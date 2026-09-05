@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#171d18" />
+    <title>Farm to Table</title>
+  </head>
+  <body>
+    <main id="app">
+      <canvas id="game" aria-label="Farm to Table restaurant game"></canvas>
+      <section class="main-menu" id="main-menu">
+        <div class="main-menu__card">
+          <span class="brand__eyebrow">YOUR NEIGHBORHOOD KITCHEN</span>
+          <h1>Farm to Table</h1>
+          <p>Grow familiar ingredients. Cook a menu you can almost keep up with.</p>
+          <div class="main-menu__root" id="main-menu-root">
+            <button data-menu-action="new" type="button">New Game</button>
+            <button data-menu-action="load" type="button">Load Game</button>
+            <button data-menu-action="settings" type="button">Settings</button>
+            <button data-menu-action="exit" type="button">Exit</button>
+          </div>
+          <div class="main-menu__slots main-menu__hidden" id="new-game-slots"></div>
+          <div class="main-menu__slots main-menu__hidden" id="load-game-slots"></div>
+        </div>
+      </section>
+      <section class="hud" aria-label="Game status">
+        <div class="saving-toast saving-toast--hidden" id="saving-toast"><i></i><span>Saving…</span></div>
+        <div class="brand">
+          <span class="brand__eyebrow">YOUR NEIGHBORHOOD KITCHEN</span>
+          <strong>Farm to Table</strong>
+        </div>
+        <div class="wallet"><span class="coin" title="Coins">✦</span><span id="coins">24</span><span class="astral-count" id="astral-count" title="Recipe Points" aria-label="0 Recipe Points">◆ 0</span></div>
+        <div class="quest">
+          <span class="quest__label">FIRST SHIFT</span>
+          <strong id="quest">Harvest Tomatoes</strong>
+          <span id="quest-detail">Your first menu will have one familiar recipe</span>
+        </div>
+        <div class="inventory" id="inventory">
+          <span class="inventory__icon">☘</span>
+          <span><small>CARRYING</small><strong id="carrying">Nothing</strong></span>
+          <span class="inventory__count" id="carrying-count">0/6</span>
+        </div>
+        <div class="stamina">
+          <span>STAMINA</span>
+          <div><i id="stamina-fill"></i></div>
+          <strong id="stamina-value">100</strong>
+        </div>
+        <div class="hint" id="hint">Click or use WASD to move · Hold Shift to sprint</div>
+        <details class="order-drawer" id="order-drawer" open>
+          <summary>Customer requests <span id="customer-count">0</span></summary>
+          <div class="order-list" id="order-list"></div>
+        </details>
+        <aside class="shelf-menu shelf-menu--hidden" id="shelf-menu">
+          <span class="shelf-menu__label">STORAGE SHELF</span>
+          <span class="shelf-menu__subheading" id="shelf-capacity">0/24 SLOTS USED</span>
+          <span class="shelf-menu__subheading">ACCEPT AUTOMATICALLY</span>
+          <div class="shelf-filter-toolbar">
+            <input id="shelf-filter-search" type="search" placeholder="Search items" aria-label="Search shelf filters" />
+            <label class="shelf-select-all"><input id="shelf-filter-all" type="checkbox" /> Accept every item</label>
+          </div>
+          <div class="shelf-filter-tabs" id="shelf-filter-tabs" aria-label="Material families"></div>
+          <div class="shelf-filter-list" id="shelf-filter-list"></div>
+          <span class="shelf-menu__label shelf-menu__label--items">STORED ITEMS</span>
+          <div class="shelf-menu__items" id="shelf-items"></div>
+          <small>Leave and return to deposit newly collected items.</small>
+        </aside>
+        <aside class="farm-context farm-context--hidden" id="farm-context">
+          <span class="farm-context__label">FARM PLOT <b id="farm-context-slot">1</b></span>
+          <strong id="farm-context-name">Empty plot</strong>
+          <small id="farm-context-status">Choose a crop to plant</small>
+          <div class="farm-progress"><i id="farm-context-progress"></i></div>
+          <select id="farm-context-crop" aria-label="Crop for this plot"></select>
+          <label><input id="farm-context-auto" type="checkbox" /> Auto-replant by workers</label>
+          <div class="farm-context__actions">
+            <button id="farm-context-plant" type="button">Plant</button>
+            <button id="farm-context-upgrade" type="button">Upgrade genetics</button>
+            <button id="farm-context-remove" class="farm-context__remove" type="button">Remove crop</button>
+          </div>
+        </aside>
+        <div id="station-statuses"></div>
+        <nav class="management-bar">
+          <button id="build-toggle" data-panel="build-menu" type="button">Build</button>
+          <button id="move-mode-toggle" type="button">Edit</button>
+          <button id="rotate-selected" class="management-control-hidden" type="button">Rotate</button>
+          <button data-panel="farm-panel" type="button">Farm</button>
+          <button data-panel="player-upgrades" type="button">Player</button>
+          <button data-panel="worker-panel" type="button">Chefs</button>
+          <button data-panel="settings-panel" type="button">Settings</button>
+          <span class="management-bar__divider"></span>
+          <button data-speed="0" type="button">Pause</button>
+          <button data-speed="1" class="speed-active" type="button">1×</button>
+          <button data-speed="2" type="button">2×</button>
+          <button data-speed="3" type="button">3×</button>
+        </nav>
+        <section class="management-panel management-panel--hidden" id="management-panel">
+          <header><strong>Restaurant Management</strong><button id="close-management" type="button">×</button></header>
+          <aside class="build-menu management-page" id="build-menu">
+            <span class="build-menu__label">BUILDING MODE</span>
+            <strong>Production stations</strong>
+            <button data-build="drying_rack" type="button">Drying Rack <span>100</span></button>
+            <button data-build="storage_shelf" type="button">Small Shelf · 12 slots <span>140</span></button>
+            <button data-build="storage_shelf_medium" type="button">Medium Shelf · 24 slots <span>320</span></button>
+            <button data-build="storage_shelf_large" type="button">Large Shelf · 40 slots <span>620</span></button>
+            <button data-build="discard_bin" type="button">Garbage Bin <span>45</span></button>
+            <button data-build="customer_counter" type="button">Sales Counter · independent queue <span>5000</span></button>
+            <button data-build="preparation_table" type="button">Preparation Table <span>130</span></button>
+            <button data-build="mortar_mill" type="button">Mortar Mill <span>220</span></button>
+            <button data-build="alchemists_still" type="button">Alchemist's Still <span>320</span></button>
+            <button data-build="enchanters_bench" type="button">Enchanter's Bench <span>380</span></button>
+            <button data-build="remedy_cauldron" type="button">Remedy Cauldron <span>450</span></button>
+            <button data-build="apothecary_table" type="button">Apothecary Table <span>520</span></button>
+            <button id="rotate-building" type="button">Rotate · R</button>
+            <small id="build-status">Select something to build</small>
+          </aside>
+          <div class="player-upgrades management-page management-page--hidden" id="player-upgrades">
+            <span class="worker-panel__label">PLAYER UPGRADES</span>
+            <button id="upgrade-player-carry" type="button">Capacity 6 → 8 · 60 coins</button>
+            <button id="upgrade-player-stamina" type="button">Stamina 100 → 125 · 50 coins</button>
+            <button id="upgrade-player-regen" type="button">Regen Lv.1 → Lv.2 · 45 coins</button>
+          </div>
+          <div class="farm-panel management-page management-page--hidden" id="farm-panel">
+            <span class="worker-panel__label">CROP DISCOVERY &amp; GENETICS</span>
+            <p class="farm-help">Unlock crops, improve their yield and growth rate, then assign them to available plots.</p>
+            <div class="crop-grid" id="crop-grid"></div>
+            <span class="worker-panel__label">FARM PLOTS</span>
+            <p class="farm-help">Renewable crops regrow after harvest. Seed crops must be replanted manually or by a worker when Auto-replant is enabled.</p>
+            <div class="farm-plot-grid" id="farm-plot-grid"></div>
+          </div>
+          <div class="worker-panel management-page management-page--hidden" id="worker-panel">
+            <span class="worker-panel__label">CHEF ROSTER</span>
+            <div class="worker-roster" id="worker-roster"></div>
+            <span class="worker-panel__label">FACILITY ASSIGNMENTS</span>
+            <p class="worker-assignment-help">Choose which stations each chef may operate. Empty columns mean autonomous kitchen work is disabled.</p>
+            <div class="worker-assignment-board" id="worker-assignment-board"></div>
+            <select id="worker-selector" class="worker-legacy-control" aria-label="Selected worker"></select>
+            <button id="unlock-worker-slot" class="worker-legacy-control" type="button">Unlock chef slot 2 · 300 coins</button>
+            <strong id="worker-name">Mira the Apprentice</strong>
+            <button id="hire-worker" class="worker-legacy-control" type="button">Hire for 20 coins</button>
+            <div class="worker-options worker-options--hidden" id="worker-options">
+              <label><input id="worker-production" type="checkbox" checked /> Production</label>
+              <label><input id="worker-stocking" type="checkbox" checked /> Shelf stocking</label>
+              <label><input id="worker-sales" type="checkbox" checked /> Customer sales</label>
+              <select id="worker-route">
+                <option value="sunleaf_powder">Produce Powder</option>
+                <option value="sunleaf_essence">Produce Essence</option>
+                <option value="sunleaf_incense">Produce Incense</option>
+              </select>
+              <span class="worker-panel__label">ASSIGNMENTS</span>
+              <button id="upgrade-worker-speed" class="worker-legacy-control" type="button">Speed Lv.1 → Lv.2 · 55 coins</button>
+              <button id="upgrade-worker-capacity" class="worker-legacy-control" type="button">Capacity 3 → 4 · 70 coins</button>
+              <small id="worker-status">Waiting for work</small>
+            </div>
+          </div>
+          <div class="worker-tooltip worker-tooltip--hidden" id="worker-tooltip" role="tooltip"></div>
+          <div class="settings-panel management-page management-page--hidden" id="settings-panel">
+            <span class="worker-panel__label">SAVE GAME</span>
+            <label class="settings-field">Active slot
+              <select id="save-slot">
+                <option value="1">Restaurant 1</option>
+                <option value="2">Restaurant 2</option>
+                <option value="3">Restaurant 3</option>
+              </select>
+            </label>
+            <label class="settings-field">Background save
+              <select id="autosave-interval">
+                <option value="0">Never</option>
+                <option value="1">Every minute</option>
+                <option value="2">Every 2 minutes</option>
+                <option value="5">Every 5 minutes</option>
+                <option value="10">Every 10 minutes</option>
+              </select>
+            </label>
+            <button id="save-now" type="button">Save current restaurant now</button>
+            <button id="new-game" class="danger-button" type="button">Start new game in this slot</button>
+            <span class="worker-panel__label">DIAGNOSTICS</span>
+            <p class="settings-help">Download chef navigation events as a structured JSONL file after a movement glitch. You can attach that file when reporting the problem.</p>
+            <div class="diagnostic-actions">
+              <button id="download-worker-debug" type="button">Download chef debug (.jsonl)</button>
+              <button id="clear-worker-debug" type="button">Clear log</button>
+            </div>
+            <small id="worker-debug-status">Diagnostic log ready</small>
+            <span class="worker-panel__label">BALANCE TELEMETRY</span>
+            <p class="settings-help">Records economy, progression, production, farming, customers, and periodic game-state snapshots.</p>
+            <div class="diagnostic-actions">
+              <button id="download-balance-debug" type="button">Download balance debug (.jsonl)</button>
+              <button id="clear-balance-debug" type="button">Clear log</button>
+            </div>
+            <small id="balance-debug-status">Balance log ready</small>
+            <span class="worker-panel__label">CONTROLS</span>
+            <p class="settings-help">Click a key to rebind it. Escape cancels.</p>
+            <div class="keybind-list" id="keybind-list"></div>
+            <button id="reset-keybinds" type="button">Restore default controls</button>
+          </div>
+        </section>
+        <div class="building-actions building-actions--hidden" id="building-actions">
+          <strong id="selected-building-name">Station</strong>
+          <button id="upgrade-building" type="button">Upgrade</button>
+          <button id="sell-building" type="button">Sell</button>
+        </div>
+      </section>
+      <div class="touch-stick" id="touch-stick" aria-hidden="true"><div></div></div>
+    </main>
+    <script type="module" src="/src/restaurant-main.ts"></script>
+  </body>
+</html>

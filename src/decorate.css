@@ -1,0 +1,56 @@
+/* Decorate mode overlay: library left, placed props right, bar on top. */
+.decorate { position: absolute; inset: 0; z-index: 20; pointer-events: none; font: 13px/1.4 "Nunito", "Segoe UI", system-ui, sans-serif; color: #edf4e8; }
+.decorate > * { pointer-events: auto; }
+.decorate-top { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; max-width: min(92vw, 1100px); padding: 9px 12px; border: 1px solid #ffffff1c; border-radius: 13px; background: #24312de6; box-shadow: 0 8px 24px #10171455; backdrop-filter: blur(10px); }
+.decorate-top strong { font-size: 14px; white-space: nowrap; }
+.decorate-status { max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #c7d4cc; font-size: 12px; }
+.decorate-grow { flex: 1; min-width: 12px; }
+.decorate button { padding: 7px 10px; border: 1px solid #ffffff28; border-radius: 8px; color: #edf4e8; background: #18221f; font: inherit; font-size: 12px; cursor: pointer; }
+.decorate button:hover:not([disabled]) { border-color: #ffffff55; }
+.decorate button[disabled] { opacity: .4; cursor: default; }
+.decorate button.active { border-color: #38d3e0; background: linear-gradient(180deg, #245b60, #1a4448); color: white; }
+.decorate button.primary { border-color: #8fd47c; background: linear-gradient(180deg, #5d9455, #3f6f3c); color: white; font-weight: 800; }
+.decorate-toggle { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; }
+.decorate-library, .decorate-props { position: absolute; top: 74px; bottom: 70px; width: 260px; display: flex; flex-direction: column; gap: 6px; padding: 12px; border: 1px solid #ffffff1c; border-radius: 14px; background: #24312de6; box-shadow: 0 8px 24px #10171455; backdrop-filter: blur(12px); overflow: auto; }
+.decorate-library { left: 14px; }
+.decorate-props { right: 14px; }
+.decorate-library header, .decorate-props header, .decorate-selected header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.decorate-library header small, .decorate-props header small, .decorate-selected header small { color: #8fa397; font-size: 11px; }
+.decorate-folder { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding: 8px 10px; border: 1px solid #ffffff14; border-radius: 10px; background: #ffffff08; font-weight: 800; cursor: pointer; user-select: none; }
+.decorate-folder:hover { background: #ffffff14; }
+.decorate-folder small { margin-left: auto; padding: 1px 7px; border-radius: 999px; background: #ffffff12; color: #c7d4cc; font-size: 11px; }
+.decorate-model { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: calc(100% - 12px); margin-left: 12px; text-align: left; }
+.decorate-prop { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border: 1px solid transparent; border-radius: 7px; font-size: 12px; cursor: pointer; user-select: none; }
+.decorate-prop:hover { background: #ffffff0c; }
+.decorate-prop.active { border-color: #38d3e0; background: #38d3e022; }
+.decorate-prop.picked { border-color: #ff9f1c88; background: #ff9f1c18; }
+.decorate-prop.dim .decorate-prop-name, .decorate-group.dim .decorate-group-name { opacity: .45; }
+.decorate-prop.in-group { margin-left: 16px; }
+.decorate-prop-name { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.decorate-prop small { margin-left: auto; color: #8fa397; font-size: 10px; white-space: nowrap; }
+.decorate-eye { width: 16px; text-align: center; cursor: pointer; opacity: .8; }
+.decorate-eye:hover { opacity: 1; }
+.decorate-group { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding: 5px 6px; border-radius: 8px; background: #ffffff0a; font-size: 12px; }
+.decorate-group .decorate-group-name { font-weight: 800; cursor: pointer; }
+.decorate-group small { margin-left: auto; color: #8fa397; font-size: 10px; }
+.decorate-group button { padding: 2px 6px; font-size: 11px; }
+.decorate-caret { width: 12px; color: #8fa397; cursor: pointer; }
+.decorate-list { display: flex; flex-direction: column; gap: 4px; }
+.decorate-selected { margin-top: 10px; padding-top: 10px; border-top: 1px solid #ffffff16; display: flex; flex-direction: column; gap: 8px; }
+.decorate-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.decorate-row > span { min-width: 58px; color: #b3c5ba; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+.decorate-row input[type="number"], .decorate-row select { width: 62px; padding: 4px 6px; border: 1px solid #ffffff26; border-radius: 6px; color: #dce8df; background: #18221f; font: inherit; font-size: 12px; }
+.decorate-row select { width: auto; max-width: 150px; }
+.decorate-hint { padding: 8px; color: #8fa397; font-size: 12px; }
+.decorate-legend { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); max-width: min(90vw, 1100px); padding: 8px 14px; border-radius: 12px; background: #1f2a22e6; color: #e6efe8; font-size: 11.5px; line-height: 1.5; box-shadow: 0 6px 18px #0006; text-align: center; }
+.decorate-launch { position: absolute; right: 16px; bottom: 16px; z-index: 15; padding: 9px 14px; border: 1px solid #ffffff28; border-radius: 10px; color: #edf4e8; background: #24312de6; font: 700 13px/1 "Nunito", "Segoe UI", system-ui, sans-serif; cursor: pointer; box-shadow: 0 6px 18px #0006; }
+.decorate-launch:hover { border-color: #ffffff55; }
+.decorate-launch.active { display: none; }
+.decorate kbd { margin-left: 4px; padding: 0 5px; border: 1px solid #ffffff2e; border-bottom-width: 2px; border-radius: 5px; color: #b3c5ba; background: #0f1614; font: inherit; font-size: 10px; font-weight: 800; }
+.decorate-speed { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; }
+.decorate-speed input[type="range"] { width: 80px; accent-color: #72bd63; }
+.decorate-speed output { min-width: 40px; font-variant-numeric: tabular-nums; color: #c7d4cc; }
+.decorate-menu { position: fixed; z-index: 60; display: flex; min-width: 220px; flex-direction: column; padding: 6px; border: 1px solid #ffffff22; border-radius: 12px; background: #1c2724f6; box-shadow: 0 14px 34px #0c14118a; backdrop-filter: blur(10px); font: 12px "Nunito", "Segoe UI", system-ui, sans-serif; color: #edf4e8; }
+.decorate-menu button { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 7px 10px; border: none; border-radius: 8px; color: #edf4e8; background: transparent; font: inherit; font-weight: 700; text-align: left; cursor: pointer; }
+.decorate-menu button:hover:not([disabled]) { background: #38d3e022; }
+.decorate-menu button[disabled] { opacity: .35; cursor: default; }
