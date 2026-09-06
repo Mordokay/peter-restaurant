@@ -14,3 +14,7 @@ pass2-*.png
 .art-assets/imports/*.vox.json
 # dry-run logs
 .art-assets/import-batch.log
+# 3D source files stay local only (the converted voxel models are the catalog; originals also live in ~/Downloads)
+.art-assets/imports/*.glb
+.art-assets/imports/*.gltf
+.art-assets/imports/*.obj
