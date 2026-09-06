@@ -1,85 +1,185 @@
-// The authored voxel catalog on disk: one JSON file per top-level folder in
-// src/assets/catalog/ (`plants.json`, `kitchen.json`, `_root.json` for models
-// without a folder). Every writer — the lab's dev endpoints, the emitter, the
-// rigger, tests — goes through here so files stay compact and consistent.
+// The authored voxel catalog on disk, version 2: one compact JSON file per model in
+// src/assets/catalog/models/<id>.json plus a small src/assets/catalog/index.json
+// that lists every model (name, folder, tags, size, counts, clip ids, thumbnail)
+// so the lab and the game can browse 800 objects without parsing 500 MB of voxels.
+// Model files load lazily at runtime (src/assets/catalog/index.ts); thumbnails live
+// in public/catalog-thumbs/<id>.png. Every writer — the lab's dev endpoints,
+// the emitter, the rigger, tests — goes through here.
 //
-// Files are written with arrays inline ("[1, 2, 3]" on one line, one run per
-// line) instead of one number per line: the same data is ~6× smaller on disk
-// and diffs stay readable.
-import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+// Version 1 (one pretty JSON per folder, later sharded at 40 MB) is migrated by
+// `migrateCatalogV1()`; `readCatalog()` keeps returning the merged { models } view.
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const catalogDir = fileURLToPath(new URL("../src/assets/catalog/", import.meta.url));
+export const modelsDir = join(catalogDir, "models");
+// Thumbnails are static files (no import graph, no HMR reloads when 600 of them appear):
+// public/catalog-thumbs/<id>.png, served at /catalog-thumbs/<id>.png.
+export const thumbsDir = fileURLToPath(new URL("../public/catalog-thumbs/", import.meta.url));
+export const indexPath = join(catalogDir, "index.json");
 
-/** File name (without directory) that holds models of this folder path. */
-export function fileNameForFolder(folder) {
-  const top = String(folder ?? "").split("/")[0].trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "_").replace(/^_+|_+$/g, "");
-  return `${top || "_root"}.json`;
+const ID = /^[a-z0-9_]{1,64}$/;
+function assertId(id) { if (typeof id !== "string" || !ID.test(id)) throw new Error(`bad model id ${JSON.stringify(id)}`); }
+export function modelPath(id) { assertId(id); return join(modelsDir, `${id}.json`); }
+export function thumbPath(id) { assertId(id); return join(thumbsDir, `${id}.png`); }
+
+// ------------------------------------------------------------------ index --
+
+/** The index entry derived from a model: everything a browser needs without the voxels. */
+export function indexEntry(model, previous = {}) {
+  let minX = Infinity, minY = Infinity, minZ = Infinity, maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity, voxels = 0;
+  const grow = (x0, y0, z0, x1, y1, z1) => {
+    if (x0 < minX) minX = x0; if (y0 < minY) minY = y0; if (z0 < minZ) minZ = z0;
+    if (x1 > maxX) maxX = x1; if (y1 > maxY) maxY = y1; if (z1 > maxZ) maxZ = z1;
+  };
+  let states = 0;
+  for (const part of model.parts ?? []) {
+    const geometries = [part, ...Object.values(part.states ?? {})];
+    states += Object.keys(part.states ?? {}).length;
+    for (const [gi, geometry] of geometries.entries()) {
+      for (const [x0, y0, z0, x1, y1, z1] of geometry.boxes ?? []) {
+        grow(Math.min(x0, x1), Math.min(y0, y1), Math.min(z0, z1), Math.max(x0, x1), Math.max(y0, y1), Math.max(z0, z1));
+        if (gi === 0) voxels += (Math.abs(x1 - x0) + 1) * (Math.abs(y1 - y0) + 1) * (Math.abs(z1 - z0) + 1);
+      }
+      for (const [y, z, x0, x1] of geometry.runs ?? []) { grow(Math.min(x0, x1), y, z, Math.max(x0, x1), y, z); if (gi === 0) voxels += Math.abs(x1 - x0) + 1; }
+      for (const [x, y, z] of geometry.voxels ?? []) { grow(x, y, z, x, y, z); if (gi === 0) voxels += 1; }
+    }
+  }
+  const pitch = Number(model.pitch) || 0;
+  const size = Number.isFinite(minX) ? [(maxX - minX + 1) * pitch, (maxY - minY + 1) * pitch, (maxZ - minZ + 1) * pitch].map((v) => Math.round(v * 1000) / 1000) : [0, 0, 0];
+  const entry = {};
+  if (model.name) entry.name = model.name;
+  if (model.folder) entry.folder = model.folder;
+  if (Array.isArray(model.tags) && model.tags.length) entry.tags = [...model.tags];
+  entry.size = size;
+  entry.voxels = voxels;
+  entry.parts = (model.parts ?? []).length;
+  if (states) entry.states = states;
+  const clips = (model.clips ?? []).map((clip) => clip.id);
+  if (clips.length) entry.clips = clips;
+  if (previous.thumb) entry.thumb = previous.thumb;  // seconds since epoch of the last render (cache-buster)
+  return entry;
 }
-export function fileForFolder(folder) { return join(catalogDir, fileNameForFolder(folder)); }
 
-function listFiles() {
-  if (!existsSync(catalogDir)) return [];
-  return readdirSync(catalogDir).filter((name) => name.endsWith(".json")).sort();
-}
+function emptyIndex() { return { version: 2, models: {} }; }
 
-function readFile(path) {
-  const parsed = JSON.parse(readFileSync(path, "utf8"));
-  if (!parsed || typeof parsed !== "object" || !parsed.models) throw new Error(`${path} is not a catalog file`);
+export function readIndex() {
+  if (!existsSync(indexPath)) return emptyIndex();
+  const parsed = JSON.parse(readFileSync(indexPath, "utf8"));
+  if (!parsed || parsed.version !== 2 || !parsed.models) throw new Error(`${indexPath} is not a version 2 catalog index`);
   return parsed;
 }
 
-/** Every model from every file, merged into one { version, models } catalog. */
+/** Index files are written one model per line: diffs stay one line per changed model. */
+export function stringifyIndex(index) {
+  const ids = Object.keys(index.models).sort();
+  return `{\n  "version": 2,\n  "models": {\n${ids.map((id, i) => `    ${JSON.stringify(id)}: ${JSON.stringify(index.models[id])}${i < ids.length - 1 ? "," : ""}`).join("\n")}\n  }\n}\n`;
+}
+
+export function writeIndex(index) {
+  mkdirSync(catalogDir, { recursive: true });
+  writeFileSync(indexPath, stringifyIndex(index));
+}
+
+/** Rebuild index.json from every model file (after a hand edit or a migration). */
+export function rebuildIndex() {
+  const previous = existsSync(indexPath) ? readIndex() : emptyIndex();
+  const index = emptyIndex();
+  for (const id of listModelIds()) {
+    const entry = indexEntry(readModel(id), previous.models[id] ?? {});
+    if (existsSync(thumbPath(id))) entry.thumb = Math.floor(statSync(thumbPath(id)).mtimeMs / 1000); else delete entry.thumb;
+    index.models[id] = entry;
+  }
+  writeIndex(index);
+  return index;
+}
+
+// ----------------------------------------------------------------- models --
+
+export function listModelIds() {
+  if (!existsSync(modelsDir)) return [];
+  return readdirSync(modelsDir).filter((name) => name.endsWith(".json")).map((name) => name.slice(0, -5)).filter((id) => ID.test(id)).sort();
+}
+
+export function hasModel(id) { return ID.test(String(id)) && existsSync(modelPath(id)); }
+
+export function readModel(id) {
+  const parsed = JSON.parse(readFileSync(modelPath(id), "utf8"));
+  if (!parsed || parsed.id !== id) throw new Error(`${modelPath(id)} does not hold model ${id}`);
+  return parsed;
+}
+
+/** Every model, merged into one { version, models } catalog (tests, the rigger, validation). */
 export function readCatalog() {
   const models = {};
   const fileOf = new Map();
-  for (const name of listFiles()) {
-    const file = readFile(join(catalogDir, name));
-    for (const [id, model] of Object.entries(file.models)) {
-      if (models[id]) throw new Error(`model ${id} appears in two catalog files (${fileOf.get(id)} and ${name})`);
-      models[id] = model;
-      fileOf.set(id, name);
-    }
-  }
+  for (const id of listModelIds()) { models[id] = readModel(id); fileOf.set(id, `models/${id}.json`); }
   return { version: 1, models, fileOf };
 }
 
-/** Add or replace a model in the file of its folder; removes it from any other file. */
+/** Model files are compact JSON: one line, no whitespace. Voxel data is not hand-edited and a
+ *  pretty layout was 70 % larger on disk (312 MB vs 183 MB for 346 models). */
+export function stringifyModel(model) { return `${JSON.stringify(model)}\n`; }
+
+/** Add or replace a model: its file plus its index line. */
 export function writeModel(model) {
   if (!model || typeof model.id !== "string") throw new Error("writeModel needs a model with an id");
-  mkdirSync(catalogDir, { recursive: true });
-  const target = fileNameForFolder(model.folder);
-  for (const name of listFiles()) {
-    if (name === target) continue;
-    const path = join(catalogDir, name);
-    const file = readFile(path);
-    if (!(model.id in file.models)) continue;
-    delete file.models[model.id];
-    if (Object.keys(file.models).length) writeFileSync(path, stringifyCatalog(file)); else unlinkSync(path);
-  }
-  const path = join(catalogDir, target);
-  const file = existsSync(path) ? readFile(path) : { version: 1, models: {} };
-  const existed = model.id in file.models;
-  file.models[model.id] = model;
-  writeFileSync(path, stringifyCatalog(file));
-  return { file: target, existed };
+  assertId(model.id);
+  mkdirSync(modelsDir, { recursive: true });
+  const existed = existsSync(modelPath(model.id));
+  writeFileSync(modelPath(model.id), stringifyModel(model));
+  const index = readIndex();
+  const entry = indexEntry(model, index.models[model.id] ?? {});
+  if (existsSync(thumbPath(model.id))) entry.thumb = entry.thumb || Math.floor(statSync(thumbPath(model.id)).mtimeMs / 1000);
+  index.models[model.id] = entry;
+  writeIndex(index);
+  return { file: `models/${model.id}.json`, existed };
 }
 
-/** Remove a model from whichever file holds it. */
+/** Remove a model: file, thumbnail and index line. Returns the file name or null when absent. */
 export function deleteModel(id) {
-  for (const name of listFiles()) {
-    const path = join(catalogDir, name);
-    const file = readFile(path);
-    if (!(id in file.models)) continue;
-    delete file.models[id];
-    if (Object.keys(file.models).length) writeFileSync(path, stringifyCatalog(file)); else unlinkSync(path);
-    return name;
-  }
-  return null;
+  assertId(id);
+  const index = readIndex();
+  const had = existsSync(modelPath(id)) || id in index.models;
+  if (existsSync(modelPath(id))) unlinkSync(modelPath(id));
+  if (existsSync(thumbPath(id))) unlinkSync(thumbPath(id));
+  if (id in index.models) { delete index.models[id]; writeIndex(index); }
+  return had ? `models/${id}.json` : null;
 }
 
-/** Pretty objects, inline arrays: `"pivot": [0, 1, 2]`, one run per line. */
+/** Record that a thumbnail exists (written by the lab through /__lab/save-thumbnail). */
+export function writeThumbnail(id, pngBuffer) {
+  assertId(id);
+  mkdirSync(thumbsDir, { recursive: true });
+  writeFileSync(thumbPath(id), pngBuffer);
+  const stamp = Math.floor(Date.now() / 1000);
+  const index = readIndex();
+  if (index.models[id]) { index.models[id].thumb = stamp; writeIndex(index); }
+  return stamp;
+}
+
+// -------------------------------------------------------------- migration --
+
+/** Version 1 → 2: every `*.json` in the catalog folder (except index.json) that holds
+ *  { version: 1, models } is split into models/<id>.json and removed. */
+export function migrateCatalogV1() {
+  const moved = [];
+  for (const name of readdirSync(catalogDir).filter((n) => n.endsWith(".json") && n !== "index.json")) {
+    const path = join(catalogDir, name);
+    const parsed = JSON.parse(readFileSync(path, "utf8"));
+    if (!parsed || !parsed.models) continue;
+    mkdirSync(modelsDir, { recursive: true });
+    for (const model of Object.values(parsed.models)) { writeFileSync(modelPath(model.id), stringifyModel(model)); moved.push(model.id); }
+    unlinkSync(path);
+  }
+  rebuildIndex();
+  return moved;
+}
+
+// ------------------------------------------------------------- utilities --
+
+/** Pretty objects, inline arrays: `"pivot": [0, 1, 2]`, one run per line (decor.json, tests). */
 export function stringifyCatalog(value) {
   return `${format(value, "")}\n`;
 }
@@ -99,3 +199,6 @@ function format(value, indent) {
   const inner = indent + "  ";
   return `{\n${keys.map((key) => `${inner}${JSON.stringify(key)}: ${format(value[key], inner)}`).join(",\n")}\n${indent}}`;
 }
+
+/** Size of a model file on disk in bytes (0 when absent). */
+export function modelFileSize(id) { return existsSync(modelPath(id)) ? statSync(modelPath(id)).size : 0; }

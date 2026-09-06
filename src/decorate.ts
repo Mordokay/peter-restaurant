@@ -1,9 +1,11 @@
 import "./decorate.css";
+import { catalogIndex, ensureModels, labelOf, thumbnailUrl } from "./assets/catalog/index";
+import { createCatalogBrowser, type CatalogBrowser } from "./catalogBrowser";
 import {
   ArcRotateCamera, ArcRotateCameraPointersInput, Camera, Color3, HighlightLayer, Mesh, PositionGizmo, Quaternion, RotationGizmo, Scene, ScaleGizmo, ShadowGenerator,
   TransformNode, UtilityLayerRenderer, Vector3,
 } from "@babylonjs/core";
-import type { AuthoredVoxelCatalog, AuthoredVoxelModel } from "./game/voxelModel";
+import type { AuthoredVoxelCatalog } from "./game/voxelModel";
 import { applyPropTransform, propRotation, propScale, propVisible, type DecorGroup, type DecorLayout, type DecorProp, type DecorScene } from "./game/decor";
 import { createHeadCamera, type HeadCamera } from "./labCamera";
 
@@ -39,7 +41,6 @@ const SNAP = 0.1;
 const HISTORY_DEPTH = 100;
 const SELECTION_COLOR = "#38d3e0";
 
-const labelFor = (model: AuthoredVoxelModel): string => model.name ?? model.id.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 
 export function createDecorateMode(host: DecorateHost): DecorateMode {
   const { scene, canvas, catalog, decor, layout } = host;
@@ -79,6 +80,8 @@ export function createDecorateMode(host: DecorateHost): DecorateMode {
   let contextMenu: HTMLElement | null = null;
   /** A library item is being dragged into the world (release materialises it). */
   let libraryDrag: { model: string; startX: number; startY: number; moved: boolean } | null = null;
+  let libraryHost: HTMLElement | null = null;
+  let libraryBrowser: CatalogBrowser | null = null;
 
   // ------------------------------------------------------------- helpers --
   const snapValue = (value: number) => (snap ? Math.round(value / SNAP) * SNAP : value);
@@ -247,13 +250,15 @@ export function createDecorateMode(host: DecorateHost): DecorateMode {
   function hold(model: string): void {
     counters.holds++;
     releaseHold();
+    // Voxel data loads lazily: fetch this model, then hold it.
+    if (!catalog.models[model]) { status = `Loading ${labelOf(model)}…`; render(); void ensureModels([model]).then(() => { if (catalog.models[model]) hold(model); else { status = `${model} is not in the catalog`; render(); } }); return; }
     const ghost = decor.add({ id: "__ghost", model, position: [0, -100, 0], rotation: [0, 0, 0], scale: 1 });
     if (!ghost) return;
     for (const mesh of ghost.rig.meshes) mesh.isPickable = false;
     holding = { model, ghost, yaw: 0 };
     selected = null;
     syncSelection();
-    status = `Holding ${labelFor(catalog.models[model]!)} — click a floor to place, R turns, Esc cancels`;
+    status = `Holding ${labelOf(model)} — click a floor to place, R turns, Esc cancels`;
     render();
   }
   function releaseHold(): void {
@@ -559,9 +564,6 @@ export function createDecorateMode(host: DecorateHost): DecorateMode {
     // While an item is being dragged out of the library, keep the DOM stable
     // (rebuilding it would pull the pressed button out from under the pointer).
     if (libraryDrag?.moved) { const statusEl = root.querySelector(".decorate-status"); if (statusEl) statusEl.textContent = status; return; }
-    const folders = new Map<string, AuthoredVoxelModel[]>();
-    for (const model of Object.values(catalog.models)) { const folder = model.folder ?? ""; let list = folders.get(folder); if (!list) folders.set(folder, (list = [])); list.push(model); }
-    const folderNames = [...folders.keys()].sort((a, b) => (a === "" ? 1 : b === "" ? -1 : a.localeCompare(b)));
     const prop = selectedProp();
     const props = layout.props.filter((candidate) => candidate.id !== "__ghost");
     // The panels are rebuilt from scratch; keep their scroll positions so an edit does not jump you to the top.
@@ -578,14 +580,13 @@ export function createDecorateMode(host: DecorateHost): DecorateMode {
         <button data-act="done" title="Leave decorate mode (Esc)">✅ Done</button>
       </div>
       <aside class="decorate-library">
-        <header><strong>📚 Library</strong><small>drag onto any surface — floors, counters, walls (it stands up against them) — or click to hold and place repeatedly</small></header>
-        ${folderNames.map((folder) => `<div class="decorate-folder ${collapsed.has(folder) ? "collapsed" : ""}" data-folder="${escapeHtml(folder)}"><span>${collapsed.has(folder) ? "▸" : "▾"}</span> 📁 ${escapeHtml(folder || "Unfiled")} <small>${folders.get(folder)!.length}</small></div>
-          ${collapsed.has(folder) ? "" : folders.get(folder)!.map((model) => `<button class="decorate-model ${holding?.model === model.id ? "active" : ""}" data-model="${escapeHtml(model.id)}" title="${escapeHtml(model.id)} · ${model.parts.length} part(s) · ${(model.clips ?? []).length} clip(s)">${escapeHtml(labelFor(model))}</button>`).join("")}`).join("")}
+        <header><strong>📚 Library</strong><small>drag a tile onto any surface — floors, counters, walls (it stands up against them) — or click to hold and place repeatedly</small></header>
+        <div class="decorate-library-slot"></div>
       </aside>
       <aside class="decorate-props">
         <header><strong>📦 Placed</strong><small>${props.length}${selectedSet.size > 1 ? ` · ${selectionIds().length} selected` : ""}</small><button data-act="group" title="Group the selected objects (Ctrl/Shift+click selects several; right-click a row for more) so they hide and show together">⧈ Group</button></header>
         <div class="decorate-list">${(() => {
-          const row = (candidate: DecorProp, inGroup: boolean) => `<div class="decorate-prop ${candidate.id === selected ? "active" : ""} ${selectedSet.has(candidate.id) && candidate.id !== selected ? "picked" : ""} ${propVisible(candidate, layout) ? "" : "dim"} ${inGroup ? "in-group" : ""}" data-select="${escapeHtml(candidate.id)}" draggable="true" title="${escapeHtml(candidate.id)} · ${escapeHtml(labelFor(catalog.models[candidate.model]!))} · click: select · Ctrl+click: add to selection · drag onto a group"><span class="decorate-eye" data-prop-eye="${escapeHtml(candidate.id)}" title="${candidate.hidden ? "Show" : "Hide"}">${candidate.hidden ? "🙈" : "👁"}</span><span class="decorate-prop-name">${escapeHtml(candidate.id)}</span><small>${escapeHtml(labelFor(catalog.models[candidate.model]!))}</small></div>`.replace('title="', 'title="Shift+click: select the rows in between · ')  ;
+          const row = (candidate: DecorProp, inGroup: boolean) => `<div class="decorate-prop ${candidate.id === selected ? "active" : ""} ${selectedSet.has(candidate.id) && candidate.id !== selected ? "picked" : ""} ${propVisible(candidate, layout) ? "" : "dim"} ${inGroup ? "in-group" : ""}" data-select="${escapeHtml(candidate.id)}" draggable="true" title="${escapeHtml(candidate.id)} · ${escapeHtml(labelOf(candidate.model))} · click: select · Ctrl+click: add to selection · drag onto a group"><span class="decorate-eye" data-prop-eye="${escapeHtml(candidate.id)}" title="${candidate.hidden ? "Show" : "Hide"}">${candidate.hidden ? "🙈" : "👁"}</span><span class="decorate-prop-name">${escapeHtml(candidate.id)}</span><small>${escapeHtml(labelOf(candidate.model))}</small></div>`.replace('title="', 'title="Shift+click: select the rows in between · ')  ;
           const grouped = groups().map((group) => {
             const members = props.filter((candidate) => candidate.group === group.id);
             const folded = collapsedGroups.has(group.id);
@@ -595,7 +596,7 @@ export function createDecorateMode(host: DecorateHost): DecorateMode {
           return grouped + loose || `<div class="decorate-hint">Nothing placed yet. Pick something from the library.</div>`;
         })()}</div>
         ${prop ? `<section class="decorate-selected">
-          <header><strong>${escapeHtml(prop.id)}</strong><small>${escapeHtml(labelFor(catalog.models[prop.model]!))}</small></header>
+          <header><strong>${escapeHtml(prop.id)}</strong><small>${escapeHtml(labelOf(prop.model))}</small></header>
           <div class="decorate-row"><span>Gizmo</span>${(["none", "move", "turn", "scale"] as const).map((mode) => `<button data-gizmo="${mode}" class="${gizmoMode === mode ? "active" : ""}" title="${mode === "none" ? "Q" : mode === "move" ? "W" : mode === "turn" ? "R" : "T"}">${mode === "none" ? "⊘ <kbd>Q</kbd>" : mode === "move" ? "✥ Move <kbd>W</kbd>" : mode === "turn" ? "⟳ Rotate <kbd>R</kbd>" : "⤢ Scale <kbd>T</kbd>"}</button>`).join("")}</div>
           <div class="decorate-row"><span>Position</span>${[0, 1, 2].map((i) => `<input type="number" step="${SNAP}" data-pos="${i}" value="${prop.position[i]}" />`).join("")}</div>
           <div class="decorate-row"><span>Rotate °</span>${[0, 1, 2].map((i) => `<input type="number" step="15" data-rot="${i}" value="${propRotation(prop)[i]}" title="${"xyz"[i]}" />`).join("")}<button data-act="turn" title="Shift+R: turn 90° around the vertical axis">+90°</button></div>
@@ -607,6 +608,9 @@ export function createDecorateMode(host: DecorateHost): DecorateMode {
       </aside>
       <div class="decorate-legend">Drag a library item onto a floor (ghost shows where it lands) · click a placed object to select it, Shift+click adds more · drag it by its body to move it · gizmo: tap <kbd>W</kbd> move · <kbd>R</kbd> rotate · <kbd>T</kbd> scale · <kbd>Q</kbd> none · Shift+R: turn 90° · Del: remove · Ctrl+C / Ctrl+V: copy & paste the selection (at the pointer) · Ctrl+D: duplicate · Ctrl+Z: undo · Camera: right-hold looks, hold <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> <kbd>Q</kbd><kbd>E</kbd> to fly (Shift fast), middle-drag pans, wheel zooms, <kbd>F</kbd> frames, middle-click orbits a point · left-drag never turns the camera · B / Esc: leave</div>`;
     [".decorate-library", ".decorate-props"].forEach((selector, index) => { const panel = root!.querySelector<HTMLElement>(selector); if (panel) panel.scrollTop = scrolls[index]!; });
+    // The library is the shared catalog browser, mounted once and re-attached after every rebuild
+    // (its grid keeps its own scroll, filters and favourites; only the held tile is re-marked).
+    if (libraryHost) { root.querySelector(".decorate-library-slot")?.replaceWith(libraryHost); libraryBrowser?.setSelected(holding?.model ?? null); }
   }
   const counters = { rootDowns: 0, moves: 0, ups: 0, holds: 0, placeCalls: 0, gizmoPresses: 0, bodyDrags: 0, selectsOnUp: 0, canvasDowns: 0 };
   /** When the library last handled a pointer press (a following click is the same gesture). */
@@ -807,6 +811,17 @@ export function createDecorateMode(host: DecorateHost): DecorateMode {
     highlight = new HighlightLayer("decorate selection", scene, { blurHorizontalSize: 1.1, blurVerticalSize: 1.1, camera });
     root = document.createElement("div");
     root.className = "decorate";
+    libraryHost = document.createElement("div");
+    libraryHost.className = "decorate-library-slot";
+    libraryBrowser = createCatalogBrowser({
+      root: libraryHost, index: catalogIndex, labelOf, thumbnailUrl, storageKey: "farm-decorate",
+      idAttribute: "data-model",
+      // Pointer down / up on [data-model] tiles already hold and drag (onRootPointerDown / onPointerUp);
+      // the browser's click is the same gesture, so it does nothing here.
+      onOpen: () => {},
+      // Native HTML5 drag would swallow the pointer gesture that places a ghost in the world.
+      onRendered: (grid) => { for (const tile of grid.querySelectorAll<HTMLElement>(".cb-tile")) tile.draggable = false; },
+    });
     root.addEventListener("click", onRootClick);
     root.addEventListener("input", onRootInput);
     root.addEventListener("contextmenu", onRootContextMenu);
@@ -835,6 +850,9 @@ export function createDecorateMode(host: DecorateHost): DecorateMode {
     window.removeEventListener("keydown", onKeyDown);
     root?.remove();
     root = null;
+    libraryBrowser?.dispose();
+    libraryBrowser = null;
+    libraryHost = null;
     highlight?.dispose();
     highlight = null;
     closeContextMenu();

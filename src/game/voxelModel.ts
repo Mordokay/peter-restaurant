@@ -105,8 +105,11 @@ export interface AuthoredVoxelModel {
   id: string;
   /** Optional human label shown in the lab list. */
   name?: string;
-  /** Lab folder path ("plants/vegetables"); also decides which catalog file stores the model. */
+  /** Lab folder path ("plants/vegetables") — where it came from, usually the pack. */
   folder?: string;
+  /** What it is for: free-form tags the browser filters on ("farm", "kitchen", "dining",
+   *  "cooking", "plant", "seating", …). See src/game/catalogTags.ts for the vocabulary. */
+  tags?: readonly string[];
   pitch: number;
   palette: Readonly<Record<string, string>>;
   parts: readonly AuthoredVoxelPart[];

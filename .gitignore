@@ -8,3 +8,9 @@ pass2-*.png
 .art-assets/food-models.backup.json
 # OS
 .DS_Store
+# temporary uploads made by the lab import dialog (the originals stay where you picked them)
+.art-assets/imports/upload_*
+# voxel grids are intermediates of an import; the source .glb next to them regenerates them
+.art-assets/imports/*.vox.json
+# dry-run logs
+.art-assets/import-batch.log

@@ -1,14 +1,24 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, type Plugin } from "vite";
 // @ts-expect-error plain ESM helper shared with the node scripts
-import { readCatalog, writeModel, deleteModel as removeModel, stringifyCatalog } from "./scripts/catalog-io.mjs";
+import { hasModel, readModel, writeModel, writeThumbnail, deleteModel as removeModel, stringifyCatalog } from "./scripts/catalog-io.mjs";
+import { DETAIL_TIERS, clampVoxelHeight, initialVoxelHeight, isImportDetail, type ImportDetail } from "./src/game/importDetail";
 
 type CatalogModel = { id: string; name?: string; folder?: string; pitch: number; palette: Record<string, string>; parts: unknown[] };
-type CatalogOnDisk = { version: number; models: Record<string, CatalogModel>; fileOf: Map<string, string> };
-const loadCatalog = (): CatalogOnDisk => readCatalog() as CatalogOnDisk;
+type CatalogOnDisk = { version: number; models: Record<string, CatalogModel> };
+// A lazy view of the catalog on disk: `models[id]` reads one file, `id in models` checks one
+// path. The endpoints only ever look at a model or two, and reading all 346 files per request
+// (176 MB) made every save and import wait seconds.
+const loadCatalog = (): CatalogOnDisk => ({
+  version: 1,
+  models: new Proxy({} as Record<string, CatalogModel>, {
+    get: (_, id) => (typeof id === "string" && hasModel(id) ? (readModel(id) as CatalogModel) : undefined),
+    has: (_, id) => typeof id === "string" && hasModel(id),
+  }),
+});
 
 /** Dev-only endpoint the Model Lab editor uses to make edits permanent:
  * POST /__lab/save-model with { model } replaces (or adds) that model in the
@@ -161,38 +171,116 @@ function labCatalogManager(): Plugin {
           response.end(JSON.stringify({ ok: true, props: layout.props.length }));
         }).catch((error: Error) => { response.statusCode = 400; response.end(String(error.message ?? error)); });
       });
+      // Describe an uploaded file (saved under .art-assets/imports) so the lab can offer a split import.
+      server.middlewares.use("/__lab/inspect-model", (request, response) => {
+        if (request.method !== "POST") { response.statusCode = 405; response.end("POST only"); return; }
+        void readJsonBody(request).then((raw) => {
+          const { fileName, data } = raw as { fileName: string; data: string };
+          if (!/\.(glb|gltf|obj)$/i.test(fileName ?? "")) throw new Error("pick a .glb, .gltf or .obj file");
+          const root = fileURLToPath(new URL("./", import.meta.url));
+          const importDir = join(root, ".art-assets", "imports");
+          mkdirSync(importDir, { recursive: true });
+          const sourceFile = `upload_${Date.now()}${fileName.slice(fileName.lastIndexOf(".")).toLowerCase()}`;
+          writeFileSync(join(importDir, sourceFile), Buffer.from(data.replace(/^data:[^,]*,/, ""), "base64"));
+          const info = JSON.parse(execFileSync("python3", ["scripts/inspect-mesh.py", join(importDir, sourceFile)], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 64 * 1024 * 1024 })) as Record<string, unknown>;
+          response.setHeader("content-type", "application/json");
+          response.end(JSON.stringify({ ok: true, sourceFile, ...info }));
+        }).catch((error: Error & { stderr?: string }) => { response.statusCode = 400; response.end(`${error.message ?? error}${error.stderr ? `\n${error.stderr}` : ""}`); });
+      });
+      // The lab renders a thumbnail after an import or a save and posts it here (PNG, base64).
+      server.middlewares.use("/__lab/save-thumbnail", (request, response) => {
+        if (request.method !== "POST") { response.statusCode = 405; response.end("POST only"); return; }
+        void readJsonBody(request).then((raw) => {
+          const { id, data } = raw as { id: string; data: string };
+          if (!/^[a-z0-9_]{1,64}$/.test(id) || !hasModel(id)) throw new Error(`${id} is not in the catalog`);
+          const png = Buffer.from(String(data).replace(/^data:[^,]*,/, ""), "base64");
+          if (png.length < 100 || png.length > 2_000_000) throw new Error("thumbnail must be a PNG between 100 B and 2 MB");
+          const thumb = writeThumbnail(id, png);
+          response.setHeader("content-type", "application/json");
+          response.end(JSON.stringify({ ok: true, id, bytes: png.length, thumb }));
+        }).catch((error: Error) => { response.statusCode = 400; response.end(String(error.message ?? error)); });
+      });
       server.middlewares.use("/__lab/import-model", (request, response) => {
         if (request.method !== "POST") { response.statusCode = 405; response.end("POST only"); return; }
         void readJsonBody(request).then((raw) => {
-          const { id, name, fileName, data, height, worldHeight, geometry, foldFragments, folder } = raw as { id: string; name?: string; fileName: string; data: string; height?: number; worldHeight?: number; geometry?: string; foldFragments?: number; folder?: string };
+          const { id, name, fileName, data, sourceFile, sourceName, replace, height, worldHeight, geometry, exact, foldFragments, folder, footprint } = raw as { id: string; name?: string; fileName: string; data?: string; sourceFile?: string; sourceName?: string; replace?: boolean; height?: number; worldHeight?: number; geometry?: string; exact?: boolean; foldFragments?: number; folder?: string; detail?: string; footprint?: [number, number, number] };
+          const detail: ImportDetail = isImportDetail((raw as { detail?: string }).detail) ? (raw as { detail: ImportDetail }).detail : "normal";
           if (!/^[a-z0-9_]{1,64}$/.test(id)) throw new Error("id must be lower-case letters, digits and underscores");
           if (!/\.(glb|gltf|obj)$/i.test(fileName ?? "")) throw new Error("pick a .glb, .gltf or .obj file");
-          if (loadCatalog().models[id]) throw new Error(`${id} already exists — pick another id or delete it first`);
+          if (!data && !sourceFile) throw new Error("send the file data or the sourceFile of a previous inspect");
+          const existing = loadCatalog().models[id];
+          const requestedFolder = (folder ?? "").trim().replace(/^\/+|\/+$/g, "");
+          if (existing && !replace) throw new Error(`${id} already exists — pick another id, or tick "replace"`);
+          // Replace only re-imports a model in its own folder. The same id in another folder is a
+          // different object from another pack (two packs both have "knife_01"); the client renames.
+          if (existing && replace && folder !== undefined && (existing.folder ?? "") !== requestedFolder) {
+            response.statusCode = 409;
+            response.setHeader("content-type", "application/json");
+            response.end(JSON.stringify({ ok: false, conflict: true, id, folder: existing.folder ?? "" }));
+            return;
+          }
           const root = fileURLToPath(new URL("./", import.meta.url));
           const importDir = join(root, ".art-assets", "imports");
           mkdirSync(importDir, { recursive: true });
           const extension = fileName.slice(fileName.lastIndexOf(".")).toLowerCase();
-          const source = join(importDir, `${id}${extension}`);
+          // A collection file is kept once under its own name (sourceName) and shared by every object
+          // split out of it; a single object keeps its source under its id.
+          if (sourceName !== undefined && !/^[a-z0-9_]{1,64}$/.test(sourceName)) throw new Error("sourceName must be lower-case letters, digits and underscores");
+          const source = join(importDir, `${sourceName ?? id}${extension}`);
           const grid = join(importDir, `${id}.vox.json`);
-          writeFileSync(source, Buffer.from(data.replace(/^data:[^,]*,/, ""), "base64"));
+          if (data) writeFileSync(source, Buffer.from(data.replace(/^data:[^,]*,/, ""), "base64"));
+          else if (sourceFile && /^upload_\d+\.(glb|gltf|obj)$/.test(sourceFile)) { if (!sourceName || !existsSync(source)) copyFileSync(join(importDir, sourceFile), source); }
+          else throw new Error("unknown sourceFile");
           const log: string[] = [];
           const run = (command: string, args: string[]) => {
             log.push(`$ ${command} ${args.join(" ")}`);
             log.push(execFileSync(command, args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 64 * 1024 * 1024 }));
           };
-          const convert = ["scripts/voxelize-mesh.py", source, grid, "--height", String(Math.max(8, Math.min(400, Math.round(height ?? 64)))), "--shadeTolerance", "0.12", "--flatten", "0.35"];
-          if (geometry && geometry.trim()) convert.push("--geometry", geometry.trim());
-          run("python3", convert);
+          // Voxel size is chosen automatically: convert, count the voxels the game would carry, and
+          // re-run with a coarser or finer grid until the model lands near its budget. The budget is
+          // the only knob the artist sees (chunky / normal / fine). Room-sized pieces (taller than
+          // 1.5 m in the game) skip the finer LOD lattice — a 5 m kitchen at "256" once made a 63M-cell grid.
+          const metres = worldHeight && worldHeight > 0 ? worldHeight : 0.5;
+          const { budget, cap } = DETAIL_TIERS[detail];
+          // Tiers (src/game/importDetail.ts) set the budget and the smallest voxel allowed; a wide, flat
+          // footprint (a tray of foods) starts coarser so the first pass stays sane.
+          let voxelHeight = height && height > 0 ? clampVoxelHeight(height, metres, detail, footprint) : initialVoxelHeight(metres, detail, footprint);
+          const convertAt = (h: number) => {
+            const convert = ["scripts/voxelize-mesh.py", source, grid, "--height", String(h), "--shadeTolerance", "0.12", "--flatten", "0.35"];
+            if (metres > 1.5) convert.push("--lodLevels", "1");
+            if (geometry && geometry.trim()) { convert.push("--geometry", geometry.trim()); if (exact) convert.push("--exact", "1"); }
+            run("python3", convert);
+            const parsed = JSON.parse(readFileSync(grid, "utf8")) as { parts: { cells: unknown[]; scale?: number }[] };
+            return parsed.parts.reduce((sum, part) => sum + part.cells.length * (part.scale ?? 1) ** 3, 0);
+          };
+          let voxels = convertAt(voxelHeight);
+          for (let attempt = 0; attempt < 3; attempt++) {
+            // Surface voxel count grows with the square of the grid height.
+            const ratio = Math.sqrt(budget / Math.max(1, voxels));
+            const next = clampVoxelHeight(voxelHeight * (voxels > budget * 1.15 ? ratio : voxels < budget * 0.45 && voxelHeight < cap ? ratio * 0.9 : 1), metres, detail, footprint);
+            if (next === voxelHeight) break;
+            voxelHeight = next;
+            voxels = convertAt(voxelHeight);
+          }
+          log.push(`auto detail: ${voxelHeight} voxels tall (~${(metres / voxelHeight * 100).toFixed(1)} cm voxels), ${voxels.toLocaleString()} voxels for a ${detail} budget of ${budget.toLocaleString()}`);
           const fold = typeof foldFragments === "number" && Number.isFinite(foldFragments) && foldFragments >= 0 ? Math.min(0.5, foldFragments) : 0.01;
-          run("node", ["scripts/voxels-to-model.mjs", grid, id, String(worldHeight && worldHeight > 0 ? worldHeight : 0.5), "--keepSourceParts", "--foldFragments", String(fold)]);
-          run("node", ["scripts/rig-model.mjs", id]);
+          // Replacing: the old model goes only now that the conversion itself succeeded.
+          if (existing) { log.push(`replacing ${id}`); removeModel(id); }
+          try {
+            run("node", ["scripts/voxels-to-model.mjs", grid, id, String(worldHeight && worldHeight > 0 ? worldHeight : 0.5), "--keepSourceParts", "--foldFragments", String(fold)]);
+            run("node", ["scripts/rig-model.mjs", id]);
+          } catch (error) {
+            // A half-written model must not linger in the catalog.
+            try { removeModel(id); } catch { /* nothing written */ }
+            throw error;
+          }
           const imported = loadCatalog().models[id]!;
           if (name && name.trim()) imported.name = name.trim();
-          const cleanFolder = (folder ?? "").trim().replace(/^\/+|\/+$/g, "");
+          const cleanFolder = (folder ?? existing?.folder ?? "").trim().replace(/^\/+|\/+$/g, "");
           if (cleanFolder) imported.folder = cleanFolder;
           writeModel(imported);
           response.setHeader("content-type", "application/json");
-          response.end(JSON.stringify({ ok: true, id, model: imported, log: log.join("\n") }));
+          response.end(JSON.stringify({ ok: true, id, model: imported, log: log.join("\n"), voxelHeight, voxels, voxelSize: metres / voxelHeight }));
         }).catch((error: Error & { stderr?: string; stdout?: string }) => {
           response.statusCode = 400;
           response.end(`${error.message ?? error}${error.stderr ? `\n${error.stderr}` : ""}${error.stdout ? `\n${error.stdout}` : ""}`);

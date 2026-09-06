@@ -17,7 +17,7 @@ import {
   TransformNode,
   Vector3,
 } from "@babylonjs/core";
-import { catalog as foodModelsCatalog } from "./assets/catalog/index";
+import { catalog as foodModelsCatalog, ensureModels } from "./assets/catalog/index";
 import { decorLayout } from "./assets/scene/index";
 import { createDecorScene } from "./game/decor";
 import { createDecorateMode } from "./decorate";
@@ -218,6 +218,9 @@ const guestCoatMaterials = [
   mat("guest coat d", "#5f8aa3"),
 ];
 
+// Voxel data loads lazily (src/assets/catalog/index.ts): fetch what the coded scene and the
+// saved decor need before anything reads `foodModels.models[...]`.
+await ensureModels(["tomato", "cabbage", "wheat_scan", "tomato_sprout_scan", "tomato_vine_scan", "tomato_ripe_scan", ...decorLayout.props.map((prop) => prop.model)]);
 const foodModels: AuthoredVoxelCatalog = foodModelsCatalog;
 // Hand-placed decor (vases, tools, props) from src/assets/scene/decor.json.
 const decor = createDecorScene(scene, foodModels, decorLayout, { shadows });

@@ -19,7 +19,8 @@
 .decorate-folder { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding: 8px 10px; border: 1px solid #ffffff14; border-radius: 10px; background: #ffffff08; font-weight: 800; cursor: pointer; user-select: none; }
 .decorate-folder:hover { background: #ffffff14; }
 .decorate-folder small { margin-left: auto; padding: 1px 7px; border-radius: 999px; background: #ffffff12; color: #c7d4cc; font-size: 11px; }
-.decorate-model { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: calc(100% - 12px); margin-left: 12px; text-align: left; }
+.decorate-model { --depth: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: calc(100% - var(--depth) * 12px); margin-left: calc(var(--depth) * 12px); text-align: left; }
+.decorate-folder { --depth: 0; margin-left: calc(var(--depth) * 12px); }
 .decorate-prop { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border: 1px solid transparent; border-radius: 7px; font-size: 12px; cursor: pointer; user-select: none; }
 .decorate-prop:hover { background: #ffffff0c; }
 .decorate-prop.active { border-color: #38d3e0; background: #38d3e022; }
@@ -54,3 +55,9 @@
 .decorate-menu button { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 7px 10px; border: none; border-radius: 8px; color: #edf4e8; background: transparent; font: inherit; font-weight: 700; text-align: left; cursor: pointer; }
 .decorate-menu button:hover:not([disabled]) { background: #38d3e022; }
 .decorate-menu button[disabled] { opacity: .35; cursor: default; }
+/* The library panel hosts the shared catalog browser. */
+.decorate-library { width: 300px; }
+.decorate-library .decorate-library-slot { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.decorate-library .cb { --cb-tile: 78px; flex: 1; min-height: 0; }
+.decorate-library .cb-tile { cursor: grab; }
+.decorate-library .cb-tile.selected { border-color: #38d3e0; background: #38d3e022; }

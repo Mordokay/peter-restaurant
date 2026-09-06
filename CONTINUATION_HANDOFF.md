@@ -2055,3 +2055,114 @@ The game world gets a hand-placed layer edited in the game itself.
   when the pointer is not over the view); new ids, group kept if it exists.
   Also in the row context menu.
 - Decorate panels keep their scroll position across re-renders (`render()` saves/restores `scrollTop` of the library and placed panels).
+
+## Big imports (Sept 2026): full_kitchen
+
+- A 7 × 2.5 × 4.8 m low-poly kitchen glb imported at "height 256" produced a
+  1448×513×988 fine grid (~63M cells with LOD boxes expanded) and overflowed
+  the emitter's `Set` of claimed cells. Emitter now tracks occupancy in a
+  `Uint8Array` over `grid.size` and the fold owner map in an `Int32Array`;
+  it warns above 3M fine cells. Fold fix: fragments whose only neighbour was
+  an already-dropped floating fragment no longer crash (`dropped` set).
+- Re-voxelized with `--height 64 --lodLevels 1` (3.9 cm voxels, no finer LOD
+  lattice): 288,728 entries → 212,302 unique voxels, 1637 source pieces folded
+  to 67 parts, saved as `full_kitchen` ("Full Kitchen", folder `kitchen`,
+  `src/assets/catalog/kitchen.json`, 2.1 MB). Guideline for set pieces: keep
+  models under ~300k voxels; the lab import dialog's "height in voxels" is the
+  lever (64 for rooms, 48 for props, 140 for hero plants).
+- Import dialog rewritten as 5 plain questions (name, id, real height in
+  metres, detail = chunky/normal/fine, folder). The voxel size is chosen by
+  the endpoint: it converts, counts the fine voxels the game would carry and
+  re-runs (≤3 times, height ∝ √(budget/voxels), cap 160) until the count is
+  near the budget (60k / 160k / 320k). Node filter and fold % are no longer
+  asked (defaults: none, 1%). Response carries `voxelHeight`, `voxels`,
+  `voxelSize`; the status line shows the voxel size in cm.
+
+## Collection files: split import (Sept 2026)
+
+- `scripts/inspect-mesh.py file` → JSON `{ nodes: [{node, geometry, faces,
+  size, center}], size, faces }` (glTF units are metres, so node sizes are
+  real). `/__lab/inspect-model` uploads once (`.art-assets/imports/upload_<ts>.glb`)
+  and returns it; `/__lab/import-model` accepts `sourceFile` instead of `data`,
+  plus `footprint` (wide flat scenes start coarser), `exact` (converter
+  `--exact 1`: node name must equal the filter — "Object_2" vs "Object_24"),
+  and never goes below 3 mm voxels. A failed emit/rig removes the half-written
+  model from the catalog.
+- Lab import: the file is inspected first; with >1 nodes the dialog offers
+  "split" (one catalog object per node, id from the node name:
+  SM_Beer_Can_01_Asset_0 → beer_can_01, real height from the file, detail +
+  folder asked once, progress in the status line) or "one".
+- Emitter occupancy/owner grids are sparse 32³ chunks (`sparseGrid`) — no
+  size limit. `rigInference`/`extractParts` no longer spread huge arrays
+  (stack overflow on 100k+ cells).
+- food_collection_-_game_ready.glb (41 nodes) imported as 40 objects into
+  `food/pantry` (the "plane_plane" tray was skipped); ~6 s per object because
+  each conversion re-reads the 35 MB file.
+- Folder paths nest in both the lab list and the decorate library ("food/pantry"
+  under "food"; ancestors get headers, collapse hides the subtree, rows indent
+  by `--depth`). Split import defaults the folder to
+  `<current folder or imports>/<collection file slug>` so every collection gets
+  its own subfolder.
+
+## Import panel, detail tiers and per-item detail (2026-09-05)
+
+- **One import panel** (`openImportPanel` in `src/model-lab.ts`, styles `.lab-import*` in `src/model-lab.css`) replaced the chain of `window.prompt` questions. Fields with descriptions: Name, Id (follows the name until edited, validated live, warns when the id exists), Height (metres, with vase/plant/chair/person/room presets), Detail (four tiers), Folder (datalist of existing folders), Replace checkbox. A file with several meshes offers **Split** (one catalog object per mesh, list with checkboxes + a per-row detail dropdown, "default" follows the collection's tier) or **One object**. The estimate line shows the voxel size the tier gives at that height. Enter imports, Esc cancels. Dev hook: `window.__labImport.openImportPanel(file, inspected)`.
+- **Detail tiers** live in `src/game/importDetail.ts` and are shared by the panel and the dev endpoint: chunky 60k voxels / 6 mm floor, normal 160k / 3 mm, fine 320k / 1.5 mm (cap 200), ultra 900k / 0.75 mm (cap 320). The floor, not the budget, is what limits small items — a 15 cm can at "normal" stopped at 40 voxels tall. Fine doubles the linear resolution (4× voxels), ultra quadruples it (16×).
+- `/__lab/import-model` now accepts `replace: true` (the old model is removed only after the conversion succeeded; its folder is kept when none is sent) and `sourceName` (a collection is stored once as `.art-assets/imports/<slug>.glb` and shared by every object split out of it — before this every split item copied the 35 MB file; 42 identical copies were deleted). `*.vox.json` intermediates are now git-ignored.
+- The 40 pantry models were re-imported at **fine** from `food_collection_game_ready.glb` (3 s each, 12k–280k voxels, 1.5 mm base voxels). Re-run: scratch script pattern = POST per node with `geometry: node.node, exact: true, replace: true, sourceName`.
+
+### Named-parent labels and the exact-match fix (2026-09-05)
+
+- `scripts/inspect-mesh.py` now emits a `label` per geometry node: the nearest ancestor whose name is not generic (`Object_12`, `mesh`, `GLTF_SceneRootNode`, …). Sketchfab files (detected from `asset.generator`) get the trailing `_<index>` stripped (`Ladle_A_0` → `Ladle_A`). The import panel groups meshes by label (`groupInspectedNodes` in `src/model-lab.ts`): one catalog object per label, one part per mesh, `geometry` sent as a comma list of node names.
+- **Bug fixed in `scripts/voxelize-mesh.py`:** `--exact` compared the filter against the node name *and* the mesh name. Sketchfab offsets the two counters (node `Object_34` carries mesh `Object_16`), so importing `Object_16` also pulled in the sunflower-oil bottle and the shared grid height made the spatula a 40-voxel blob. Exact now matches node names only. The pantry was unaffected (its mesh names equal its node names).
+- `kitchen_utensils.glb` (Sketchfab, 33 meshes → 31 objects) imported at fine into `kitchen/utensils`; source kept once as `.art-assets/imports/kitchen_utensils.glb`. Known weak one: `tin_can_b` is a hanging plant whose 1.8 m string makes it "taller than 1.5 m", so it gets the coarse single-LOD path (1 cm voxels, 124 leaf fragments) — re-import at ultra or split the string off by hand if it matters.
+
+### Units and material tails (2026-09-05, restaurant_kitchen_set_part_1)
+
+- `restaurant_kitchen_set_part_1.glb` (Sketchfab, 63 meshes, 26 MB) is exported in **centimetres** (257 m × 42 m × 168 m read as metres). The import panel now has a **Units** select (metres / centimetres / millimetres / inches), auto-guessed from the file extent (`guessUnitScale`: > 12 m → cm, > 400 m → mm) and applied to every size shown and to the `worldHeight`/`footprint` sent. In One-object mode the Height field defaults to the file height in the chosen unit. The geometry itself is untouched — the height sets the game size.
+- `scripts/inspect-mesh.py` labels: Sketchfab appends `_<material>_<n>` to node names (`SM_Cup.001_Dishes_Dirty_0`), so the material tail is stripped when it matches the mesh's material. Blender duplicates (`Cup.001`) whose material differs from the original only by extra words get those words instead of the number: `Cup.001` + `Dishes_Dirty` → `Cup_Dirty`; same-material duplicates keep the number (`Teacup_001`). Each node also reports `material`.
+- The set went to `kitchen/restaurant_set_1/{utensils,dishes,cookware,trays}` by material category (fixing the file's "Coockware" spelling) at fine detail; the panel itself puts a collection in a single folder — category subfolders were done from the script for this import.
+- **Flat objects:** `minVoxelHeight` in `src/game/importDetail.ts` lets a model be as few as 6 voxels tall when it is much wider than tall (a 1 cm × 60 cm cutting board), so the budget loop can coarsen it; the fixed 16 minimum produced 789k voxels of 0.6 mm cubes for the small board. Upright objects still get 16.
+- **Blended (transparent) materials:** the voxelizer used to drop texels under 50 % alpha for BLEND materials, so glasses imported as ~2k voxels of rim. BLEND now keeps everything above 2 % alpha (MASK still honours its cutoff); the game has no per-voxel transparency, so a glass becomes a solid tinted shape.
+- `Food_Free.glb` (1.4 MB, metres, one mesh per object, proper names) imported at fine into `food/food_free` (50 objects; the `Frame` floor plane skipped). food.json is now 40 MB, kitchen.json 81 MB — split the catalog files per subfolder before the next kitchen pack (GitHub's 100 MB file limit).
+
+### Catalog files per folder path (2026-09-05)
+
+`scripts/catalog-io.mjs` `fileNameForFolder` now maps the full folder path to one file: `kitchen/restaurant_set_1/cookware` → `src/assets/catalog/kitchen--restaurant_set_1--cookware.json` (`_root.json` for unfiled). The old per-top-folder files were migrated in place (194 models, no loss); the largest file is now 34 MB instead of 85 MB. `catalog/index.ts` needs no change — its eager glob already picks up every `*.json`. Moving a model to another folder moves it between files (writeModel handles it).
+
+### electronics_kitchen.glb (2026-09-05)
+
+Fab low-poly appliance set, metres, 178 meshes in 94 named groups, Spanish names (Sarten = frying pan, Vaso = glass/jug, Tapa = lid, Vidrio = glass material). Doors, drawers, blender jugs/lids, coffee-maker carafes, buttons/knobs and pot lids were **attached to the appliance whose XZ footprint they overlap** (script `import-elec.mjs` in the session scratchpad; rule: attachment name pattern + ≥ 40 % XZ overlap), so each fridge/microwave/stove is one model whose door is its own part — animatable with the rig system. Ids translated (`frying_pan`, `drinking_glass`). Folder `kitchen/electronics_kitchen/{appliances,cookware,cutlery,dishes,storage}`. Worth turning into a panel option later ("attach doors and lids to the object they sit on").
+- Attachment rule that finally worked for oven doors (they hang in front of the stove and touch along one edge): attach when the XZ boxes are within 6 cm of each other and the door covers ≥ 50 % of its long axis over the base; pick the best coverage minus distance. The first rule (XZ overlap ≥ 40 %) missed all five oven doors. With the door and its glass, stoves land at ~16 mm voxels under the fine budget; appliances generally sit at 6–16 mm (large surfaces), cutlery/dishes at 1.5 mm.
+- **Id clash across packs (fixed 2026-09-05):** the electronics import with `replace: true` silently overwrote nine restaurant-set utensils that shared ids (knife_01–07, fork, spoon) and moved them to another folder. `/__lab/import-model` now answers **409 `{conflict: true, folder}`** when `replace` targets an id that lives in a different folder — replace is only for re-importing a pack over itself. The panel renames such clashes to `<id>_<collection slug>` instead of `_2`. The nine restaurant pieces were re-imported from `restaurant_kitchen_set_part_1.glb`; the electronics cutlery is `knife_01_electronics_kitchen` … `spoon_electronics_kitchen`.
+
+### GLB folder / All_Food.glb (2026-09-06)
+
+`~/Downloads/GLB` holds 75 separate cartoon-food files (each ~880 KB because each repeats the shared atlas) plus `All_Food.glb`, which is the same 75 objects in one file (Blender export, metres, one material `Cartoon_Mat`, proper node names). Imported from the combined file at fine into `food/all_food` (source kept once as `.art-assets/imports/all_food.glb`). Ids that another pack already owned (`tomato` — the hand-made one in `food`; `bowl`, `fork`, `knife` in the electronics/restaurant sets) got the `_all_food` suffix via the 409 rule. `Bell_Pepper_Yellow_Pice` → `bell_pepper_yellow_piece`.
+- **Catalog shards (2026-09-06):** a folder's file is sharded at 40 MB (`SHARD_BYTES` in `scripts/catalog-io.mjs`): `food--all_food.json`, `food--all_food.2.json`, `.3.json`. `writeModel` keeps a model in the shard that already holds it, otherwise uses the first shard with room, otherwise opens a new one; `readCatalog` merges every `*.json`, so nothing else changed. all_food was re-sharded into 37 / 36 / 10 MB. `kitchen--electronics_kitchen--appliances.json` is 43.5 MB and stays as is (new appliances go to a `.2` shard).
+- **Lab list keyboard navigation (2026-09-06):** ↑/↓ in the object list step through the rendered items (collapsed folders and the search filter decide what is rendered), Home/End jump to the ends; the moved-to item is loaded and scrolled into view. Handler on `document` in `src/model-lab.ts` (acts when focus is in the object list / search box or on body; inputs, editor panels and open dialogs keep their own keys); each item button carries `data-entry-id`. A click re-renders the list and would drop focus, so the click handler refocuses the active row (`focusActiveItem`) — without that the next arrow scrolled the page, which is the bug the first version had. From the search box the keys work too and focus stays in the box. If the current model sits in a collapsed folder there is no current item, so ↓ starts at the first and ↑ at the last visible item.
+
+### stylized_farm_objects_mobile_game_ready.glb (2026-09-06)
+
+Fab low-poly farm set (metres, oversized stylized props: 5.3 m fence sections, 2.4 m pitchfork, 2.2 m shovel — scale them in decorate mode if they look big next to the chef). One BLEND atlas material; node names carry the material tail with spaces ("Fence post_Farm objects material_0") — `inspect-mesh.py` now matches the material tail with spaces or underscores. Imported at fine into `farm/{tools,fences,crates,nature}`; ids: pitchfork (the file's "Fork"), fence_post/plank/plank_long/dense/spaces, crate/crate_corner/crate_side_long/short, stone/stone_flat, grass_01–04, hoe, shovel, watering_can. New top folder → new catalog files `farm--*.json`.
+- **Caps raised** in `src/game/importDetail.ts` (normal 256, fine 400, ultra 640): thin tall objects (pitchfork, shovel, fence post) were stuck at 200 voxels tall = 12 mm cubes with only ~4k voxels; the budget, not the cap, should decide. Grids are sparse so height is free.
+
+## Catalog v2: per-model files, index, lazy loading (2026-09-06)
+
+- **Disk:** `src/assets/catalog/models/<id>.json` (compact one-line JSON, 176 MB for 346 models) + `src/assets/catalog/index.json` (44 KB: name, folder, tags, size in metres, voxels, parts, states, clip ids, thumb flag; one model per line) + `src/assets/catalog/thumbs/<id>.png`. `scripts/catalog-io.mjs`: `readIndex/writeIndex/rebuildIndex`, `readModel/hasModel/listModelIds`, `writeModel` (file + index line), `deleteModel` (file + thumb + index), `writeThumbnail`, `migrateCatalogV1` (done — the sharded per-folder files are gone), `readCatalog()` still returns everything merged for tests/rigger. `indexEntry()` computes bounds from boxes/runs/voxels × pitch.
+- **Runtime:** `src/assets/catalog/index.ts` exports `catalogIndex` (eager), `catalog` (same object forever, `models` fills as they load), `loadModel/ensureModels/ensureAllModels/isLoaded`, `labelOf(id)`, `thumbnailUrl(id)`, `registerModel/forgetModel`, `entryFor(model)`. Model files are `import.meta.glob("./models/*.json")` lazy chunks; thumbs an eager `?url` glob. HMR: self-accepting; re-fetches every loaded model into the same `catalog.models` and copies the index in place.
+- **Consumers:** `restaurant-main.ts` does a top-level `await ensureModels([tomato, cabbage, wheat_scan, tomato_*_scan, ...decor props])` before building the scene (game loads in ~0.85 s, index only). `decorate.ts` library renders from `catalogIndex`, `hold()` ensures the model first, labels via `labelOf`. `model-lab.ts` entries come from the index; `loadEntry` ensures the model (or the tomato stage set) then re-enters; save/paste/import/rename/delete go through `registerModel/forgetModel/entryFor`. `vite.config.ts` `loadCatalog()` is a lazy Proxy (`models[id]` reads one file, `id in models` checks a path); new endpoint `/__lab/save-thumbnail {id, data(base64 png)}`. Scripts `voxels-to-model.mjs`/`rig-model.mjs` read one model.
+- Next: tags vocabulary + heuristics, thumbnails rendered by the lab, the Sims-style grid browser (lab + decorate).
+
+## Ingestion pipeline for pack folders (2026-09-06)
+
+Dry-run first, convert after approval. Tools:
+- `scripts/inspect-mesh.py` (labels: nearest meaningful ancestor, Sketchfab index stripped, material tail stripped with spaces/underscores, generic stems keep the informative tail, a material name stands in only when unique to one mesh; each node reports `material`).
+- `scripts/contact-sheet.py <glb> <out.png> [--perMesh] [--labels labels.json]` — software-rasterised 3/4 contact sheet of every object in a pack (PIL), for naming anonymous meshes by eye.
+- `scripts/import-plan.mjs <inspect-dir>` (+ `scripts/import-overrides.json`: per pack scale/units/folder/detail, rename {label→id, null=skip}, merge {id→labels}, wholeFile, height {id→m}, folderFor, names, tagsFor) → `docs/IMPORT_REPORT.md` + `.art-assets/import-plan.json`. Run with `node --experimental-strip-types` (imports catalogTags.ts).
+- `scripts/import-batch.mjs [--dry] [--only re] [--replace] [--jobs 3]` — converts the plan outside Vite (voxelize → emit → rig → name/folder/tags), source kept once as `.art-assets/imports/<pack>.glb`; log `.art-assets/import-batch.log`. Thumbnails afterwards from the lab (📸).
+First run: `~/Downloads/3D`, 25 packs, 417 objects found → 325 to import, 92 skipped (scan fragments, ground planes, building blocks, the farm pack already imported). Unit findings: SketchUp packs are in inches (fruits_pack, stainless shelving), steel_table and hanging_plants_001 in mm, bay leaves/house plants/pothos/farm_set_part_3 in cm, cartoon packs oversized (×0.4, ×0.33, ×0.5), trash cans ×30, 28_free_objects mixed (explicit heights). Awaiting the owner's corrections before `import-batch`.
+- **Batch run 2026-09-06:** owner dropped `low_poly_farm_v2` and `fruits_pack`; `import-batch` converted **243 objects, 0 failures** (~10 min, 3 jobs; catalog writes serialised through a lock because the emitter, rigger and writeModel all rewrite index.json). Detail rule in `import-plan.mjs`: objects the player handles (folders food/*, decor/plants, decor/hanging, decor/plant_shelf, dining/tableware*, kitchen/utensils*, kitchen/kitchen_assets; longest side ≤ 70 cm) → **ultra**, the rest the pack tier (fine; big farm pieces normal). Catalog: 589 models, `src/assets/catalog/models` = 502 MB (compact JSON) — git will carry it, but a binary voxel format is the next size lever if needed.
+- Voxel-size reality check: the budget counts cells at the finest pitch, so objects 0.8–1.5 m tall land at ~12 mm base / 6 mm detail under the fine budget (barrels, tables, sink, cart), 10 m farm plots at 40–100 mm. That is the budget working as designed; hero pieces can be re-imported at ultra from the lab panel.
+- **Converter fix (2026-09-06):** `voxelize-mesh.py` copied each geometry before sampling, and trimesh drops `visual.vertex_attributes["color"]` (COLOR_0) on copy — vertex-painted packs with no texture (kitchen_appliances) came out white. The colours are carried across the copy now; the 23 cartoon utensils were re-imported. The elegant dinner set is genuinely near-black ceramic (baseColorFactor 0.059 × texture) with gold rims, and hanging_plants_001 is a very dark green factor — both correct to the file, recolour in the lab if wanted.
+- **Thumbnails moved to `public/catalog-thumbs/<id>.png`** (served at `/catalog-thumbs/…`). They were an eager `import.meta.glob` in `catalog/index.ts`; Vite full-reloads the page whenever a file is added to a glob, which aborted thumbnail batches (each new PNG = reload). Now they are static files, the index carries `thumb: <epoch seconds>` as a cache-buster (`thumbnailUrl()` appends `?v=`), `/__lab/save-thumbnail` returns the stamp, and `vite.config.ts` ignores the folder in the watcher. `rebuildIndex()` stamps from file mtimes. Nothing imports PNGs any more.

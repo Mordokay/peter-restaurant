@@ -1,9 +1,11 @@
 import "./model-lab.css";
+import { DETAIL_ORDER, DETAIL_TIERS, estimateImport, isImportDetail, type ImportDetail } from "./game/importDetail";
 import {
   ArcRotateCamera, ArcRotateCameraPointersInput, Color3, Color4, DirectionalLight, Engine, HemisphericLight, Mesh, MeshBuilder,
-  Scene, ShadowGenerator, StandardMaterial, TransformNode, Vector3,
+  Scene, ShadowGenerator, StandardMaterial, Tools, TransformNode, Vector3,
 } from "@babylonjs/core";
-import { catalog as catalogData } from "./assets/catalog/index";
+import { catalog as catalogData, catalogIndex, ensureModels, entryFor, forgetModel, isLoaded, labelOf, registerModel, thumbnailUrl } from "./assets/catalog/index";
+import { createCatalogBrowser } from "./catalogBrowser";
 import { cellsFromAuthoredModel, type AuthoredVoxelCatalog, type AuthoredVoxelModel } from "./game/voxelModel";
 import { visibleVoxelFaceCount } from "./game/voxelGeometry";
 
@@ -16,7 +18,7 @@ import { createClipPlayer, createVoxelRig, type ClipPlayer, type VoxelRig } from
 
 const host = document.querySelector<HTMLElement>("#model-lab")!;
 host.innerHTML = `<div class="lab" id="lab-root">
-  <aside class="lab-sidebar" id="lab-sidebar"><div class="lab-resize-handle" id="lab-resize" title="Drag to resize this panel"></div><div class="lab-objects" id="lab-objects"><a class="lab-back" href="/">← Back to game</a><h1>Model Lab</h1><p>Every registered production asset appears here. Inspect silhouettes at any angle before approving them.</p><input class="lab-search" id="lab-search" placeholder="Search objects" /><div class="lab-list" id="lab-list"></div><div class="lab-objects-actions"><button id="lab-import" title="Import a .glb/.gltf/.obj: it is voxelized, its parts kept and auto-rigged, and it lands in this list ready to edit and animate">📥 Import 3D object…</button><input type="file" id="lab-import-file" accept=".glb,.gltf,.obj" hidden /></div><div class="lab-panel-hint">Drag one object onto another — or onto the 3D view, where it lands at the drop point — to bring its parts in (e.g. a better tomato onto the plant). Drop onto a 📁 folder to move it there. ✏️ renames (name · id · folder) · 🗑️ removes · Ctrl+C / Ctrl+V duplicates an object into the folder you are in.</div></div><div class="lab-left-panel" id="lab-left" hidden></div></aside>
+  <aside class="lab-sidebar" id="lab-sidebar"><div class="lab-resize-handle" id="lab-resize" title="Drag to resize this panel"></div><div class="lab-objects" id="lab-objects"><a class="lab-back" href="/">← Back to game</a><h1>Model Lab</h1><p>Every registered production asset appears here. Inspect silhouettes at any angle before approving them.</p><div class="lab-browser" id="lab-browser"></div><div class="lab-objects-actions"><button id="lab-import" title="Import a .glb/.gltf/.obj: it is voxelized, its parts kept and auto-rigged, and it lands in this list ready to edit and animate">📥 Import 3D object…</button><input type="file" id="lab-import-file" accept=".glb,.gltf,.obj" hidden /><button id="lab-thumbs" title="Render the missing thumbnails (pictures in the browser and the decorate library). Shift+click re-renders every thumbnail.">📸</button></div><div class="lab-panel-hint">Click a tile to open it · right-click for rename, duplicate, merge, remove · drag a tile onto another (or onto the 3D view) to bring its parts in · drag onto a folder in the 📁 rail to move it · ★ favourites · arrows move around the grid.</div></div><div class="lab-left-panel" id="lab-left" hidden></div></aside>
   <section class="lab-view"><canvas id="lab-canvas"></canvas><div class="lab-toolbar"><span id="lab-modes" class="lab-modes"></span><span id="lab-clips" class="lab-clips"></span><button id="lab-edit" title="Edit this voxel model: brushes, bucket, eyedropper, chunk delete, parts, rig, animation, save to the catalog">Edit</button><button id="lab-reset" title="Back to the framed view (also resets the field of view)">Reset view</button><button id="lab-fly" title="Fly mode (C): W A S D move, Q E down/up, hold the right mouse button to look. Off: the same works while holding the right button.">🎥 Fly <kbd>C</kbd></button><label class="lab-speed" title="Keyboard fly speed (W A S D / Q E)"><span>🎮</span><input type="range" id="lab-fly-speed" min="0" max="100" step="1" /><output id="lab-fly-speed-value"></output></label><button id="lab-spin">Auto rotate</button></div><div class="lab-help" id="lab-help"></div><div class="lab-stats" id="lab-stats"></div></section>
   <aside class="lab-right-panel" id="lab-right" hidden></aside>
   <footer class="lab-bottom-panel" id="lab-bottom" hidden></footer>
@@ -25,8 +27,6 @@ host.innerHTML = `<div class="lab" id="lab-root">
 </div>`;
 
 const canvas = document.querySelector<HTMLCanvasElement>("#lab-canvas")!;
-const list = document.querySelector<HTMLElement>("#lab-list")!;
-const search = document.querySelector<HTMLInputElement>("#lab-search")!;
 const stats = document.querySelector<HTMLElement>("#lab-stats")!;
 const spinButton = document.querySelector<HTMLButtonElement>("#lab-spin")!;
 const editButton = document.querySelector<HTMLButtonElement>("#lab-edit")!;
@@ -86,7 +86,7 @@ type LabEntry = { id: string; label: string; kind: "staged" | "model"; folder?: 
 const labelFor = (model: AuthoredVoxelModel): string => model.name ?? model.id.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 const entries: LabEntry[] = [
   { id: "tomato_stages", label: "Tomato · growth stages", kind: "staged" },
-  ...Object.keys(catalog.models).filter((id) => !HIDDEN_FROM_LAB.has(id)).map((id) => ({ id, label: labelFor(catalog.models[id]!), kind: "model" as const, folder: catalog.models[id]!.folder })),
+  ...Object.keys(catalogIndex).filter((id) => !HIDDEN_FROM_LAB.has(id)).sort().map((id) => ({ id, label: labelOf(id), kind: "model" as const, folder: catalogIndex[id]!.folder })),
 ];
 const requestedModel = new URLSearchParams(window.location.search).get("model");
 let selected = entries.some((entry) => entry.id === requestedModel) ? requestedModel! : entries[0]!.id;
@@ -176,9 +176,14 @@ function resetView(): void {
 }
 
 function loadEntry(entry: LabEntry, options: { skipDirtyCheck?: boolean } = {}): void {
-  // The folder of the object you open is never left collapsed.
-  if (entry.folder !== undefined && collapsedFolders.has(entry.folder)) { collapsedFolders.delete(entry.folder); storeFolders(); }
   if (editor.active && editor.dirty && !options.skipDirtyCheck && !window.confirm("Discard unsaved voxel edits?")) return;
+  // Voxel data loads lazily: fetch this entry's model(s) first, then come back here.
+  const needed = entry.kind === "staged" ? ["tomato", "tomato_sprout_scan", "tomato_vine_scan", "tomato_ripe_scan"] : [entry.id];
+  if (!needed.every(isLoaded)) {
+    stats.textContent = `Loading ${entry.label}…`;
+    void ensureModels(needed).then(() => { if (needed.every(isLoaded)) loadEntry(entry, { skipDirtyCheck: true }); else stats.textContent = `${entry.id} is not in the catalog`; });
+    return;
+  }
   editor.close();
   editableModel = null;
   clipPlayer = null;
@@ -328,12 +333,16 @@ const editor = createLabEditor({
   onStats(text) { stats.textContent = text; },
   setAutoRotate(on) { autoRotate = on; spinButton.classList.toggle("active", on); },
   onSaved(model, isNew) {
-    (catalog.models as Record<string, AuthoredVoxelModel>)[model.id] = model;
-    if (isNew && !entries.some((entry) => entry.id === model.id)) {
+    registerModel(model, entryFor(model, catalogIndex[model.id]));
+    const known = entries.find((entry) => entry.id === model.id);
+    if (known) { known.label = labelFor(model); known.folder = model.folder; }
+    if (isNew && !known) {
       entries.push({ id: model.id, label: labelFor(model), kind: "model", folder: model.folder });
       renderList();
     }
     if (model.id === selected) editableModel = model;
+    // The saved model is the one on display once the editor closes; refresh its picture then.
+    if (model.id === selected) setTimeout(() => { if (!editor.active) void captureThumbnail(model.id); }, 400);
   },
   reload() {
     const entry = entries.find((candidate) => candidate.id === selected);
@@ -357,109 +366,133 @@ editButton.addEventListener("click", () => {
 
 // Folders: a model's `folder` path groups it in the list (and decides which
 // catalog file stores it). Collapsed folders are remembered per browser.
-const FOLDERS_KEY = "farm-lab-folders-collapsed";
-const collapsedFolders = new Set<string>();
-try { for (const folder of JSON.parse(window.localStorage.getItem(FOLDERS_KEY) ?? "[]") as string[]) collapsedFolders.add(folder); } catch { /* ignore */ }
-const storeFolders = () => { try { window.localStorage.setItem(FOLDERS_KEY, JSON.stringify([...collapsedFolders])); } catch { /* ignore */ } };
 const UNFILED = "";
 /** Folder of the selected model — where imports and pasted copies land. */
 function currentFolder(): string | undefined { return entries.find((entry) => entry.id === selected)?.folder; }
 function folderLabel(folder: string): string { return folder === UNFILED ? "Unfiled" : folder; }
 async function moveModelToFolder(id: string, folder: string): Promise<void> {
-  const model = catalog.models[id];
+  const info = catalogIndex[id];
   const entry = entries.find((candidate) => candidate.id === id);
-  if (!model || !entry || (entry.folder ?? UNFILED) === folder) return;
+  if (!info || !entry || (entry.folder ?? UNFILED) === folder) return;
   try {
     const response = await fetch("/__lab/rename-model", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ from: id, folder }) });
     if (!response.ok) throw new Error(await response.text());
     const result = (await response.json()) as { folder: string | null };
-    const mutable = model as { folder?: string };
-    if (result.folder) mutable.folder = result.folder; else delete mutable.folder;
-    entry.folder = mutable.folder;
-    collapsedFolders.delete(folder);
-    storeFolders();
+    const mutable = (catalog.models[id] ?? {}) as { folder?: string };
+    if (result.folder) { mutable.folder = result.folder; info.folder = result.folder; } else { delete mutable.folder; delete info.folder; }
+    entry.folder = info.folder;
     renderList();
     stats.textContent = `${entry.label} moved to ${folderLabel(folder)}`;
   } catch (error) {
     window.alert(`Could not move: ${(error as Error).message}`);
   }
 }
-function itemButton(entry: LabEntry, inFolder: boolean): HTMLButtonElement {
-  const button = document.createElement("button");
-  button.className = `lab-item${entry.id === selected ? " active" : ""}${inFolder ? " in-folder" : ""}`;
-  const text = document.createElement("span");
-  text.className = "lab-item-text";
-  const name = document.createElement("span");
-  name.className = "lab-item-name";
-  name.textContent = entry.label;
-  name.title = entry.kind === "model" ? `id: ${entry.id}` : entry.label;
-  text.append(name);
-  if (entry.kind === "model") { const id = document.createElement("span"); id.className = "lab-item-id"; id.textContent = entry.id; text.append(id); }
-  button.append(text);
-  if (entry.kind === "model") {
-    const rename = document.createElement("span");
-    rename.className = "lab-item-rename";
-    rename.textContent = "✏️";
-    rename.title = "Rename: display name, id (what code references) and folder";
-    rename.addEventListener("click", (event) => { event.stopPropagation(); void renameModel(entry); });
-    button.append(rename);
-    const remove = document.createElement("span");
-    remove.className = "lab-item-rename";
-    remove.textContent = "🗑️";
-    remove.title = "Remove this object from the catalog (refused while game code references it)";
-    remove.addEventListener("click", (event) => { event.stopPropagation(); void deleteModel(entry); });
-    button.append(remove);
-    button.draggable = true;
-    button.addEventListener("dragstart", (event) => { event.dataTransfer?.setData("text/plain", entry.id); button.classList.add("dragging"); });
-    button.addEventListener("dragend", () => button.classList.remove("dragging"));
-    button.addEventListener("dragover", (event) => { if (draggedEntryId && draggedEntryId !== entry.id) { event.preventDefault(); button.classList.add("drop"); } });
-    button.addEventListener("dragleave", () => button.classList.remove("drop"));
-    button.addEventListener("drop", (event) => { event.preventDefault(); button.classList.remove("drop"); const source = event.dataTransfer?.getData("text/plain"); if (source && source !== entry.id) void mergeModels(source, entry); });
-  }
-  button.addEventListener("click", () => loadEntry(entry));
-  return button;
-}
+
+// ------------------------------------------------------------------ browser --
+// The object list is the shared catalog browser (src/catalogBrowser.ts): thumbnails in a
+// grid, search, zone/kind/size filters, a folder rail, favourites and recents.
+const browserRoot = document.querySelector<HTMLElement>("#lab-browser")!;
+let draggedEntryId: string | null = null;
+const browser = createCatalogBrowser({
+  root: browserRoot,
+  index: catalogIndex,
+  labelOf,
+  thumbnailUrl,
+  storageKey: "farm-lab",
+  hidden: HIDDEN_FROM_LAB,
+  extras: [{ id: "tomato_stages", label: "Tomato · growth stages", icon: "🍅", hint: "Coded growth stages: sprout → vine → ripe (press G to grow)" }],
+  idAttribute: "data-entry-id",
+  onOpen(id) {
+    const entry = entries.find((candidate) => candidate.id === id);
+    if (!entry) return;
+    loadEntry(entry);
+    browser.noteUsed(id);
+  },
+  onContext(id, event) { openTileMenu(id, event); },
+  onDragStart(id) { draggedEntryId = id; },
+  onRendered(grid) {
+    // Tiles are drop targets: dropping one object onto another brings its parts in (mergeModels).
+    for (const tile of grid.querySelectorAll<HTMLElement>(".cb-tile[data-entry-id]")) {
+      const id = tile.dataset.entryId!;
+      tile.addEventListener("dragover", (event) => { if (draggedEntryId && draggedEntryId !== id && entries.find((entry) => entry.id === id)?.kind === "model") { event.preventDefault(); tile.classList.add("drop"); } });
+      tile.addEventListener("dragleave", () => tile.classList.remove("drop"));
+      tile.addEventListener("drop", (event) => { event.preventDefault(); tile.classList.remove("drop"); const source = event.dataTransfer?.getData("text/plain") || draggedEntryId; const target = entries.find((entry) => entry.id === id); if (source && target && source !== id) void mergeModels(source, target); });
+    }
+  },
+});
+browserRoot.addEventListener("dragend", () => { draggedEntryId = null; });
+// Folder rail buttons take drops too: move the object into that folder ("" = Unfiled).
+browserRoot.addEventListener("dragover", (event) => { const folder = (event.target as HTMLElement).closest<HTMLElement>("[data-cb-folder]"); if (folder && draggedEntryId) { event.preventDefault(); folder.classList.add("drop"); } });
+browserRoot.addEventListener("dragleave", (event) => { (event.target as HTMLElement).closest?.("[data-cb-folder]")?.classList.remove("drop"); });
+browserRoot.addEventListener("drop", (event) => { const folder = (event.target as HTMLElement).closest<HTMLElement>("[data-cb-folder]"); if (!folder) return; event.preventDefault(); folder.classList.remove("drop"); const source = event.dataTransfer?.getData("text/plain") || draggedEntryId; if (source) void moveModelToFolder(source, folder.dataset.cbFolder ?? ""); });
 function renderList(): void {
-  const query = search.value.trim().toLowerCase();
-  list.replaceChildren();
-  const visible = entries.filter((candidate) => candidate.label.toLowerCase().includes(query) || candidate.id.toLowerCase().includes(query) || (candidate.folder ?? "").toLowerCase().includes(query));
-  for (const entry of visible.filter((candidate) => candidate.kind === "staged")) list.append(itemButton(entry, false));
-  const byFolder = new Map<string, LabEntry[]>();
-  for (const entry of visible.filter((candidate) => candidate.kind === "model")) {
-    const folder = entry.folder ?? UNFILED;
-    let bucket = byFolder.get(folder);
-    if (!bucket) byFolder.set(folder, (bucket = []));
-    bucket.push(entry);
+  const grid = browserRoot.querySelector<HTMLElement>(".cb-grid");
+  const keepFocus = Boolean(grid && document.activeElement && grid.contains(document.activeElement));
+  browser.setSelected(selected);
+  browser.render();
+  if (keepFocus) browser.focusSelected();
+}
+// Arrow keys step through the grid when nothing else owns them (focus on the page body).
+// Inside the browser its own handler runs; inputs, editor panels and dialogs keep their keys.
+document.addEventListener("keydown", (event) => {
+  const step = event.key === "ArrowDown" ? { dy: 1 } : event.key === "ArrowUp" ? { dy: -1 } : event.key === "ArrowRight" ? { dx: 1 } : event.key === "ArrowLeft" ? { dx: -1 } : event.key === "Home" ? { to: "home" as const } : event.key === "End" ? { to: "end" as const } : null;
+  if (!step || event.altKey || event.metaKey || event.ctrlKey) return;
+  const target = (document.activeElement ?? document.body) as HTMLElement;
+  if (target !== document.body || document.querySelector(".lab-dialog") || editor.active) return;
+  const id = browser.move(step);
+  if (!id) { event.preventDefault(); return; }
+  event.preventDefault();
+  const entry = entries.find((candidate) => candidate.id === id);
+  if (entry) { loadEntry(entry); browser.noteUsed(id); browser.focusSelected(); }
+});
+// Right-click menu on a tile.
+let tileMenu: HTMLElement | null = null;
+function closeTileMenu(): void { tileMenu?.remove(); tileMenu = null; }
+function openTileMenu(id: string, event: MouseEvent): void {
+  closeTileMenu();
+  const entry = entries.find((candidate) => candidate.id === id);
+  if (!entry) return;
+  const current = entries.find((candidate) => candidate.id === selected);
+  const menu = document.createElement("div");
+  menu.className = "lab-menu";
+  const items: { label: string; action: () => void; disabled?: boolean }[] = [
+    { label: "Open", action: () => { loadEntry(entry); browser.noteUsed(id); } },
+    ...(entry.kind === "model" ? [
+      { label: "✏️ Rename / move…", action: () => { void renameModel(entry); } },
+      { label: "📄 Duplicate here", action: () => { copiedModelId = id; void pasteModelCopy(); } },
+      { label: `⤵ Merge into ${current && current.kind === "model" && current.id !== id ? current.label : "the open object"}`, action: () => { if (current) void mergeModels(id, current); }, disabled: !current || current.kind !== "model" || current.id === id },
+      { label: "📸 Re-render thumbnail", action: () => { void generateThumbnails([id]); } },
+      { label: "🗑️ Remove…", action: () => { void deleteModel(entry); } },
+    ] : []),
+  ];
+  for (const item of items) {
+    const button = document.createElement("button");
+    button.textContent = item.label;
+    button.disabled = Boolean(item.disabled);
+    button.addEventListener("click", () => { closeTileMenu(); item.action(); });
+    menu.append(button);
   }
-  const folders = [...byFolder.keys()].sort((a, b) => (a === UNFILED ? 1 : b === UNFILED ? -1 : a.localeCompare(b)));
-  for (const folder of folders) {
-    const members = byFolder.get(folder)!;
-    const collapsed = collapsedFolders.has(folder) && !query;
-    const header = document.createElement("div");
-    header.className = `lab-folder${collapsed ? " collapsed" : ""}`;
-    header.title = `${folderLabel(folder)} · ${members.length} object${members.length === 1 ? "" : "s"} · click to ${collapsed ? "expand" : "collapse"} · drop an object here to move it into this folder`;
-    header.innerHTML = `<span class="lab-folder-caret">${collapsed ? "▸" : "▾"}</span><span class="lab-folder-name">📁 ${folderLabel(folder).replaceAll("/", " / ")}</span><small>${members.length}</small>`;
-    header.addEventListener("click", () => { if (collapsedFolders.has(folder)) collapsedFolders.delete(folder); else collapsedFolders.add(folder); storeFolders(); renderList(); });
-    header.addEventListener("dragover", (event) => { if (draggedEntryId) { event.preventDefault(); header.classList.add("drop"); } });
-    header.addEventListener("dragleave", () => header.classList.remove("drop"));
-    header.addEventListener("drop", (event) => { event.preventDefault(); header.classList.remove("drop"); const source = event.dataTransfer?.getData("text/plain"); if (source) void moveModelToFolder(source, folder); });
-    list.append(header);
-    if (collapsed) continue;
-    for (const entry of members) list.append(itemButton(entry, true));
-  }
+  document.body.append(menu);
+  const width = menu.offsetWidth, height = menu.offsetHeight;
+  menu.style.left = `${Math.min(event.clientX, window.innerWidth - width - 8)}px`;
+  menu.style.top = `${Math.min(event.clientY, window.innerHeight - height - 8)}px`;
+  tileMenu = menu;
+  const dismiss = (e: Event) => { if (e instanceof KeyboardEvent && e.key !== "Escape") return; if (e instanceof MouseEvent && menu.contains(e.target as Node)) return; closeTileMenu(); window.removeEventListener("pointerdown", dismiss, true); window.removeEventListener("keydown", dismiss, true); };
+  setTimeout(() => { window.addEventListener("pointerdown", dismiss, true); window.addEventListener("keydown", dismiss, true); }, 0);
 }
 
 // Copy / paste objects like files: Ctrl+C on the selected object, Ctrl+V makes
 // "<name> copy" in the folder you are looking at (ids: <id>_copy, <id>_copy_2…).
 let copiedModelId: string | null = null;
 async function pasteModelCopy(): Promise<void> {
+  if (copiedModelId) await ensureModels([copiedModelId]);
   const source = copiedModelId ? catalog.models[copiedModelId] : undefined;
   if (!source) { stats.textContent = "Nothing copied — select an object and press Ctrl+C first"; return; }
   const folder = currentFolder() ?? source.folder;
   let id = `${source.id}_copy`;
-  for (let n = 2; catalog.models[id]; n++) id = `${source.id}_copy_${n}`;
+  for (let n = 2; catalogIndex[id]; n++) id = `${source.id}_copy_${n}`;
   const baseName = labelFor(source).replace(/ copy( \d+)?$/, "");
-  const taken = new Set(Object.values(catalog.models).map((model) => labelFor(model)));
+  const taken = new Set(Object.keys(catalogIndex).map((known) => labelOf(known)));
   let name = `${baseName} copy`;
   for (let n = 2; taken.has(name); n++) name = `${baseName} copy ${n}`;
   const copy = structuredClone(source) as AuthoredVoxelModel & { folder?: string; name?: string };
@@ -469,7 +502,7 @@ async function pasteModelCopy(): Promise<void> {
   try {
     const response = await fetch("/__lab/save-model", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ model: copy }) });
     if (!response.ok) throw new Error(await response.text());
-    (catalog.models as Record<string, AuthoredVoxelModel>)[id] = copy;
+    registerModel(copy, entryFor(copy));
     const entry: LabEntry = { id, label: labelFor(copy), kind: "model", folder: copy.folder };
     entries.push(entry);
     loadEntry(entry, { skipDirtyCheck: true });
@@ -489,9 +522,6 @@ window.addEventListener("keydown", (event) => {
   } else if (key === "v") { event.preventDefault(); void pasteModelCopy(); }
 });
 
-let draggedEntryId: string | null = null;
-list.addEventListener("dragstart", (event) => { draggedEntryId = (event.target as HTMLElement).closest<HTMLElement>(".lab-item")?.querySelector(".lab-item-id")?.textContent ?? null; const id = event.dataTransfer?.getData("text/plain"); if (id) draggedEntryId = id; });
-list.addEventListener("dragend", () => { draggedEntryId = null; });
 
 async function deleteModel(entry: LabEntry): Promise<void> {
   if (editor.active) { window.alert("Finish editing (Done) before removing a model."); return; }
@@ -505,7 +535,7 @@ async function deleteModel(entry: LabEntry): Promise<void> {
       response = await attempt(true);
     }
     if (!response.ok) throw new Error(await response.text());
-    delete (catalog.models as Record<string, AuthoredVoxelModel>)[entry.id];
+    forgetModel(entry.id);
     entries.splice(entries.indexOf(entry), 1);
     if (selected === entry.id) loadEntry(entries.find((candidate) => candidate.kind === "model") ?? entries[0]!, { skipDirtyCheck: true });
     else renderList();
@@ -520,6 +550,7 @@ async function deleteModel(entry: LabEntry): Promise<void> {
  * source id, and the target opens in the editor for placement. A drop on the
  * 3D view also passes the point under the cursor, so the donor lands there. */
 async function mergeModels(sourceId: string, target: LabEntry, dropPoint?: { clientX: number; clientY: number }): Promise<void> {
+  await ensureModels([sourceId, target.id]);
   const source = catalog.models[sourceId];
   const model = catalog.models[target.id];
   if (!source || !model || target.kind !== "model") return;
@@ -556,46 +587,373 @@ canvas.addEventListener("drop", (event) => {
 const importButton = document.querySelector<HTMLButtonElement>("#lab-import")!;
 const importFile = document.querySelector<HTMLInputElement>("#lab-import-file")!;
 importButton.addEventListener("click", () => importFile.click());
+/** Node name → catalog id: "SM_Beer_Can_01_Asset_0" → "beer_can_01". */
+function idFromNodeName(node: string): string {
+  return node.replace(/^sm_/i, "").replace(/_?asset.*$/i, "").replace(/_0$/, "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40) || "object";
+}
+function slugOf(text: string): string {
+  return text.replace(/\.[^.]+$/, "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40);
+}
+function titleOf(id: string): string { return id.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()); }
+const escapeHtml = (text: string): string => text.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
+const formatCm = (metres: number): string => (metres >= 1 ? `${metres.toFixed(2)} m` : `${(metres * 100).toFixed(metres < 0.1 ? 1 : 0)} cm`);
+const formatMm = (metres: number): string => (metres >= 0.01 ? `${(metres * 100).toFixed(1)} cm` : `${(metres * 1000).toFixed(metres < 0.002 ? 2 : 1)} mm`);
+
+type InspectedNode = { node: string; geometry: string; label?: string; material?: string; faces: number; size: [number, number, number]; center: [number, number, number] };
+/** Files exported in centimetres or millimetres arrive as 250 m kitchens; a scale is applied to
+ *  every size we show and send (the geometry itself is untouched — the height sets the game size). */
+const UNIT_SCALES: { value: number; label: string; hint: string }[] = [
+  { value: 1, label: "metres", hint: "sizes are used as they are" },
+  { value: 0.01, label: "centimetres", hint: "sizes ÷ 100" },
+  { value: 0.001, label: "millimetres", hint: "sizes ÷ 1000" },
+  { value: 0.0254, label: "inches", hint: "sizes × 0.0254" },
+];
+function guessUnitScale(size: readonly number[]): number {
+  const extent = Math.max(...size);
+  return extent > 400 ? 0.001 : extent > 12 ? 0.01 : 1;
+}
+const scaled = (size: readonly number[], scale: number): [number, number, number] => [size[0]! * scale, size[1]! * scale, size[2]! * scale];
+/** Meshes that share a meaningful name (a plant in a tin can: can + foliage + string under "Tin_Can_B")
+ *  import as one object with one part per mesh. The inspector supplies the label. */
+type ImportGroup = { key: string; id: string; nodes: InspectedNode[]; size: [number, number, number]; faces: number };
+function groupInspectedNodes(nodes: InspectedNode[]): ImportGroup[] {
+  const groups = new Map<string, ImportGroup>();
+  for (const node of nodes) {
+    const key = node.label ?? node.node;
+    const group = groups.get(key) ?? { key, id: idFromNodeName(key), nodes: [], size: [0, 0, 0], faces: 0 };
+    group.nodes.push(node);
+    group.faces += node.faces;
+    groups.set(key, group);
+  }
+  for (const group of groups.values()) {
+    const low = [Infinity, Infinity, Infinity], high = [-Infinity, -Infinity, -Infinity];
+    for (const node of group.nodes) for (let axis = 0; axis < 3; axis++) { low[axis] = Math.min(low[axis]!, node.center[axis]! - node.size[axis]! / 2); high[axis] = Math.max(high[axis]!, node.center[axis]! + node.size[axis]! / 2); }
+    group.size = [high[0]! - low[0]!, high[1]! - low[1]!, high[2]! - low[2]!];
+  }
+  return [...groups.values()];
+}
+type InspectedFile = { sourceFile: string; nodes: InspectedNode[]; size: [number, number, number]; faces?: number };
+type ImportPlan =
+  | { mode: "one"; id: string; name: string; worldHeight: number; detail: ImportDetail; folder: string; replace: boolean }
+  | { mode: "split"; items: { group: ImportGroup; detail: ImportDetail }[]; detail: ImportDetail; folder: string; replace: boolean; unitScale: number };
+
+/** One panel instead of a chain of browser prompts: every question, its explanation and a live
+ *  estimate of the voxel size, filled in before anything is converted. Resolves null on cancel. */
+function openImportPanel(file: File, inspected: InspectedFile): Promise<ImportPlan | null> {
+  return new Promise((resolve) => {
+    const many = inspected.nodes.length > 1;
+    const fileSlug = slugOf(file.name) || "imported";
+    const folders = [...new Set(entries.map((entry) => entry.folder).filter((folder): folder is string => Boolean(folder)))].sort();
+    const defaultFolder = currentFolder() ?? "imports";
+    const [w, h, d] = inspected.size;
+    const totalFaces = inspected.faces ?? inspected.nodes.reduce((sum, node) => sum + node.faces, 0);
+    const groups = groupInspectedNodes(inspected.nodes);
+    let unitScale = guessUnitScale(inspected.size);
+    const heights = () => groups.map((group) => group.size[1] * unitScale);
+    let mode: "one" | "split" = many ? "split" : "one";
+    let idTouched = false;
+    let lastDetail: ImportDetail = "normal";
+    try { const saved = localStorage.getItem("farm-lab-import-detail"); if (isImportDetail(saved)) lastDetail = saved; } catch { /* private mode */ }
+
+    const element = document.createElement("div");
+    element.className = "lab-dialog lab-import";
+    const detailOptions = (checked: ImportDetail) => DETAIL_ORDER.map((key) => `<label class="lab-import-tier"><input type="radio" name="detail" value="${key}" ${key === checked ? "checked" : ""} /><span><b>${DETAIL_TIERS[key].label}</b> <small>${escapeHtml(DETAIL_TIERS[key].hint)}</small></span></label>`).join("");
+    element.innerHTML = `
+      <header><strong>📥 Import 3D object</strong><button type="button" data-import="close" title="Cancel (Esc)">✕</button></header>
+      <p class="lab-import-file"><b>${escapeHtml(file.name)}</b> · ${many ? `${inspected.nodes.length} meshes${groups.length !== inspected.nodes.length ? ` in ${groups.length} named objects` : ""}` : "1 mesh"} · <span data-import="file-size"></span> · ${totalFaces.toLocaleString()} triangles</p>
+      <label class="lab-import-field"><span class="lab-import-label">Units</span><span class="lab-import-inline"><select name="units">${UNIT_SCALES.map((unit) => `<option value="${unit.value}" ${unit.value === unitScale ? "selected" : ""}>${unit.label} (${unit.hint})</option>`).join("")}</select></span><small data-import="units-note"></small></label>
+      ${many ? `<div class="lab-import-modes">
+        <label><input type="radio" name="mode" value="split" checked /><span><b>Split into ${groups.length} objects</b><small>One catalog object per ${groups.length !== inspected.nodes.length ? "named object (meshes that share a name become parts of one object)" : "mesh"}, each at the size it has in the file (a tray of foods becomes ${groups.length} foods). <span data-import="split-range"></span></small></span></label>
+        <label><input type="radio" name="mode" value="one" /><span><b>One object</b><small>The whole file becomes a single model with one part per mesh — right for a chair or a kitchen counter that was modelled in pieces.</small></span></label>
+      </div>` : ""}
+      <div class="lab-import-fields" data-mode="one">
+        <label class="lab-import-field"><span class="lab-import-label">Name</span><input type="text" name="name" value="${escapeHtml(file.name.replace(/\.[^.]+$/, ""))}" autocomplete="off" /><small>Shown in the lab list and in the decorate library. Any text.</small></label>
+        <label class="lab-import-field"><span class="lab-import-label">Id</span><input type="text" name="id" value="${fileSlug}" autocomplete="off" spellcheck="false" /><small>Stable reference for code and saved scenes: lower-case letters, digits and underscores. Follows the name until you edit it. <span data-import="id-note"></span></small></label>
+        <label class="lab-import-field"><span class="lab-import-label">Height</span><span class="lab-import-inline"><input type="number" name="height" value="${(Math.min(5, Math.max(0.02, h * unitScale)) || 0.5).toFixed(2)}" min="0.01" step="0.05" /> m <span class="lab-import-presets">${[["vase", 0.3], ["plant", 0.6], ["chair", 0.9], ["person", 1.8], ["room", 2.5]].map(([label, value]) => `<button type="button" data-import="preset" data-value="${value}">${label} ${value}</button>`).join("")}</span></span><small>How tall it stands in the game, in metres. Width and depth keep the proportions of the file.</small></label>
+      </div>
+      <div class="lab-import-fields" data-mode="split">
+        <div class="lab-import-field"><span class="lab-import-label">Objects</span><div class="lab-import-nodes">${groups.map((group, index) => `<label><input type="checkbox" name="node" value="${index}" checked /><span class="node-id">${escapeHtml(group.id)}${group.nodes.length > 1 ? ` <em>${group.nodes.length} parts</em>` : ""}</span><span class="node-size" data-index="${index}"></span><span class="node-faces">${group.faces.toLocaleString()} tri</span><select name="node-detail" data-index="${index}" title="Detail for this object only"><option value="">default</option>${DETAIL_ORDER.map((key) => `<option value="${key}">${DETAIL_TIERS[key].label}</option>`).join("")}</select></label>`).join("")}</div><small><button type="button" data-import="nodes-all">All</button> <button type="button" data-import="nodes-none">None</button> Untick anything that is not an object — a tray, a floor plane, a placeholder. Each object keeps the size it has in the file; ids come from the mesh names (or the named parent when meshes are just "Object_12"). The dropdown on a row gives that one object its own detail level; <i>default</i> follows the Detail chosen below.</small></div>
+      </div>
+      <div class="lab-import-field"><span class="lab-import-label">Detail</span><div class="lab-import-tiers">${detailOptions(lastDetail)}</div><small data-import="estimate"></small></div>
+      <label class="lab-import-field"><span class="lab-import-label">Folder</span><input type="text" name="folder" list="lab-import-folders" value="${escapeHtml(defaultFolder)}" autocomplete="off" spellcheck="false" /><datalist id="lab-import-folders">${folders.map((folder) => `<option value="${escapeHtml(folder)}"></option>`).join("")}</datalist><small data-import="folder-note">Where it appears in the list. Use / for subfolders (kitchen/tools); leave empty for Unfiled.</small></label>
+      <label class="lab-import-replace"><input type="checkbox" name="replace" /><span>Replace objects that already have the same id <small>(only within the same folder — a re-import of this pack; an id taken by another pack's object gets this collection's name added instead)</small></span></label>
+      <footer><button type="button" data-import="close">Cancel</button><button type="button" class="primary" data-import="go">Import</button></footer>`;
+    document.body.append(element);
+
+    const field = <T extends HTMLElement>(selector: string) => element.querySelector<T>(selector)!;
+    const nameInput = field<HTMLInputElement>("input[name=name]");
+    const idInput = field<HTMLInputElement>("input[name=id]");
+    const heightInput = field<HTMLInputElement>("input[name=height]");
+    const folderInput = field<HTMLInputElement>("input[name=folder]");
+    const replaceInput = field<HTMLInputElement>("input[name=replace]");
+    const estimate = field<HTMLElement>("[data-import=estimate]");
+    const idNote = field<HTMLElement>("[data-import=id-note]");
+    const folderNote = field<HTMLElement>("[data-import=folder-note]");
+    const goButton = field<HTMLButtonElement>("[data-import=go]");
+    const unitsSelect = field<HTMLSelectElement>("select[name=units]");
+    const renderSizes = () => {
+      field<HTMLElement>("[data-import=file-size]").textContent = `${formatCm(w * unitScale)} × ${formatCm(h * unitScale)} × ${formatCm(d * unitScale)} in the file`;
+      field<HTMLElement>("[data-import=units-note]").textContent = unitScale === 1 && Math.max(w, h, d) <= 12 ? "Sizes in the file look like metres. Change this if a knife shows as 16 m long." : unitScale === 1 ? "⚠️ The file is very large for metres — a 250 m kitchen is usually a centimetre export." : `The file is ${formatCm(Math.max(w, h, d))} across if read as metres, so it was probably exported in ${UNIT_SCALES.find((unit) => unit.value === unitScale)?.label}. Sizes below are converted.`;
+      for (const cell of element.querySelectorAll<HTMLElement>(".node-size[data-index]")) { const group = groups[Number(cell.dataset.index)]!; const size = scaled(group.size, unitScale); cell.textContent = `${formatCm(size[0])} × ${formatCm(size[1])} × ${formatCm(size[2])}`; }
+      const range = element.querySelector<HTMLElement>("[data-import=split-range]");
+      if (range) { const hs = heights(); range.textContent = `Tallest ${formatCm(Math.max(...hs))}, smallest ${formatCm(Math.min(...hs))}.`; }
+    };
+    const detailValue = (): ImportDetail => { const checked = element.querySelector<HTMLInputElement>("input[name=detail]:checked")?.value; return isImportDetail(checked) ? checked : "normal"; };
+    const chosenGroups = () => [...element.querySelectorAll<HTMLInputElement>("input[name=node]:checked")].map((input) => groups[Number(input.value)]!);
+    const nodeDetail = (index: number, fallback: ImportDetail): ImportDetail => { const value = element.querySelector<HTMLSelectElement>(`select[name=node-detail][data-index="${index}"]`)?.value; return isImportDetail(value) ? value : fallback; };
+    const chosenItems = (fallback: ImportDetail) => [...element.querySelectorAll<HTMLInputElement>("input[name=node]:checked")].map((input) => ({ group: groups[Number(input.value)]!, detail: nodeDetail(Number(input.value), fallback) }));
+    const idValid = () => /^[a-z0-9_]{1,64}$/.test(idInput.value);
+
+    const render = () => {
+      for (const block of element.querySelectorAll<HTMLElement>(".lab-import-fields")) block.hidden = block.dataset.mode !== mode;
+      const detail = detailValue();
+      const tier = DETAIL_TIERS[detail];
+      if (mode === "one") {
+        const metres = Math.max(0.01, Number(heightInput.value) || 0.5);
+        const plan = estimateImport(metres, detail);
+        estimate.innerHTML = `At ${formatCm(metres)} tall: cubes of about <b>${formatMm(plan.voxelSize)}</b> (fine details ${formatMm(plan.fineSize)}), up to ${plan.voxelHeight} voxels high, aiming for ~${(tier.budget / 1000).toFixed(0)}k voxels. The grid is coarsened automatically if the model has more surface than that.`;
+        const exists = Boolean(catalogIndex[idInput.value]);
+        idNote.textContent = !idInput.value ? "" : !idValid() ? "⚠️ Only a–z, 0–9 and _ are allowed." : exists ? (replaceInput.checked ? "Replaces the existing object." : "⚠️ Already exists — tick replace below or pick another id.") : "";
+        idNote.classList.toggle("warn", Boolean(idInput.value) && (!idValid() || (exists && !replaceInput.checked)));
+        folderNote.textContent = "Where it appears in the list. Use / for subfolders (kitchen/tools); leave empty for Unfiled.";
+        goButton.disabled = !idValid() || (exists && !replaceInput.checked);
+        goButton.textContent = exists && replaceInput.checked ? "Replace" : "Import";
+      } else {
+        const chosen = chosenGroups();
+        const sizes = chosen.map((group) => Math.max(0.02, group.size[1] * unitScale));
+        const smallest = sizes.length ? Math.min(...sizes) : 0.1, tallest = sizes.length ? Math.max(...sizes) : 0.1;
+        const fine = estimateImport(smallest, detail), coarse = estimateImport(tallest, detail);
+        const overrides = chosenItems(detail).filter((item) => item.detail !== detail).length;
+        estimate.innerHTML = `Each object gets its own grid from its real size: cubes of about <b>${formatMm(fine.voxelSize)}</b> for the ${formatCm(smallest)} ones up to <b>${formatMm(coarse.voxelSize)}</b> for the ${formatCm(tallest)} ones, each aiming for ~${(tier.budget / 1000).toFixed(0)}k voxels.${overrides ? ` <b>${overrides}</b> object${overrides === 1 ? " has its" : "s have their"} own level from the list above.` : ""}`;
+        const existing = chosen.filter((group) => catalogIndex[group.id]).length;
+        folderNote.textContent = "The whole collection lands here; use / for subfolders. Each collection gets its own subfolder by default.";
+        goButton.disabled = chosen.length === 0;
+        goButton.textContent = chosen.length ? `Import ${chosen.length} object${chosen.length === 1 ? "" : "s"}${existing ? replaceInput.checked ? ` (${existing} replaced)` : ` (${existing} renamed with the collection name)` : ""}` : "Nothing selected";
+      }
+    };
+    const setMode = (next: "one" | "split") => {
+      mode = next;
+      if (!folderInput.dataset.touched) folderInput.value = next === "split" ? `${defaultFolder}/${fileSlug}` : defaultFolder;
+      render();
+    };
+    element.addEventListener("input", (event) => {
+      const target = event.target as HTMLInputElement;
+      if (target.name === "mode") setMode(target.value as "one" | "split");
+      if (target.name === "name" && !idTouched) idInput.value = slugOf(target.value) || fileSlug;
+      if (target.name === "id") { idTouched = true; idInput.value = idInput.value.toLowerCase(); }
+      if (target.name === "folder") folderInput.dataset.touched = "1";
+      if (target.name === "units") { unitScale = Number(unitsSelect.value) || 1; renderSizes(); if (mode === "one" && !heightInput.dataset.touched) heightInput.value = (Math.min(5, Math.max(0.02, h * unitScale)) || 0.5).toFixed(2); }
+      if (target.name === "height") heightInput.dataset.touched = "1";
+      if (target.name === "detail") { try { localStorage.setItem("farm-lab-import-detail", target.value); } catch { /* private mode */ } }
+      render();
+    });
+    element.addEventListener("click", (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLElement>("[data-import]");
+      if (!button) return;
+      const action = button.dataset.import;
+      if (action === "close") finish(null);
+      else if (action === "preset") { heightInput.value = button.dataset.value!; render(); }
+      else if (action === "nodes-all" || action === "nodes-none") { for (const input of element.querySelectorAll<HTMLInputElement>("input[name=node]")) input.checked = action === "nodes-all"; render(); }
+      else if (action === "go" && !goButton.disabled) {
+        const detail = detailValue(), folder = folderInput.value.trim(), replace = replaceInput.checked;
+        finish(mode === "one"
+          ? { mode: "one", id: idInput.value.trim(), name: nameInput.value.trim() || titleOf(idInput.value), worldHeight: Math.max(0.01, Number(heightInput.value) || 0.5), detail, folder, replace }
+          : { mode: "split", items: chosenItems(detail), detail, folder, replace, unitScale });
+      }
+    });
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { event.preventDefault(); finish(null); }
+      else if (event.key === "Enter" && (event.target as HTMLElement).tagName === "INPUT" && (event.target as HTMLInputElement).type !== "checkbox") { event.preventDefault(); goButton.click(); }
+    };
+    element.addEventListener("keydown", onKey);
+    const finish = (plan: ImportPlan | null) => { element.remove(); resolve(plan); };
+    renderSizes();
+    setMode(mode);
+    (mode === "one" ? nameInput : folderInput).focus({ preventScroll: true });
+    element.scrollTop = 0;
+    if (mode === "one") nameInput.select();
+  });
+}
+
+// ------------------------------------------------------------- thumbnails --
+// A 256² PNG of each model for the browser tiles, rendered here (the only place with a
+// renderer) and stored by the dev server in src/assets/catalog/thumbs/<id>.png.
+const thumbsButton = document.querySelector<HTMLButtonElement>("#lab-thumbs")!;
+let thumbsRunning = false;
+function missingThumbnails(): string[] { return entries.filter((entry) => entry.kind === "model" && !catalogIndex[entry.id]?.thumb).map((entry) => entry.id); }
+function updateThumbsButton(): void {
+  const missing = missingThumbnails().length;
+  thumbsButton.textContent = thumbsRunning ? "⏳" : missing ? `📸 ${missing}` : "📸";
+  thumbsButton.title = thumbsRunning ? "Rendering thumbnails…" : missing ? `Render the ${missing} missing thumbnail${missing === 1 ? "" : "s"} (pictures for the browser tiles). Shift+click re-renders every thumbnail.` : "Every object has a thumbnail. Shift+click re-renders them all.";
+}
+const nextFrame = () => new Promise<void>((resolve) => scene.onAfterRenderObservable.addOnce(() => resolve()));
+/** Capture the model currently on display as its thumbnail (transparent background, no ground). */
+async function captureThumbnail(id: string): Promise<boolean> {
+  if (selected !== id || !(displayedRig || displayed) || editor.active) return false;
+  const clear = scene.clearColor.clone();
+  const groundVisible = ground.isVisible;
+  scene.clearColor = new Color4(0, 0, 0, 0);
+  ground.isVisible = false;
+  // Frame for a SQUARE picture: the bounding sphere of what is on display, filling the frame.
+  // (The viewport framing is for the wide canvas and leaves air on the sides.)
+  const radius = camera.radius, target = camera.target.clone();
+  const meshes = (displayedRig?.meshes ?? (displayed?.getChildMeshes() as Mesh[]) ?? []).filter((mesh) => mesh.isEnabled() && mesh.isVisible && mesh.getTotalVertices() > 0);
+  if (meshes.length) {
+    meshes.forEach((mesh) => mesh.computeWorldMatrix(true));
+    let minimum = new Vector3(Infinity, Infinity, Infinity), maximum = new Vector3(-Infinity, -Infinity, -Infinity);
+    for (const mesh of meshes) { const box = mesh.getBoundingInfo().boundingBox; minimum = Vector3.Minimize(minimum, box.minimumWorld); maximum = Vector3.Maximize(maximum, box.maximumWorld); }
+    const centre = minimum.add(maximum).scale(0.5);
+    const sphere = maximum.subtract(minimum).length() / 2;
+    camera.target = centre;
+    camera.radius = Math.max(0.05, (sphere / Math.sin(camera.fov / 2)) * 0.92);
+  }
+  try {
+    await nextFrame();
+    const data = await Tools.CreateScreenshotUsingRenderTargetAsync(engine, camera, { width: 256, height: 256 }, "image/png", 4, true);
+    const response = await fetch("/__lab/save-thumbnail", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, data }) });
+    if (!response.ok) throw new Error(await response.text());
+    const saved = (await response.json()) as { thumb?: number };
+    const info = catalogIndex[id];
+    if (info) info.thumb = saved.thumb ?? Math.floor(Date.now() / 1000);
+    return true;
+  } catch (error) {
+    console.warn(`thumbnail for ${id} failed: ${(error as Error).message}`);
+    return false;
+  } finally {
+    scene.clearColor = clear;
+    ground.isVisible = groundVisible;
+    camera.radius = radius;
+    camera.target = target;
+    updateThumbsButton();
+  }
+}
+/** Show each model in turn and capture it. Returns how many were written. */
+async function generateThumbnails(ids: string[] = missingThumbnails()): Promise<number> {
+  if (thumbsRunning || editor.active) return 0;
+  thumbsRunning = true;
+  updateThumbsButton();
+  let written = 0;
+  const previous = selected;
+  try {
+    for (const [index, id] of ids.entries()) {
+      const entry = entries.find((candidate) => candidate.id === id && candidate.kind === "model");
+      if (!entry) continue;
+      stats.textContent = `Thumbnail ${index + 1}/${ids.length}: ${entry.label}…`;
+      loadEntry(entry, { skipDirtyCheck: true });
+      for (let tries = 0; tries < 200 && !(selected === id && displayedRig && isLoaded(id)); tries++) await new Promise((resolve) => setTimeout(resolve, 50));
+      if (await captureThumbnail(id)) written++;
+    }
+  } finally {
+    thumbsRunning = false;
+    updateThumbsButton();
+    const back = entries.find((candidate) => candidate.id === previous);
+    if (back && selected !== previous) loadEntry(back, { skipDirtyCheck: true });
+    stats.textContent = `Rendered ${written} thumbnail${written === 1 ? "" : "s"}.`;
+  }
+  return written;
+}
+thumbsButton.addEventListener("click", (event) => { void generateThumbnails(event.shiftKey ? entries.filter((entry) => entry.kind === "model").map((entry) => entry.id) : undefined); });
+updateThumbsButton();
+Object.assign(window as unknown as Record<string, unknown>, { __labThumbs: { generate: generateThumbnails, capture: captureThumbnail, missing: missingThumbnails } });
+
+function setImportBusy(text: string | null): void {
+  importButton.disabled = text !== null;
+  importButton.textContent = text ?? "📥 Import 3D object…";
+}
+function addImportedModel(model: AuthoredVoxelModel): LabEntry {
+  registerModel(model, entryFor(model, catalogIndex[model.id]));
+  let entry = entries.find((candidate) => candidate.id === model.id);
+  if (entry) { entry.label = labelFor(model); entry.folder = model.folder; }
+  else { entry = { id: model.id, label: labelFor(model), kind: "model", folder: model.folder }; entries.push(entry); }
+  return entry;
+}
+
+async function importSplit(sourceFile: string, fileName: string, plan: Extract<ImportPlan, { mode: "split" }>): Promise<void> {
+  const { items, folder, replace, unitScale } = plan;
+  const nodes = items.map((item) => item.group);
+  const sourceName = slugOf(fileName) || "collection";
+  const levels = [...new Set(items.map((item) => DETAIL_TIERS[item.detail].label.toLowerCase()))].join("/");
+  const taken = new Set(Object.keys(catalogIndex));
+  const done: string[] = []; const failed: string[] = [];
+  let index = 0;
+  for (const { group, detail } of items) {
+    index++;
+    // Same id in another folder = a different object from another pack: it gets the collection's name added.
+    const clash = catalogIndex[group.id];
+    let id = group.id;
+    if (clash && (!replace || (clash.folder ?? "") !== folder.replace(/^\/+|\/+$/g, ""))) id = `${group.id}_${sourceName}`;
+    for (let n = 2; taken.has(id); n++) id = `${group.id}_${sourceName}_${n}`;
+    taken.add(id);
+    const name = titleOf(id);
+    setImportBusy(`⏳ ${index}/${nodes.length} ${name}…`);
+    const size = scaled(group.size, unitScale);
+    stats.textContent = `Importing ${index}/${nodes.length}: ${name} (${formatCm(size[1])} tall, ${DETAIL_TIERS[detail].label.toLowerCase()} detail)…`;
+    try {
+      const response = await fetch("/__lab/import-model", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, name, fileName, sourceFile, sourceName, replace, worldHeight: Math.max(0.02, size[1]), footprint: size, geometry: group.nodes.map((node) => node.node).join(","), exact: true, foldFragments: 0.01, folder, detail }) });
+      if (!response.ok) throw new Error(await response.text());
+      const result = (await response.json()) as { id: string; model: AuthoredVoxelModel };
+      addImportedModel(result.model);
+      done.push(result.id);
+      renderList();
+    } catch (error) {
+      failed.push(`${group.key}: ${(error as Error).message.split("\n")[0]}`);
+    }
+  }
+  setImportBusy(null);
+  if (done.length) loadEntry(entries.find((entry) => entry.id === done[0])!, { skipDirtyCheck: true });
+  if (done.length) void generateThumbnails(done);
+  stats.textContent = `Imported ${done.length} of ${nodes.length} objects into ${folder || "Unfiled"} at ${levels} detail${failed.length ? ` · ${failed.length} failed (see console)` : ""}.`;
+  if (failed.length) console.warn("Split import failures:\n" + failed.join("\n"));
+}
+
+async function importOne(sourceFile: string, fileName: string, footprint: [number, number, number], plan: Extract<ImportPlan, { mode: "one" }>): Promise<void> {
+  const { id, name, worldHeight, detail, folder, replace } = plan;
+  const geometry = ""; // advanced: node filter (run scripts/voxelize-mesh.py --geometry by hand)
+  const foldFragments = 0.01; // tiny loose flakes join the part they touch; 🧹 Tidy in the lab can do more
+  setImportBusy("⏳ Converting…");
+  stats.textContent = `Importing ${fileName} as ${id}: voxelizing at ${DETAIL_TIERS[detail].label.toLowerCase()} detail, emitting parts, auto-rigging…`;
+  try {
+    const response = await fetch("/__lab/import-model", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id, name, fileName, sourceFile, replace, worldHeight, footprint, geometry, foldFragments, folder, detail }) });
+    if (!response.ok) throw new Error(await response.text());
+    const result = (await response.json()) as { id: string; model: AuthoredVoxelModel; log: string; voxelHeight?: number; voxels?: number; voxelSize?: number };
+    const entry = addImportedModel(result.model);
+    loadEntry(entry, { skipDirtyCheck: true });
+    void nextFrame().then(() => captureThumbnail(result.id));
+    console.info(result.log);
+    stats.textContent = `Imported ${result.id}: ${result.voxels?.toLocaleString() ?? "?"} voxels at ${result.voxelSize ? formatMm(result.voxelSize) : "?"}, ${result.model.parts.length} part(s), auto-rigged. Edit → polish, assign, animate.`;
+  } catch (error) {
+    window.alert(`Import failed:\n${(error as Error).message}`);
+    stats.textContent = "Import failed — see the alert.";
+  } finally { setImportBusy(null); }
+}
+
 importFile.addEventListener("change", async () => {
   const file = importFile.files?.[0];
   importFile.value = "";
   if (!file) return;
-  const suggestedId = file.name.replace(/\.[^.]+$/, "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40) || "imported";
-  const name = window.prompt("Display name for this object:", file.name.replace(/\.[^.]+$/, ""));
-  if (name === null) return;
-  const id = window.prompt("Id (stable reference used by code — lower-case letters, digits, underscores):", suggestedId);
-  if (!id) return;
-  const height = Number(window.prompt("Detail: height of the object in voxels (48 = chunky prop, 140 = hero plant):", "64") ?? "64");
-  const worldHeight = Number(window.prompt("Size in the game: height in metres:", "0.5") ?? "0.5");
-  const geometry = window.prompt("Optional: only convert nodes whose name contains… (leave empty for the whole file):", "") ?? "";
-  const foldPercent = Number(window.prompt("Fold fragments: pieces smaller than this % of the largest piece join the part they touch (scans shed hundreds of flakes; 0 keeps every piece):", "1") ?? "1");
-  const foldFragments = Number.isFinite(foldPercent) && foldPercent >= 0 ? foldPercent / 100 : 0.01;
-  const folder = (window.prompt("Folder in the lab list (e.g. plants or kitchen/tools; empty = unfiled):", currentFolder() ?? "imports") ?? "").trim();
-  importButton.disabled = true;
-  importButton.textContent = "⏳ Converting…";
-  stats.textContent = `Importing ${file.name} as ${id}: voxelizing, emitting parts, auto-rigging…`;
+  // Upload once and look inside; the panel then asks everything in one go.
+  setImportBusy("⏳ Reading file…");
+  let inspected: InspectedFile | null = null;
   try {
     const data = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(reader.error); reader.readAsDataURL(file); });
-    const response = await fetch("/__lab/import-model", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: id.trim(), name, fileName: file.name, data, height, worldHeight, geometry, foldFragments, folder }) });
+    const response = await fetch("/__lab/inspect-model", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ fileName: file.name, data }) });
     if (!response.ok) throw new Error(await response.text());
-    const result = (await response.json()) as { id: string; model: AuthoredVoxelModel; log: string };
-    (catalog.models as Record<string, AuthoredVoxelModel>)[result.id] = result.model;
-    const entry: LabEntry = { id: result.id, label: labelFor(result.model), kind: "model", folder: result.model.folder };
-    entries.push(entry);
-    loadEntry(entry, { skipDirtyCheck: true });
-    console.info(result.log);
-    stats.textContent = `Imported ${result.id}: ${result.model.parts.length} part(s), auto-rigged. Edit → polish, assign, animate.`;
+    inspected = (await response.json()) as InspectedFile;
   } catch (error) {
-    window.alert(`Import failed:\n${(error as Error).message}`);
-    stats.textContent = "Import failed — see the alert.";
-  } finally {
-    importButton.disabled = false;
-    importButton.textContent = "📥 Import 3D object…";
-  }
+    window.alert(`Could not read the file:\n${(error as Error).message}`);
+    return;
+  } finally { setImportBusy(null); }
+  if (!inspected) return;
+  const plan = await openImportPanel(file, inspected);
+  if (!plan) return;
+  if (plan.mode === "split") await importSplit(inspected.sourceFile, file.name, plan);
+  else await importOne(inspected.sourceFile, file.name, inspected.size, plan);
 });
+Object.assign(window as unknown as Record<string, unknown>, { __labImport: { openImportPanel, importSplit, importOne } });
 
 async function renameModel(entry: LabEntry): Promise<void> {
   if (editor.active) { window.alert("Finish editing (Done) before renaming a model."); return; }
+  await ensureModels([entry.id]);
   const model = catalog.models[entry.id];
   if (!model) return;
   const name = window.prompt("Display name (shown in the lab; leave empty to show the id):", model.name ?? "");
@@ -608,13 +966,13 @@ async function renameModel(entry: LabEntry): Promise<void> {
     const response = await fetch("/__lab/rename-model", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ from: entry.id, to: id.trim() || entry.id, name, folder }) });
     if (!response.ok) throw new Error(await response.text());
     const result = (await response.json()) as { id: string; name: string | null; folder: string | null; references: string[] };
-    const models = catalog.models as Record<string, AuthoredVoxelModel>;
     const moved = { ...model, id: result.id } as AuthoredVoxelModel;
     if (result.name) moved.name = result.name; else delete moved.name;
     if (result.folder) moved.folder = result.folder; else delete moved.folder;
     entry.folder = moved.folder;
-    delete models[entry.id];
-    models[result.id] = moved;
+    const previous = catalogIndex[entry.id];
+    forgetModel(entry.id);
+    registerModel(moved, entryFor(moved, previous));
     entry.id = result.id;
     entry.label = labelFor(moved);
     if (selected !== result.id) { selected = result.id; loadEntry(entry, { skipDirtyCheck: true }); } else renderList();
@@ -626,7 +984,6 @@ async function renameModel(entry: LabEntry): Promise<void> {
   }
 }
 
-search.addEventListener("input", renderList);
 document.querySelector<HTMLButtonElement>("#lab-reset")!.addEventListener("click", resetView);
 const flyButton = document.querySelector<HTMLButtonElement>("#lab-fly")!;
 const speedSlider = document.querySelector<HTMLInputElement>("#lab-fly-speed")!;

@@ -38,6 +38,7 @@ Usage:
 Options:
   --geometry NAME[,NAME..]  only nodes/geometries whose name contains NAME
                             (case-insensitive). Default: every geometry node.
+  --exact 1                 with --geometry: the name must match exactly.
   --height N                model height in BASE-pitch voxels (default 48).
   --pitch F                 base pitch in model units (overrides --height; use
                             it so several models share one voxel size).
@@ -77,7 +78,7 @@ if len(sys.argv) < 3:
     raise SystemExit(__doc__)
 input_path, out_path = sys.argv[1], sys.argv[2]
 options = {
-    "geometry": None, "height": 48, "pitch": None, "lod": "auto", "lodLevels": "2,1,0.5", "lodThreshold": 1.5, "minPartVoxels": 6,
+    "geometry": None, "exact": "0", "height": 48, "pitch": None, "lod": "auto", "lodLevels": "2,1,0.5", "lodThreshold": 1.5, "minPartVoxels": 6,
     "shadeTolerance": 0.07, "maxShades": 4, "flatten": 0.0, "paletteTolerance": 0.025, "denoise": 1,
 }
 args = sys.argv[3:]
@@ -113,6 +114,7 @@ flatten = min(1.0, max(0.0, float(options["flatten"])))
 palette_tolerance = float(options["paletteTolerance"])
 denoise_passes = max(0, int(options["denoise"]))
 name_filters = [f.strip().lower() for f in str(options["geometry"]).split(",") if f.strip()] if options["geometry"] else []
+exact_names = str(options["exact"]) in ("1", "true", "yes")  # --exact 1: node/geometry name must equal a filter (collections: "Object_2" vs "Object_24")
 
 # ----------------------------------------------------------------------------
 # Color math: sRGB <-> linear, linear -> Oklab (perceptual) and back.
@@ -233,9 +235,19 @@ for node_name in scene.graph.nodes_geometry:
     if not isinstance(geometry, trimesh.Trimesh) or len(geometry.faces) == 0:
         continue
     haystack = f"{node_name} {geometry_name}".lower()
-    if name_filters and not any(f in haystack for f in name_filters):
+    # --exact compares NODE names only: Sketchfab files name meshes with the same "Object_N"
+    # counter as nodes but offset, so node "Object_34" can carry mesh "Object_16" — matching
+    # either would pull a second object into the import.
+    if name_filters and exact_names and node_name.lower() not in name_filters:
+        continue
+    if name_filters and not exact_names and not any(f in haystack for f in name_filters):
         continue
     mesh = geometry.copy()
+    # Trimesh drops COLOR_0 (visual.vertex_attributes["color"]) when copying a textured
+    # visual; carry it over or vertex-painted packs come out white.
+    source_colors = getattr(getattr(geometry, "visual", None), "vertex_attributes", {}).get("color") if hasattr(getattr(geometry, "visual", None), "vertex_attributes") else None
+    if source_colors is not None and len(source_colors) == len(mesh.vertices):
+        mesh.visual.vertex_attributes["color"] = source_colors
     mesh.apply_transform(matrix)
     instances.append((node_name, geometry_name, mesh))
 if not instances:
@@ -461,7 +473,10 @@ def sample_part(part):
             bary_rows = numpy.tile(bary, (len(chosen), 1))
             rgba = part["sampler"](face_rows, bary_rows)
             if part["alpha_mode"] in ("MASK", "BLEND"):
-                keep = rgba[:, 3] >= (part["alpha_cutoff"] if part["alpha_mode"] == "MASK" else 0.5)
+                # MASK: honour the cutoff (leaves cut out of a card). BLEND: a glass is 20-40 %
+                # opaque everywhere — dropping that leaves 2k voxels of rim; voxels have no
+                # partial transparency, so keep every texel that is not fully clear.
+                keep = rgba[:, 3] >= (part["alpha_cutoff"] if part["alpha_mode"] == "MASK" else 0.02)
                 points, rgba = points[keep], rgba[keep]
             if len(points) == 0:
                 continue

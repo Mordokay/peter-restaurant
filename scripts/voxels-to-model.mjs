@@ -30,7 +30,7 @@
 //                       `b`. This is the only place the pipeline changes a
 //                       color the source did not have.
 import { readFileSync, writeFileSync } from "node:fs";
-import { readCatalog, writeModel } from "./catalog-io.mjs";
+import { hasModel, readModel, writeModel } from "./catalog-io.mjs";
 
 const args = process.argv.slice(2);
 const input = args[0];
@@ -69,6 +69,25 @@ function hexToOklab(hex) {
   ];
 }
 const oklabDistance = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+
+
+/** Sparse 3D grid of numbers: 32³ typed-array chunks created on first write. Negative coordinates allowed. */
+function sparseGrid(ArrayType) {
+  const chunks = new Map();
+  const key = (cx, cy, cz) => `${cx},${cy},${cz}`;
+  return {
+    get(x, y, z) {
+      const chunk = chunks.get(key(x >> 5, y >> 5, z >> 5));
+      return chunk ? chunk[((x & 31) << 10) | ((y & 31) << 5) | (z & 31)] : 0;
+    },
+    set(x, y, z, value) {
+      const k = key(x >> 5, y >> 5, z >> 5);
+      let chunk = chunks.get(k);
+      if (!chunk) chunks.set(k, (chunk = new ArrayType(32768)));
+      chunk[((x & 31) << 10) | ((y & 31) << 5) | (z & 31)] = value;
+    },
+  };
+}
 
 function runsFromCells(cells) {
   // cells: [x, y, z, colorKey] at scale 1 -> [y, z, xStart, xEnd, color] runs.
@@ -136,7 +155,12 @@ if (grid.version === 2) {
   // render), so overlaps between source parts are resolved here: finer parts
   // win over coarser ones and, at equal scale, later parts win. A coarse block
   // that is only partly covered is emitted as its uncovered cells.
-  const claimed = new Set();
+  // Occupancy in 32³ chunks allocated on demand: a Set of "x,y,z" strings
+  // overflows at ~16M entries and a dense array over the bounding box explodes
+  // for wide, flat scenes (a 2 m tray of small foods at 3 mm voxels).
+  const claimed = sparseGrid(Uint8Array);
+  const fineCells = grid.parts.reduce((sum, part) => sum + part.cells.length * (part.scale ?? 1) ** 3, 0);
+  if (fineCells > 3_000_000) console.warn(`  warning: ${fineCells.toLocaleString()} fine cells — that is a very heavy model for the game (aim below ~500k). Re-run the converter with a smaller --height (bigger voxels).`);
   const ordered = [...grid.parts.entries()].sort((a, b) => (a[1].scale - b[1].scale) || (b[0] - a[0]));
   const pending = new Map();
   for (const [emitIndex, part] of ordered) {
@@ -145,9 +169,8 @@ if (grid.version === 2) {
     if (!bucket) pending.set(partId, (bucket = { runsCells: [], boxes: [], voxels: [] }));
     if (part.scale === 1) {
       for (const [x, y, z, c] of part.cells) {
-        const key = `${x},${y},${z}`;
-        if (claimed.has(key)) continue;
-        claimed.add(key);
+        if (claimed.get(x, y, z)) continue;
+        claimed.set(x, y, z, 1);
         bucket.runsCells.push([x, y, z, keyFor(c)]);
       }
     } else {
@@ -155,11 +178,11 @@ if (grid.version === 2) {
       for (const [x, y, z, c] of part.cells) {
         const free = [];
         for (let dx = 0; dx < s; dx++) for (let dy = 0; dy < s; dy++) for (let dz = 0; dz < s; dz++) {
-          if (!claimed.has(`${x + dx},${y + dy},${z + dz}`)) free.push([x + dx, y + dy, z + dz]);
+          if (!claimed.get(x + dx, y + dy, z + dz)) free.push([x + dx, y + dy, z + dz]);
         }
         if (free.length === s * s * s) bucket.boxes.push([x - halfX, y, z - halfZ, x - halfX + s - 1, y + s - 1, z - halfZ + s - 1, keyFor(c)]);
         else for (const [fx, fy, fz] of free) bucket.voxels.push([fx - halfX, fy, fz - halfZ, keyFor(c)]);
-        for (const [fx, fy, fz] of free) claimed.add(`${fx},${fy},${fz}`);
+        for (const [fx, fy, fz] of free) claimed.set(fx, fy, fz, 1);
       }
     }
   }
@@ -189,22 +212,26 @@ if (grid.version === 2) {
     const cells = new Map(catalogParts.map((part) => [part.id, cellsOf(part)]));
     const largest = Math.max(...[...cells.values()].map((list) => list.length));
     const threshold = Math.max(2, Math.floor(largest * foldFragments));
-    const owner = new Map();
-    for (const [id, list] of cells) for (const [x, y, z] of list) owner.set(`${x},${y},${z}`, id);
+    // Owner per fine cell (part index + 1) in the same sparse chunk structure.
+    const partIds = catalogParts.map((part) => part.id);
+    const ownerGrid = sparseGrid(Int32Array);
+    for (const [id, list] of cells) { const code = partIds.indexOf(id) + 1; for (const [x, y, z] of list) ownerGrid.set(x + halfX, y, z + halfZ, code); }
+    const owner = { get: (x, y, z) => { const code = ownerGrid.get(x + halfX, y, z + halfZ); return code ? partIds[code - 1] : undefined; } };
     const byId = new Map(catalogParts.map((part) => [part.id, part]));
     const fragments = catalogParts.filter((part) => cells.get(part.id).length > 0 && cells.get(part.id).length <= threshold).sort((a, b) => cells.get(a.id).length - cells.get(b.id).length);
     const alias = new Map();
+    const dropped = new Set(); // floating fragments already removed: their cells count as empty space
     const resolve = (id) => { while (alias.has(id)) id = alias.get(id); return id; };
     const sortRuns = (runs) => runs.sort((a, b) => (a[0] - b[0]) || (a[1] - b[1]) || (a[2] - b[2]));
-    let mergedParts = 0, mergedCells = 0, dropped = 0, droppedCells = 0;
+    let mergedParts = 0, mergedCells = 0, droppedCount = 0, droppedCells = 0;
     for (const fragment of fragments) {
       const touch = new Map();
       for (const [x, y, z] of cells.get(fragment.id)) {
         for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
-          const found = owner.get(`${x + dx},${y + dy},${z + dz}`);
+          const found = owner.get(x + dx, y + dy, z + dz);
           if (!found) continue;
           const resolved = resolve(found);
-          if (resolved === fragment.id) continue;
+          if (resolved === fragment.id || dropped.has(resolved) || !byId.has(resolved)) continue;
           touch.set(resolved, (touch.get(resolved) ?? 0) + 1);
         }
       }
@@ -220,7 +247,7 @@ if (grid.version === 2) {
         if (fragment.voxels?.length) target.voxels = [...(target.voxels ?? []), ...fragment.voxels];
         alias.set(fragment.id, best.id);
         mergedParts++; mergedCells += cells.get(fragment.id).length;
-      } else { dropped++; droppedCells += cells.get(fragment.id).length; }
+      } else { droppedCount++; droppedCells += cells.get(fragment.id).length; dropped.add(fragment.id); }
       catalogParts.splice(catalogParts.indexOf(fragment), 1);
       byId.delete(fragment.id);
     }
@@ -228,9 +255,9 @@ if (grid.version === 2) {
     // Pieces that ended up with no voxels of their own (fully covered by finer
     // pieces) and nothing hanging off them are noise too.
     for (const part of [...catalogParts]) {
-      if (cells.get(part.id).length === 0 && !catalogParts.some((other) => other.parent === part.id) && catalogParts.length > 1) { catalogParts.splice(catalogParts.indexOf(part), 1); byId.delete(part.id); dropped++; }
+      if (cells.get(part.id).length === 0 && !catalogParts.some((other) => other.parent === part.id) && catalogParts.length > 1) { catalogParts.splice(catalogParts.indexOf(part), 1); byId.delete(part.id); droppedCount++; }
     }
-    console.log(`  fold: ${mergedParts} fragment part(s) (${mergedCells} voxels) joined the parts they touch, ${dropped} floating (${droppedCells} voxels) dropped — threshold ${threshold} voxels (${Math.round(foldFragments * 1000) / 10}% of the largest part); ${catalogParts.length} part(s) remain`);
+    console.log(`  fold: ${mergedParts} fragment part(s) (${mergedCells} voxels) joined the parts they touch, ${droppedCount} floating (${droppedCells} voxels) dropped — threshold ${threshold} voxels (${Math.round(foldFragments * 1000) / 10}% of the largest part); ${catalogParts.length} part(s) remain`);
   }
 
   // Explicit art override: remap palette colors near `from` to `to`.
@@ -297,7 +324,7 @@ if (grid.version === 2) {
 }
 
 // Re-emitting keeps the model in its folder (and display name) — only the voxels change.
-const previous = readCatalog().models[modelId];
+const previous = hasModel(modelId) ? readModel(modelId) : undefined;
 if (previous?.folder) model.folder = previous.folder;
 if (previous?.name) model.name = previous.name;
 writeModel(model);

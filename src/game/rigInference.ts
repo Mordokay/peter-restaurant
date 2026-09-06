@@ -128,7 +128,8 @@ export function inferRig(model: AuthoredVoxelModel, options: { root?: string; ke
   // The root pivots at the centre of its bottom row, so a whole-model clip
   // (scale from the ground, a lean) reads as growing/leaning from the base.
   const rootCells = cellsOf.get(root)!;
-  const minY = Math.min(...rootCells.map((c) => c.y));
+  let minY = Infinity;
+  for (const c of rootCells) if (c.y < minY) minY = c.y; // no spread: parts can hold 100k+ cells
   const base = rootCells.filter((c) => c.y === minY);
   pivots.set(root, [Math.round(base.reduce((s, c) => s + c.x, 0) / base.length), minY, Math.round(base.reduce((s, c) => s + c.z, 0) / base.length)]);
   return { root, parents, pivots };

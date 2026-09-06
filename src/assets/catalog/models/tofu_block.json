@@ -1,0 +1,1 @@
+{"id":"tofu_block","pitch":0.03,"palette":{"t":"#eee5c7","h":"#fff7dc","s":"#d5caa9","p":"#bdb18f"},"parts":[{"id":"pressed_curd","pivot":[0,0,0],"boxes":[[-7,-4,-5,7,4,5,"t"]],"voxels":[[-6,4,-4,"h"],[-2,4,-5,"h"],[3,4,-3,"h"],[6,2,-5,"s"],[-7,0,-2,"s"],[-5,-4,3,"s"],[2,-4,5,"p"],[7,3,2,"p"],[4,0,5,"s"],[-1,1,-5,"p"]]}],"folder":"food","tags":["kitchen","food","ingredient"]}

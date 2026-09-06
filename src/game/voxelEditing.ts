@@ -1155,9 +1155,10 @@ export class VoxelEditSession {
     if (chosen.size === 0) return null;
     const cells = [...this.cells.values()].filter((cell) => chosen.has(cell.part));
     if (cells.length === 0) return null;
-    const minY = Math.min(...cells.map((c) => c.y));
-    const centerX = Math.round((Math.min(...cells.map((c) => c.x)) + Math.max(...cells.map((c) => c.x))) / 2);
-    const centerZ = Math.round((Math.min(...cells.map((c) => c.z)) + Math.max(...cells.map((c) => c.z))) / 2);
+    let minY = Infinity, minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (const c of cells) { if (c.y < minY) minY = c.y; if (c.x < minX) minX = c.x; if (c.x > maxX) maxX = c.x; if (c.z < minZ) minZ = c.z; if (c.z > maxZ) maxZ = c.z; }
+    const centerX = Math.round((minX + maxX) / 2);
+    const centerZ = Math.round((minZ + maxZ) / 2);
     const shift = { x: centerX, y: minY, z: centerZ };
     const shifted = (p: readonly [number, number, number]): [number, number, number] => [p[0] - centerX, p[1] - minY, p[2] - centerZ];
     const palette: Record<string, string> = {};

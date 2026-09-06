@@ -10,7 +10,7 @@
 //        [--pop partA,partB,...]                  one-shot "harvest": listed parts
 //                                                 swell then shrink to zero, with a
 //                                                 "harvest" event at the pop
-import { readCatalog, writeModel } from "./catalog-io.mjs";
+import { hasModel, readModel, writeModel } from "./catalog-io.mjs";
 import { applyRig, inferRig } from "../src/game/rigInference.ts";
 import { validateAuthoredVoxelCatalog } from "../src/game/voxelModel.ts";
 
@@ -19,8 +19,7 @@ const modelId = args[0];
 const option = (name) => (args.includes(name) ? args[args.indexOf(name) + 1] : undefined);
 if (!modelId) throw new Error("Usage: node scripts/rig-model.mjs <modelId> [--root partId] [--sway deg,seconds] [--pop a,b,c]");
 
-const catalog = readCatalog();
-const model = catalog.models[modelId];
+const model = hasModel(modelId) ? readModel(modelId) : undefined;
 if (!model) throw new Error(`${modelId} is not in the catalog`);
 
 // Parents that came with the file (or from the editor) are kept unless --reinfer.

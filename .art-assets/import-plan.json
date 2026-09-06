@@ -1,0 +1,5614 @@
+{
+ "version": 1,
+ "generated": "2026-09-06T02:35:59.785Z",
+ "source": "/Users/pedrosaldanha/Downloads/3D",
+ "packs": [
+  {
+   "pack": "28_free_objects",
+   "file": "28_free_objects.glb",
+   "sourceFile": "/Users/pedrosaldanha/Downloads/3D/28_free_objects.glb",
+   "scale": 1,
+   "folder": "props/free_objects",
+   "objects": [
+    {
+     "id": "metal_shelving_unit",
+     "name": "Metal Shelving Unit",
+     "folder": "props/free_objects",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "Cube.001_0"
+     ],
+     "worldHeight": 1.8,
+     "footprint": [
+      0.678,
+      1.8,
+      0.757
+     ],
+     "detail": "fine",
+     "faces": 180,
+     "flags": []
+    },
+    {
+     "id": "metal_cabinet",
+     "name": "Metal Cabinet",
+     "folder": "props/free_objects",
+     "tags": [
+      "kitchen",
+      "storage"
+     ],
+     "nodes": [
+      "Cube.003_0"
+     ],
+     "worldHeight": 1.6,
+     "footprint": [
+      0.918,
+      1.6,
+      0.922
+     ],
+     "detail": "fine",
+     "faces": 406,
+     "flags": []
+    },
+    {
+     "id": "storage_container_low",
+     "name": "Storage Container Low",
+     "folder": "props/free_objects",
+     "tags": [
+      "kitchen",
+      "storage"
+     ],
+     "nodes": [
+      "Cube.005_0"
+     ],
+     "worldHeight": 0.8,
+     "footprint": [
+      1.171,
+      0.8,
+      0.487
+     ],
+     "detail": "fine",
+     "faces": 356,
+     "flags": []
+    },
+    {
+     "id": "storage_container_tall",
+     "name": "Storage Container Tall",
+     "folder": "props/free_objects",
+     "tags": [
+      "kitchen",
+      "storage"
+     ],
+     "nodes": [
+      "Cube.008_0"
+     ],
+     "worldHeight": 1.4,
+     "footprint": [
+      0.566,
+      1.4,
+      0.559
+     ],
+     "detail": "fine",
+     "faces": 208,
+     "flags": []
+    },
+    {
+     "id": "storage_container_tall_2",
+     "name": "Storage Container Tall 2",
+     "folder": "props/free_objects",
+     "tags": [
+      "kitchen",
+      "storage"
+     ],
+     "nodes": [
+      "Cube.009_0"
+     ],
+     "worldHeight": 1.4,
+     "footprint": [
+      0.431,
+      1.4,
+      0.914
+     ],
+     "detail": "fine",
+     "faces": 372,
+     "flags": []
+    },
+    {
+     "id": "pallet",
+     "name": "Pallet",
+     "folder": "props/free_objects",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "Cube.012_0"
+     ],
+     "worldHeight": 0.15,
+     "footprint": [
+      0.533,
+      0.15,
+      0.279
+     ],
+     "detail": "fine",
+     "faces": 482,
+     "flags": []
+    },
+    {
+     "id": "storage_container_box",
+     "name": "Storage Container Box",
+     "folder": "props/free_objects",
+     "tags": [
+      "kitchen",
+      "storage"
+     ],
+     "nodes": [
+      "Cube.013_0"
+     ],
+     "worldHeight": 0.6,
+     "footprint": [
+      0.368,
+      0.6,
+      0.223
+     ],
+     "detail": "fine",
+     "faces": 138,
+     "flags": []
+    },
+    {
+     "id": "steel_frame_table",
+     "name": "Steel Frame Table",
+     "folder": "dining/tables",
+     "tags": [
+      "dining",
+      "furniture",
+      "decor"
+     ],
+     "nodes": [
+      "Cube.014_0"
+     ],
+     "worldHeight": 0.9,
+     "footprint": [
+      1.055,
+      0.9,
+      2.203
+     ],
+     "detail": "fine",
+     "faces": 196,
+     "flags": []
+    },
+    {
+     "id": "hand_truck",
+     "name": "Hand Truck",
+     "folder": "props/free_objects",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "Cube.015_0"
+     ],
+     "worldHeight": 1.1,
+     "footprint": [
+      1.64,
+      1.1,
+      0.456
+     ],
+     "detail": "fine",
+     "faces": 332,
+     "flags": []
+    },
+    {
+     "id": "bistro_chair",
+     "name": "Bistro Chair",
+     "folder": "dining/seating",
+     "tags": [
+      "dining",
+      "seating",
+      "furniture"
+     ],
+     "nodes": [
+      "Cube.016_0"
+     ],
+     "worldHeight": 0.9,
+     "footprint": [
+      0.493,
+      0.9,
+      0.396
+     ],
+     "detail": "fine",
+     "faces": 662,
+     "flags": []
+    },
+    {
+     "id": "pallet_flat",
+     "name": "Pallet Flat",
+     "folder": "props/free_objects",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "Cube.017_0"
+     ],
+     "worldHeight": 0.15,
+     "footprint": [
+      4.248,
+      0.15,
+      2.427
+     ],
+     "detail": "fine",
+     "faces": 120,
+     "flags": []
+    },
+    {
+     "id": "pergola",
+     "name": "Pergola",
+     "folder": "outdoor/structures",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "Cube.018_0"
+     ],
+     "worldHeight": 2.4,
+     "footprint": [
+      3.002,
+      2.4,
+      5.753
+     ],
+     "detail": "fine",
+     "faces": 928,
+     "flags": []
+    },
+    {
+     "id": "pallet_small",
+     "name": "Pallet Small",
+     "folder": "props/free_objects",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "Cube.019_0"
+     ],
+     "worldHeight": 0.15,
+     "footprint": [
+      1.474,
+      0.15,
+      1.458
+     ],
+     "detail": "fine",
+     "faces": 92,
+     "flags": []
+    },
+    {
+     "id": "folding_chair",
+     "name": "Folding Chair",
+     "folder": "dining/seating",
+     "tags": [
+      "dining",
+      "seating",
+      "furniture"
+     ],
+     "nodes": [
+      "Cube.020_0"
+     ],
+     "worldHeight": 0.85,
+     "footprint": [
+      0.555,
+      0.85,
+      0.513
+     ],
+     "detail": "fine",
+     "faces": 948,
+     "flags": []
+    },
+    {
+     "id": "water_bottle_large",
+     "name": "Water Bottle Large",
+     "folder": "props/free_objects",
+     "tags": [
+      "kitchen",
+      "ingredient",
+      "storage"
+     ],
+     "nodes": [
+      "Cube.021_0"
+     ],
+     "worldHeight": 0.5,
+     "footprint": [
+      0.193,
+      0.5,
+      0.188
+     ],
+     "detail": "fine",
+     "faces": 332,
+     "flags": []
+    },
+    {
+     "id": "plastic_crate",
+     "name": "Plastic Crate",
+     "folder": "props/free_objects",
+     "tags": [
+      "kitchen",
+      "storage"
+     ],
+     "nodes": [
+      "Cube.022_0"
+     ],
+     "worldHeight": 0.35,
+     "footprint": [
+      0.444,
+      0.35,
+      0.384
+     ],
+     "detail": "fine",
+     "faces": 590,
+     "flags": []
+    },
+    {
+     "id": "resten_objeckter_001",
+     "name": "Resten Objeckter 001",
+     "folder": "props/free_objects",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "Cube.023_0"
+     ],
+     "worldHeight": 1.3,
+     "footprint": [
+      0.332,
+      1.3,
+      0.332
+     ],
+     "detail": "fine",
+     "faces": 264,
+     "flags": []
+    },
+    {
+     "id": "wash_tub",
+     "name": "Wash Tub",
+     "folder": "props/free_objects",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "Cube.023_1"
+     ],
+     "worldHeight": 0.3,
+     "footprint": [
+      0.412,
+      0.3,
+      0.412
+     ],
+     "detail": "fine",
+     "faces": 436,
+     "flags": []
+    },
+    {
+     "id": "storage_box",
+     "name": "Storage Box",
+     "folder": "props/free_objects",
+     "tags": [
+      "kitchen",
+      "storage"
+     ],
+     "nodes": [
+      "Cube.029_0"
+     ],
+     "worldHeight": 0.4,
+     "footprint": [
+      0.442,
+      0.4,
+      0.508
+     ],
+     "detail": "fine",
+     "faces": 124,
+     "flags": []
+    },
+    {
+     "id": "storage_box_2",
+     "name": "Storage Box 2",
+     "folder": "props/free_objects",
+     "tags": [
+      "kitchen",
+      "storage"
+     ],
+     "nodes": [
+      "Cube.030_0"
+     ],
+     "worldHeight": 0.4,
+     "footprint": [
+      0.442,
+      0.4,
+      0.508
+     ],
+     "detail": "fine",
+     "faces": 124,
+     "flags": []
+    },
+    {
+     "id": "storage_box_3",
+     "name": "Storage Box 3",
+     "folder": "props/free_objects",
+     "tags": [
+      "kitchen",
+      "storage"
+     ],
+     "nodes": [
+      "Cube.031_0"
+     ],
+     "worldHeight": 0.4,
+     "footprint": [
+      0.442,
+      0.4,
+      0.508
+     ],
+     "detail": "fine",
+     "faces": 124,
+     "flags": []
+    },
+    {
+     "id": "cable_reel",
+     "name": "Cable Reel",
+     "folder": "props/free_objects",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "Cube_0"
+     ],
+     "worldHeight": 1,
+     "footprint": [
+      0.842,
+      1,
+      1.021
+     ],
+     "detail": "fine",
+     "faces": 244,
+     "flags": []
+    },
+    {
+     "id": "globe",
+     "name": "Globe",
+     "folder": "decor/office",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "globe_0"
+     ],
+     "worldHeight": 0.4,
+     "footprint": [
+      0.226,
+      0.4,
+      0.233
+     ],
+     "detail": "fine",
+     "faces": 10716,
+     "flags": []
+    },
+    {
+     "id": "round_tub",
+     "name": "Round Tub",
+     "folder": "props/free_objects",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "stol.001_0"
+     ],
+     "worldHeight": 0.6,
+     "footprint": [
+      0.922,
+      0.6,
+      0.968
+     ],
+     "detail": "fine",
+     "faces": 2172,
+     "flags": []
+    },
+    {
+     "id": "wooden_chair_scan",
+     "name": "Wooden Chair Scan",
+     "folder": "dining/seating",
+     "tags": [
+      "dining",
+      "seating",
+      "furniture"
+     ],
+     "nodes": [
+      "stol_0"
+     ],
+     "worldHeight": 0.9,
+     "footprint": [
+      0.469,
+      0.9,
+      0.413
+     ],
+     "detail": "fine",
+     "faces": 1032,
+     "flags": []
+    }
+   ]
+  },
+  {
+   "pack": "black_metal_vintage_restaurant_chair",
+   "file": "black_metal_vintage_restaurant_chair.glb",
+   "sourceFile": "/Users/pedrosaldanha/Downloads/3D/black_metal_vintage_restaurant_chair.glb",
+   "scale": 1,
+   "folder": "dining/seating",
+   "objects": [
+    {
+     "id": "vintage_metal_chair",
+     "name": "Vintage Metal Chair",
+     "folder": "dining/seating",
+     "tags": [
+      "dining",
+      "seating",
+      "furniture"
+     ],
+     "nodes": [
+      "Object_11",
+      "Object_13",
+      "Object_15",
+      "Object_17",
+      "Object_19",
+      "Object_21",
+      "Object_23",
+      "Object_25",
+      "Object_27",
+      "Object_29",
+      "Object_5",
+      "Object_7",
+      "Object_9"
+     ],
+     "worldHeight": 0.85,
+     "footprint": [
+      0.619,
+      0.85,
+      0.619
+     ],
+     "detail": "fine",
+     "faces": 5316,
+     "flags": []
+    }
+   ]
+  },
+  {
+   "pack": "cartoon__wooden__farm__pack",
+   "file": "cartoon__wooden__farm__pack.glb",
+   "sourceFile": "/Users/pedrosaldanha/Downloads/3D/cartoon__wooden__farm__pack.glb",
+   "scale": 0.4,
+   "folder": "farm/cartoon_wood",
+   "objects": [
+    {
+     "id": "garden_table",
+     "name": "Garden Table",
+     "folder": "outdoor/furniture",
+     "tags": [
+      "kitchen",
+      "furniture"
+     ],
+     "nodes": [
+      "Cube.001_Chair_0"
+     ],
+     "worldHeight": 0.752,
+     "footprint": [
+      2.121,
+      0.752,
+      2.595
+     ],
+     "detail": "fine",
+     "faces": 164,
+     "flags": []
+    },
+    {
+     "id": "deck_planks_3",
+     "name": "Deck Planks 3",
+     "folder": "farm/cartoon_wood",
+     "tags": [
+      "farm",
+      "outdoor"
+     ],
+     "nodes": [
+      "Cube.002_Floor_0"
+     ],
+     "worldHeight": 0.118,
+     "footprint": [
+      1.21,
+      0.118,
+      1.037
+     ],
+     "detail": "fine",
+     "faces": 164,
+     "flags": []
+    },
+    {
+     "id": "street_lamp_wood",
+     "name": "Street Lamp Wood",
+     "folder": "outdoor/lighting",
+     "tags": [
+      "dining",
+      "decor"
+     ],
+     "nodes": [
+      "Cube.003_streetLamp_0"
+     ],
+     "worldHeight": 3.536,
+     "footprint": [
+      0.434,
+      3.536,
+      1.969
+     ],
+     "detail": "fine",
+     "faces": 68,
+     "flags": [
+      "very tall — check units"
+     ]
+    },
+    {
+     "id": "fence_wall_3",
+     "name": "Fence Wall 3",
+     "folder": "farm/cartoon_wood",
+     "tags": [
+      "farm",
+      "outdoor",
+      "fence",
+      "structure"
+     ],
+     "nodes": [
+      "Cube.004_Wall_0"
+     ],
+     "worldHeight": 1.12,
+     "footprint": [
+      1.636,
+      1.12,
+      2.844
+     ],
+     "detail": "fine",
+     "faces": 248,
+     "flags": []
+    },
+    {
+     "id": "fence_wall_2",
+     "name": "Fence Wall 2",
+     "folder": "farm/cartoon_wood",
+     "tags": [
+      "farm",
+      "outdoor",
+      "fence",
+      "structure"
+     ],
+     "nodes": [
+      "Cube.005_Wall_0"
+     ],
+     "worldHeight": 1.12,
+     "footprint": [
+      0.367,
+      1.12,
+      3.135
+     ],
+     "detail": "fine",
+     "faces": 248,
+     "flags": []
+    },
+    {
+     "id": "fence_wall_post",
+     "name": "Fence Wall Post",
+     "folder": "farm/cartoon_wood",
+     "tags": [
+      "farm",
+      "outdoor",
+      "fence",
+      "structure"
+     ],
+     "nodes": [
+      "Cube.006_Wall_0"
+     ],
+     "worldHeight": 1.12,
+     "footprint": [
+      2.195,
+      1.12,
+      2.503
+     ],
+     "detail": "fine",
+     "faces": 248,
+     "flags": []
+    },
+    {
+     "id": "fence_wall",
+     "name": "Fence Wall",
+     "folder": "farm/cartoon_wood",
+     "tags": [
+      "farm",
+      "outdoor",
+      "fence",
+      "structure"
+     ],
+     "nodes": [
+      "Cube.007_Wall_0"
+     ],
+     "worldHeight": 1.12,
+     "footprint": [
+      3.135,
+      1.12,
+      0.379
+     ],
+     "detail": "fine",
+     "faces": 248,
+     "flags": []
+    },
+    {
+     "id": "garden_bench",
+     "name": "Garden Bench",
+     "folder": "outdoor/furniture",
+     "tags": [
+      "dining",
+      "seating",
+      "furniture"
+     ],
+     "nodes": [
+      "Cube.008_Chair_0"
+     ],
+     "worldHeight": 1.141,
+     "footprint": [
+      2.143,
+      1.141,
+      2.88
+     ],
+     "detail": "fine",
+     "faces": 164,
+     "flags": []
+    },
+    {
+     "id": "crate_cartoon",
+     "name": "Crate Cartoon",
+     "folder": "farm/cartoon_wood",
+     "tags": [
+      "farm",
+      "outdoor",
+      "storage"
+     ],
+     "nodes": [
+      "Cube.009_Box_0"
+     ],
+     "worldHeight": 1.229,
+     "footprint": [
+      1.397,
+      1.229,
+      1.397
+     ],
+     "detail": "fine",
+     "faces": 192,
+     "flags": []
+    },
+    {
+     "id": "crate_cartoon_small",
+     "name": "Crate Cartoon Small",
+     "folder": "farm/cartoon_wood",
+     "tags": [
+      "farm",
+      "outdoor",
+      "storage"
+     ],
+     "nodes": [
+      "Cube.010_Box_0"
+     ],
+     "worldHeight": 0.726,
+     "footprint": [
+      0.825,
+      0.726,
+      0.825
+     ],
+     "detail": "fine",
+     "faces": 192,
+     "flags": []
+    },
+    {
+     "id": "deck_planks_2",
+     "name": "Deck Planks 2",
+     "folder": "farm/cartoon_wood",
+     "tags": [
+      "farm",
+      "outdoor"
+     ],
+     "nodes": [
+      "Cube.011_Floor_0"
+     ],
+     "worldHeight": 0.118,
+     "footprint": [
+      1.302,
+      0.118,
+      1.431
+     ],
+     "detail": "fine",
+     "faces": 164,
+     "flags": []
+    },
+    {
+     "id": "deck_planks",
+     "name": "Deck Planks",
+     "folder": "farm/cartoon_wood",
+     "tags": [
+      "farm",
+      "outdoor"
+     ],
+     "nodes": [
+      "Cube.012_Floor_0"
+     ],
+     "worldHeight": 0.118,
+     "footprint": [
+      1.296,
+      0.118,
+      1.427
+     ],
+     "detail": "fine",
+     "faces": 164,
+     "flags": []
+    },
+    {
+     "id": "wooden_ladder",
+     "name": "Wooden Ladder",
+     "folder": "farm/cartoon_wood",
+     "tags": [
+      "farm",
+      "outdoor"
+     ],
+     "nodes": [
+      "Cube.013_Floor_0"
+     ],
+     "worldHeight": 1.173,
+     "footprint": [
+      1.043,
+      1.173,
+      0.475
+     ],
+     "detail": "fine",
+     "faces": 164,
+     "flags": []
+    },
+    {
+     "id": "crate_cartoon_2",
+     "name": "Crate Cartoon 2",
+     "folder": "farm/cartoon_wood",
+     "tags": [
+      "farm",
+      "outdoor",
+      "storage"
+     ],
+     "nodes": [
+      "Cube_Box_0"
+     ],
+     "worldHeight": 1.229,
+     "footprint": [
+      1.216,
+      1.229,
+      1.215
+     ],
+     "detail": "fine",
+     "faces": 192,
+     "flags": []
+    },
+    {
+     "id": "barrel_cartoon_2",
+     "name": "Barrel Cartoon 2",
+     "folder": "farm/cartoon_wood",
+     "tags": [
+      "farm",
+      "outdoor",
+      "storage"
+     ],
+     "nodes": [
+      "Cylinder.001_Boshka_0"
+     ],
+     "worldHeight": 0.618,
+     "footprint": [
+      0.614,
+      0.618,
+      0.602
+     ],
+     "detail": "fine",
+     "faces": 278,
+     "flags": []
+    },
+    {
+     "id": "wooden_tub_3",
+     "name": "Wooden Tub 3",
+     "folder": "farm/cartoon_wood",
+     "tags": [
+      "farm",
+      "outdoor"
+     ],
+     "nodes": [
+      "Cylinder.002_Donke_0"
+     ],
+     "worldHeight": 0.628,
+     "footprint": [
+      0.832,
+      0.628,
+      0.781
+     ],
+     "detail": "fine",
+     "faces": 76,
+     "flags": []
+    },
+    {
+     "id": "wooden_tub_2",
+     "name": "Wooden Tub 2",
+     "folder": "farm/cartoon_wood",
+     "tags": [
+      "farm",
+      "outdoor"
+     ],
+     "nodes": [
+      "Cylinder.003_Donke_0"
+     ],
+     "worldHeight": 0.628,
+     "footprint": [
+      0.832,
+      0.628,
+      0.781
+     ],
+     "detail": "fine",
+     "faces": 76,
+     "flags": []
+    },
+    {
+     "id": "wooden_tub",
+     "name": "Wooden Tub",
+     "folder": "farm/cartoon_wood",
+     "tags": [
+      "farm",
+      "outdoor"
+     ],
+     "nodes": [
+      "Cylinder.004_Donke_0"
+     ],
+     "worldHeight": 0.628,
+     "footprint": [
+      0.832,
+      0.628,
+      0.781
+     ],
+     "detail": "fine",
+     "faces": 76,
+     "flags": []
+    },
+    {
+     "id": "stump_2",
+     "name": "Stump 2",
+     "folder": "farm/cartoon_wood",
+     "tags": [
+      "farm",
+      "outdoor",
+      "decor"
+     ],
+     "nodes": [
+      "Cylinder.005_cap_0"
+     ],
+     "worldHeight": 0.638,
+     "footprint": [
+      0.547,
+      0.638,
+      0.488
+     ],
+     "detail": "fine",
+     "faces": 224,
+     "flags": []
+    },
+    {
+     "id": "stump",
+     "name": "Stump",
+     "folder": "farm/cartoon_wood",
+     "tags": [
+      "farm",
+      "outdoor",
+      "decor"
+     ],
+     "nodes": [
+      "Cylinder.006_cap_0"
+     ],
+     "worldHeight": 0.539,
+     "footprint": [
+      0.386,
+      0.539,
+      0.351
+     ],
+     "detail": "fine",
+     "faces": 224,
+     "flags": []
+    },
+    {
+     "id": "stump_short",
+     "name": "Stump Short",
+     "folder": "farm/cartoon_wood",
+     "tags": [
+      "farm",
+      "outdoor",
+      "decor"
+     ],
+     "nodes": [
+      "Cylinder.007_cap_0"
+     ],
+     "worldHeight": 0.437,
+     "footprint": [
+      0.377,
+      0.437,
+      0.323
+     ],
+     "detail": "fine",
+     "faces": 224,
+     "flags": []
+    },
+    {
+     "id": "stump_tall",
+     "name": "Stump Tall",
+     "folder": "farm/cartoon_wood",
+     "tags": [
+      "farm",
+      "outdoor",
+      "decor"
+     ],
+     "nodes": [
+      "Cylinder.008_cap_0"
+     ],
+     "worldHeight": 0.715,
+     "footprint": [
+      0.548,
+      0.715,
+      0.568
+     ],
+     "detail": "fine",
+     "faces": 224,
+     "flags": []
+    },
+    {
+     "id": "barrel_cartoon",
+     "name": "Barrel Cartoon",
+     "folder": "farm/cartoon_wood",
+     "tags": [
+      "farm",
+      "outdoor",
+      "storage"
+     ],
+     "nodes": [
+      "Cylinder.009_Boshka_0"
+     ],
+     "worldHeight": 0.844,
+     "footprint": [
+      0.838,
+      0.844,
+      0.821
+     ],
+     "detail": "fine",
+     "faces": 278,
+     "flags": []
+    },
+    {
+     "id": "squash_cartoon_3",
+     "name": "Squash Cartoon 3",
+     "folder": "food/cartoon_produce",
+     "tags": [
+      "kitchen",
+      "food"
+     ],
+     "nodes": [
+      "Cylinder.010_Squash 1_0"
+     ],
+     "worldHeight": 0.331,
+     "footprint": [
+      0.529,
+      0.331,
+      0.556
+     ],
+     "detail": "ultra",
+     "faces": 140,
+     "flags": []
+    },
+    {
+     "id": "squash_cartoon_2",
+     "name": "Squash Cartoon 2",
+     "folder": "food/cartoon_produce",
+     "tags": [
+      "kitchen",
+      "food"
+     ],
+     "nodes": [
+      "Cylinder.011_Squash 1_0"
+     ],
+     "worldHeight": 0.403,
+     "footprint": [
+      0.529,
+      0.403,
+      0.556
+     ],
+     "detail": "ultra",
+     "faces": 218,
+     "flags": []
+    },
+    {
+     "id": "squash_cartoon",
+     "name": "Squash Cartoon",
+     "folder": "food/cartoon_produce",
+     "tags": [
+      "kitchen",
+      "food"
+     ],
+     "nodes": [
+      "Cylinder.012_Squash 1_0"
+     ],
+     "worldHeight": 0.331,
+     "footprint": [
+      0.529,
+      0.331,
+      0.556
+     ],
+     "detail": "ultra",
+     "faces": 140,
+     "flags": []
+    },
+    {
+     "id": "watermelon_cartoon_2",
+     "name": "Watermelon Cartoon 2",
+     "folder": "food/cartoon_produce",
+     "tags": [
+      "kitchen",
+      "food",
+      "ingredient"
+     ],
+     "nodes": [
+      "Cylinder.013_Watermelon_0"
+     ],
+     "worldHeight": 0.533,
+     "footprint": [
+      0.539,
+      0.533,
+      0.545
+     ],
+     "detail": "ultra",
+     "faces": 140,
+     "flags": []
+    },
+    {
+     "id": "watermelon_cartoon",
+     "name": "Watermelon Cartoon",
+     "folder": "food/cartoon_produce",
+     "tags": [
+      "kitchen",
+      "food",
+      "ingredient"
+     ],
+     "nodes": [
+      "Cylinder.014_Watermelon_0"
+     ],
+     "worldHeight": 0.599,
+     "footprint": [
+      0.604,
+      0.599,
+      0.583
+     ],
+     "detail": "ultra",
+     "faces": 140,
+     "flags": []
+    },
+    {
+     "id": "stump_3",
+     "name": "Stump 3",
+     "folder": "farm/cartoon_wood",
+     "tags": [
+      "farm",
+      "outdoor",
+      "decor"
+     ],
+     "nodes": [
+      "Cylinder_cap_0"
+     ],
+     "worldHeight": 0.539,
+     "footprint": [
+      0.372,
+      0.539,
+      0.482
+     ],
+     "detail": "fine",
+     "faces": 224,
+     "flags": []
+    }
+   ]
+  },
+  {
+   "pack": "cleaning_cart",
+   "file": "cleaning_cart.glb",
+   "sourceFile": "/Users/pedrosaldanha/Downloads/3D/cleaning_cart.glb",
+   "scale": 0.13,
+   "folder": "kitchen/cleaning",
+   "objects": [
+    {
+     "id": "cleaning_cart",
+     "name": "Cleaning Cart",
+     "folder": "kitchen/cleaning",
+     "tags": [
+      "kitchen",
+      "storage",
+      "tool",
+      "furniture"
+     ],
+     "nodes": [
+      "CT_CartBody_CleaningTools_0"
+     ],
+     "worldHeight": 1,
+     "footprint": [
+      0.429,
+      1,
+      0.742
+     ],
+     "detail": "fine",
+     "faces": 22636,
+     "flags": []
+    }
+   ]
+  },
+  {
+   "pack": "elegant_dinner_set",
+   "file": "elegant_dinner_set.glb",
+   "sourceFile": "/Users/pedrosaldanha/Downloads/3D/elegant_dinner_set.glb",
+   "scale": 1,
+   "folder": "dining/tableware_elegant",
+   "objects": [
+    {
+     "id": "knife_elegant",
+     "name": "Knife Elegant",
+     "folder": "dining/tableware_elegant",
+     "tags": [
+      "kitchen",
+      "prep",
+      "tool"
+     ],
+     "nodes": [
+      "Object_11",
+      "Object_12",
+      "Object_13"
+     ],
+     "worldHeight": 0.02,
+     "footprint": [
+      0.021,
+      0.009,
+      0.194
+     ],
+     "detail": "ultra",
+     "faces": 5024,
+     "flags": []
+    },
+    {
+     "id": "serving_lid_elegant",
+     "name": "Serving Lid Elegant",
+     "folder": "dining/tableware_elegant",
+     "tags": [
+      "kitchen",
+      "cooking"
+     ],
+     "nodes": [
+      "Object_15",
+      "Object_16"
+     ],
+     "worldHeight": 0.091,
+     "footprint": [
+      0.206,
+      0.091,
+      0.212
+     ],
+     "detail": "ultra",
+     "faces": 30976,
+     "flags": []
+    },
+    {
+     "id": "serving_bowl_elegant",
+     "name": "Serving Bowl Elegant",
+     "folder": "dining/tableware_elegant",
+     "tags": [
+      "dining",
+      "tableware"
+     ],
+     "nodes": [
+      "Object_18",
+      "Object_19"
+     ],
+     "worldHeight": 0.061,
+     "footprint": [
+      0.199,
+      0.061,
+      0.199
+     ],
+     "detail": "ultra",
+     "faces": 39936,
+     "flags": []
+    },
+    {
+     "id": "serving_bowl_deep_elegant",
+     "name": "Serving Bowl Deep Elegant",
+     "folder": "dining/tableware_elegant",
+     "tags": [
+      "dining",
+      "tableware"
+     ],
+     "nodes": [
+      "Object_21",
+      "Object_22"
+     ],
+     "worldHeight": 0.113,
+     "footprint": [
+      0.205,
+      0.113,
+      0.211
+     ],
+     "detail": "ultra",
+     "faces": 7936,
+     "flags": []
+    },
+    {
+     "id": "small_bowl_elegant",
+     "name": "Small Bowl Elegant",
+     "folder": "dining/tableware_elegant",
+     "tags": [
+      "dining",
+      "tableware"
+     ],
+     "nodes": [
+      "Object_24",
+      "Object_25"
+     ],
+     "worldHeight": 0.052,
+     "footprint": [
+      0.148,
+      0.052,
+      0.148
+     ],
+     "detail": "ultra",
+     "faces": 13056,
+     "flags": []
+    },
+    {
+     "id": "small_bowl_elegant_2",
+     "name": "Small Bowl Elegant 2",
+     "folder": "dining/tableware_elegant",
+     "tags": [
+      "dining",
+      "tableware"
+     ],
+     "nodes": [
+      "Object_27",
+      "Object_28"
+     ],
+     "worldHeight": 0.047,
+     "footprint": [
+      0.101,
+      0.047,
+      0.101
+     ],
+     "detail": "ultra",
+     "faces": 14592,
+     "flags": []
+    },
+    {
+     "id": "serving_spoon_elegant",
+     "name": "Serving Spoon Elegant",
+     "folder": "dining/tableware_elegant",
+     "tags": [
+      "kitchen",
+      "prep",
+      "tool"
+     ],
+     "nodes": [
+      "Object_30",
+      "Object_31"
+     ],
+     "worldHeight": 0.02,
+     "footprint": [
+      0.039,
+      0.016,
+      0.192
+     ],
+     "detail": "ultra",
+     "faces": 76965,
+     "flags": []
+    },
+    {
+     "id": "ladle_elegant",
+     "name": "Ladle Elegant",
+     "folder": "dining/tableware_elegant",
+     "tags": [
+      "kitchen",
+      "prep",
+      "tool"
+     ],
+     "nodes": [
+      "Object_33",
+      "Object_34"
+     ],
+     "worldHeight": 0.023,
+     "footprint": [
+      0.04,
+      0.023,
+      0.173
+     ],
+     "detail": "ultra",
+     "faces": 11520,
+     "flags": []
+    },
+    {
+     "id": "soup_spoon_elegant",
+     "name": "Soup Spoon Elegant",
+     "folder": "dining/tableware_elegant",
+     "tags": [
+      "dining",
+      "food",
+      "prep",
+      "tool"
+     ],
+     "nodes": [
+      "Object_36"
+     ],
+     "worldHeight": 0.02,
+     "footprint": [
+      0.03,
+      0.017,
+      0.126
+     ],
+     "detail": "ultra",
+     "faces": 11264,
+     "flags": []
+    },
+    {
+     "id": "napkin_ring_gold",
+     "name": "Gold Napkin Ring",
+     "folder": "dining/tableware_elegant",
+     "tags": [
+      "dining",
+      "decor"
+     ],
+     "nodes": [
+      "Object_37"
+     ],
+     "worldHeight": 0.02,
+     "footprint": [
+      0.012,
+      0.01,
+      0.056
+     ],
+     "detail": "ultra",
+     "faces": 256,
+     "flags": []
+    },
+    {
+     "id": "teaspoon_elegant",
+     "name": "Teaspoon Elegant",
+     "folder": "dining/tableware_elegant",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "Object_39"
+     ],
+     "worldHeight": 0.02,
+     "footprint": [
+      0.028,
+      0.012,
+      0.134
+     ],
+     "detail": "ultra",
+     "faces": 66405,
+     "flags": []
+    },
+    {
+     "id": "spoon_ceramic_elegant",
+     "name": "Spoon Ceramic Elegant",
+     "folder": "dining/tableware_elegant",
+     "tags": [
+      "kitchen",
+      "prep",
+      "tool"
+     ],
+     "nodes": [
+      "Object_40"
+     ],
+     "worldHeight": 0.02,
+     "footprint": [
+      0.009,
+      0.009,
+      0.083
+     ],
+     "detail": "ultra",
+     "faces": 10560,
+     "flags": []
+    },
+    {
+     "id": "square_plate_elegant",
+     "name": "Square Plate Elegant",
+     "folder": "dining/tableware_elegant",
+     "tags": [
+      "dining",
+      "tableware"
+     ],
+     "nodes": [
+      "Object_42",
+      "Object_43",
+      "Object_44"
+     ],
+     "worldHeight": 0.02,
+     "footprint": [
+      0.229,
+      0.02,
+      0.229
+     ],
+     "detail": "fine",
+     "faces": 184320,
+     "flags": [
+      "184k triangles — slow to convert"
+     ]
+    },
+    {
+     "id": "tray_elegant",
+     "name": "Tray Elegant",
+     "folder": "dining/tableware_elegant",
+     "tags": [
+      "kitchen",
+      "prep"
+     ],
+     "nodes": [
+      "Object_46",
+      "Object_47"
+     ],
+     "worldHeight": 0.02,
+     "footprint": [
+      0.1,
+      0.02,
+      0.3
+     ],
+     "detail": "ultra",
+     "faces": 20736,
+     "flags": []
+    },
+    {
+     "id": "dinner_plate_elegant",
+     "name": "Dinner Plate Elegant",
+     "folder": "dining/tableware_elegant",
+     "tags": [
+      "dining",
+      "tableware"
+     ],
+     "nodes": [
+      "Object_5",
+      "Object_6"
+     ],
+     "worldHeight": 0.02,
+     "footprint": [
+      0.226,
+      0.02,
+      0.226
+     ],
+     "detail": "fine",
+     "faces": 116736,
+     "flags": []
+    },
+    {
+     "id": "fork_elegant",
+     "name": "Fork Elegant",
+     "folder": "dining/tableware_elegant",
+     "tags": [
+      "kitchen",
+      "prep",
+      "tool"
+     ],
+     "nodes": [
+      "Object_8",
+      "Object_9"
+     ],
+     "worldHeight": 0.02,
+     "footprint": [
+      0.027,
+      0.015,
+      0.213
+     ],
+     "detail": "ultra",
+     "faces": 81664,
+     "flags": []
+    }
+   ]
+  },
+  {
+   "pack": "farm_-_low_poly_moduler_pack",
+   "file": "farm_-_low_poly_moduler_pack.glb",
+   "sourceFile": "/Users/pedrosaldanha/Downloads/3D/farm_-_low_poly_moduler_pack.glb",
+   "scale": 1,
+   "folder": "farm/modular",
+   "objects": [
+    {
+     "id": "barrel_wood",
+     "name": "Barrel Wood",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor",
+      "storage"
+     ],
+     "nodes": [
+      "barrel_Material.001_0",
+      "barrel_Material.018_0"
+     ],
+     "worldHeight": 0.987,
+     "footprint": [
+      0.96,
+      0.987,
+      0.96
+     ],
+     "detail": "fine",
+     "faces": 268,
+     "flags": []
+    },
+    {
+     "id": "bucket",
+     "name": "Bucket",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor",
+      "tool"
+     ],
+     "nodes": [
+      "bucket_Material.001_0",
+      "bucket_Material.006_0"
+     ],
+     "worldHeight": 0.611,
+     "footprint": [
+      0.618,
+      0.611,
+      0.679
+     ],
+     "detail": "fine",
+     "faces": 380,
+     "flags": []
+    },
+    {
+     "id": "plot_dirt_dry",
+     "name": "Plot Dirt Dry",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor",
+      "decor"
+     ],
+     "nodes": [
+      "Dirtdry_Material.001_0",
+      "Dirtdry_Material.002_0"
+     ],
+     "worldHeight": 0.743,
+     "footprint": [
+      10,
+      0.743,
+      10
+     ],
+     "detail": "fine",
+     "faces": 3132,
+     "flags": []
+    },
+    {
+     "id": "plot_dirt_flat",
+     "name": "Plot Dirt Flat",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor",
+      "decor"
+     ],
+     "nodes": [
+      "DirtFlat_Material.001_0"
+     ],
+     "worldHeight": 0.735,
+     "footprint": [
+      10,
+      0.735,
+      10
+     ],
+     "detail": "fine",
+     "faces": 2754,
+     "flags": []
+    },
+    {
+     "id": "plot_dirt_tall_dry",
+     "name": "Plot Dirt Tall Dry",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor",
+      "decor"
+     ],
+     "nodes": [
+      "Dirthighdry_Material.001_0",
+      "Dirthighdry_Material.002_0",
+      "Dirthighdry_Material.004_0"
+     ],
+     "worldHeight": 2.297,
+     "footprint": [
+      10,
+      2.297,
+      10.079
+     ],
+     "detail": "fine",
+     "faces": 4604,
+     "flags": []
+    },
+    {
+     "id": "plot_dirt_tall_green",
+     "name": "Plot Dirt Tall Green",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor",
+      "decor"
+     ],
+     "nodes": [
+      "Dirthighgreen_Material.001_0",
+      "Dirthighgreen_Material.002_0",
+      "Dirthighgreen_Material.003_0"
+     ],
+     "worldHeight": 2.297,
+     "footprint": [
+      10,
+      2.297,
+      10.079
+     ],
+     "detail": "fine",
+     "faces": 4604,
+     "flags": []
+    },
+    {
+     "id": "plot_dirt_short_green",
+     "name": "Plot Dirt Short Green",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor",
+      "decor"
+     ],
+     "nodes": [
+      "Dirtshortgreen_Material.001_0",
+      "Dirtshortgreen_Material.002_0",
+      "Dirtshortgreen_Material.003_0"
+     ],
+     "worldHeight": 1.23,
+     "footprint": [
+      10,
+      1.23,
+      10
+     ],
+     "detail": "fine",
+     "faces": 4582,
+     "flags": []
+    },
+    {
+     "id": "plot_dirt_small_dry",
+     "name": "Plot Dirt Small Dry",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor",
+      "decor"
+     ],
+     "nodes": [
+      "DirtSmalldry_Material.001_0",
+      "DirtSmalldry_Material.002_0",
+      "DirtSmalldry_Material.004_0"
+     ],
+     "worldHeight": 1.288,
+     "footprint": [
+      10,
+      1.288,
+      10
+     ],
+     "detail": "fine",
+     "faces": 4612,
+     "flags": []
+    },
+    {
+     "id": "plot_dirt_watered",
+     "name": "Plot Dirt Watered",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor",
+      "decor"
+     ],
+     "nodes": [
+      "DirtWater_Material.001_0",
+      "DirtWater_Material.002_0",
+      "DirtWater_Material.005_0"
+     ],
+     "worldHeight": 0.645,
+     "footprint": [
+      10,
+      0.645,
+      10
+     ],
+     "detail": "fine",
+     "faces": 2756,
+     "flags": []
+    },
+    {
+     "id": "fence_rail",
+     "name": "Fence Rail",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor",
+      "fence",
+      "structure"
+     ],
+     "nodes": [
+      "Fence_Material.001_0",
+      "Fence_Material.006_0"
+     ],
+     "worldHeight": 1.203,
+     "footprint": [
+      0.181,
+      1.203,
+      1.996
+     ],
+     "detail": "fine",
+     "faces": 252,
+     "flags": []
+    },
+    {
+     "id": "fence_rail_broken",
+     "name": "Fence Rail Broken",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor",
+      "fence",
+      "structure"
+     ],
+     "nodes": [
+      "fencebroken_Material.001_0",
+      "fencebroken_Material.006_0"
+     ],
+     "worldHeight": 1.203,
+     "footprint": [
+      0.176,
+      1.203,
+      1.996
+     ],
+     "detail": "fine",
+     "faces": 256,
+     "flags": []
+    },
+    {
+     "id": "gate_wood",
+     "name": "Gate Wood",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor",
+      "fence",
+      "structure"
+     ],
+     "nodes": [
+      "Gate_Material.001_0"
+     ],
+     "worldHeight": 3.428,
+     "footprint": [
+      0.567,
+      3.428,
+      4.286
+     ],
+     "detail": "fine",
+     "faces": 1040,
+     "flags": [
+      "very tall — check units"
+     ]
+    },
+    {
+     "id": "grass_patch_dry",
+     "name": "Grass Patch Dry",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor",
+      "plant",
+      "decor"
+     ],
+     "nodes": [
+      "GrassDry_Material.004_0"
+     ],
+     "worldHeight": 0.908,
+     "footprint": [
+      5.602,
+      0.908,
+      5.099
+     ],
+     "detail": "fine",
+     "faces": 10000,
+     "flags": []
+    },
+    {
+     "id": "grass_patch_green",
+     "name": "Grass Patch Green",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor",
+      "plant",
+      "decor"
+     ],
+     "nodes": [
+      "GrassGreen_Material.003_0"
+     ],
+     "worldHeight": 0.908,
+     "footprint": [
+      5.602,
+      0.908,
+      5.099
+     ],
+     "detail": "fine",
+     "faces": 10000,
+     "flags": []
+    },
+    {
+     "id": "grass_tuft",
+     "name": "Grass Tuft",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor",
+      "plant",
+      "decor"
+     ],
+     "nodes": [
+      "GrassSingle_Material.003_0"
+     ],
+     "worldHeight": 1.945,
+     "footprint": [
+      0.697,
+      1.945,
+      0.821
+     ],
+     "detail": "fine",
+     "faces": 10,
+     "flags": []
+    },
+    {
+     "id": "grass_tuft_dry",
+     "name": "Grass Tuft Dry",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor",
+      "plant",
+      "decor"
+     ],
+     "nodes": [
+      "GrassSingledry_Material.004_0"
+     ],
+     "worldHeight": 1.945,
+     "footprint": [
+      0.697,
+      1.945,
+      0.821
+     ],
+     "detail": "fine",
+     "faces": 10,
+     "flags": []
+    },
+    {
+     "id": "hay_bale_round",
+     "name": "Hay Bale Round",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor",
+      "decor"
+     ],
+     "nodes": [
+      "HayBale_Material.001_0",
+      "HayBale_Material.013_0",
+      "HayBale_Material.014_0",
+      "HayBale_Material.020_0"
+     ],
+     "worldHeight": 1.108,
+     "footprint": [
+      1.286,
+      1.108,
+      1.108
+     ],
+     "detail": "fine",
+     "faces": 236,
+     "flags": []
+    },
+    {
+     "id": "laundry_line",
+     "name": "Laundry Line",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor"
+     ],
+     "nodes": [
+      "Laundry_Material.001_0",
+      "Laundry_Material.002_0",
+      "Laundry_Material.004_0",
+      "Laundry_Material.010_0",
+      "Laundry_Material.017_0"
+     ],
+     "worldHeight": 2.323,
+     "footprint": [
+      0.295,
+      2.323,
+      5.015
+     ],
+     "detail": "fine",
+     "faces": 936,
+     "flags": []
+    },
+    {
+     "id": "log",
+     "name": "Log",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor",
+      "decor"
+     ],
+     "nodes": [
+      "Log_Material.001_0"
+     ],
+     "worldHeight": 0.807,
+     "footprint": [
+      0.752,
+      0.807,
+      2.854
+     ],
+     "detail": "fine",
+     "faces": 378,
+     "flags": []
+    },
+    {
+     "id": "log_moss_dry",
+     "name": "Log Moss Dry",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor",
+      "decor"
+     ],
+     "nodes": [
+      "logmossDry_Material.001_0",
+      "logmossDry_Material.004_0"
+     ],
+     "worldHeight": 0.807,
+     "footprint": [
+      0.752,
+      0.807,
+      2.854
+     ],
+     "detail": "fine",
+     "faces": 474,
+     "flags": []
+    },
+    {
+     "id": "log_moss_green",
+     "name": "Log Moss Green",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor",
+      "decor"
+     ],
+     "nodes": [
+      "LogMossgreen_Material.001_0",
+      "LogMossgreen_Material.003_0"
+     ],
+     "worldHeight": 0.807,
+     "footprint": [
+      0.752,
+      0.807,
+      2.854
+     ],
+     "detail": "fine",
+     "faces": 474,
+     "flags": []
+    },
+    {
+     "id": "plant_bush",
+     "name": "Plant Bush",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor",
+      "plant",
+      "decor"
+     ],
+     "nodes": [
+      "Plant_Material.003_0"
+     ],
+     "worldHeight": 0.683,
+     "footprint": [
+      1.849,
+      0.683,
+      1.9
+     ],
+     "detail": "fine",
+     "faces": 224,
+     "flags": []
+    },
+    {
+     "id": "plant_bush_dry",
+     "name": "Plant Bush Dry",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor",
+      "plant",
+      "decor"
+     ],
+     "nodes": [
+      "PlantDry_Material.004_0"
+     ],
+     "worldHeight": 0.683,
+     "footprint": [
+      1.849,
+      0.683,
+      1.9
+     ],
+     "detail": "fine",
+     "faces": 224,
+     "flags": []
+    },
+    {
+     "id": "rock_1",
+     "name": "Rock 1",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor",
+      "decor"
+     ],
+     "nodes": [
+      "Rock1_Material.006_0"
+     ],
+     "worldHeight": 1.269,
+     "footprint": [
+      1.73,
+      1.269,
+      1.515
+     ],
+     "detail": "fine",
+     "faces": 74,
+     "flags": []
+    },
+    {
+     "id": "rock_2",
+     "name": "Rock 2",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor",
+      "decor"
+     ],
+     "nodes": [
+      "Rock2_Material.006_0"
+     ],
+     "worldHeight": 1.297,
+     "footprint": [
+      1.474,
+      1.297,
+      1.434
+     ],
+     "detail": "fine",
+     "faces": 72,
+     "flags": []
+    },
+    {
+     "id": "rock_3",
+     "name": "Rock 3",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor",
+      "decor"
+     ],
+     "nodes": [
+      "Rock3_Material.006_0"
+     ],
+     "worldHeight": 0.872,
+     "footprint": [
+      1.23,
+      0.872,
+      1.343
+     ],
+     "detail": "fine",
+     "faces": 86,
+     "flags": []
+    },
+    {
+     "id": "rock_dry_1",
+     "name": "Rock Dry 1",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor",
+      "decor"
+     ],
+     "nodes": [
+      "RockDry1_Material.004_0",
+      "RockDry1_Material.006_0"
+     ],
+     "worldHeight": 1.269,
+     "footprint": [
+      1.73,
+      1.269,
+      1.515
+     ],
+     "detail": "fine",
+     "faces": 74,
+     "flags": []
+    },
+    {
+     "id": "rock_dry_2",
+     "name": "Rock Dry 2",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor",
+      "decor"
+     ],
+     "nodes": [
+      "RockDry2_Material.004_0",
+      "RockDry2_Material.006_0"
+     ],
+     "worldHeight": 1.297,
+     "footprint": [
+      1.474,
+      1.297,
+      1.434
+     ],
+     "detail": "fine",
+     "faces": 72,
+     "flags": []
+    },
+    {
+     "id": "rock_dry_3",
+     "name": "Rock Dry 3",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor",
+      "decor"
+     ],
+     "nodes": [
+      "RockDry3_Material.004_0",
+      "RockDry3_Material.006_0"
+     ],
+     "worldHeight": 0.872,
+     "footprint": [
+      1.23,
+      0.872,
+      1.343
+     ],
+     "detail": "fine",
+     "faces": 86,
+     "flags": []
+    },
+    {
+     "id": "rock_moss_1",
+     "name": "Rock Moss 1",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor",
+      "decor"
+     ],
+     "nodes": [
+      "RockMoss1_Material.003_0",
+      "RockMoss1_Material.006_0"
+     ],
+     "worldHeight": 1.269,
+     "footprint": [
+      1.73,
+      1.269,
+      1.515
+     ],
+     "detail": "fine",
+     "faces": 74,
+     "flags": []
+    },
+    {
+     "id": "rock_moss_2",
+     "name": "Rock Moss 2",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor",
+      "decor"
+     ],
+     "nodes": [
+      "RockMoss2_Material.003_0",
+      "RockMoss2_Material.006_0"
+     ],
+     "worldHeight": 1.297,
+     "footprint": [
+      1.474,
+      1.297,
+      1.434
+     ],
+     "detail": "fine",
+     "faces": 72,
+     "flags": []
+    },
+    {
+     "id": "rock_moss_3",
+     "name": "Rock Moss 3",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor",
+      "decor"
+     ],
+     "nodes": [
+      "RockMoss3_Material.003_0",
+      "RockMoss3_Material.006_0"
+     ],
+     "worldHeight": 0.872,
+     "footprint": [
+      1.23,
+      0.872,
+      1.343
+     ],
+     "detail": "fine",
+     "faces": 86,
+     "flags": []
+    },
+    {
+     "id": "tractor_green",
+     "name": "Tractor Green",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor"
+     ],
+     "nodes": [
+      "Tractor-green_Material.007_0",
+      "Tractor-green_Material.011_0",
+      "Tractor-green_Material.019_0"
+     ],
+     "worldHeight": 2.773,
+     "footprint": [
+      4.103,
+      2.773,
+      2.103
+     ],
+     "detail": "fine",
+     "faces": 3056,
+     "flags": []
+    },
+    {
+     "id": "tractor_red",
+     "name": "Tractor Red",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor"
+     ],
+     "nodes": [
+      "Tractor-red_Material.007_0",
+      "Tractor-red_Material.009_0",
+      "Tractor-red_Material.019_0"
+     ],
+     "worldHeight": 2.773,
+     "footprint": [
+      4.103,
+      2.773,
+      2.103
+     ],
+     "detail": "fine",
+     "faces": 3056,
+     "flags": []
+    },
+    {
+     "id": "tractor_yellow",
+     "name": "Tractor Yellow",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor"
+     ],
+     "nodes": [
+      "Tractor-yellow_Material.007_0",
+      "Tractor-yellow_Material.012_0",
+      "Tractor-yellow_Material.019_0"
+     ],
+     "worldHeight": 2.773,
+     "footprint": [
+      4.103,
+      2.773,
+      2.103
+     ],
+     "detail": "fine",
+     "faces": 3056,
+     "flags": []
+    },
+    {
+     "id": "tree_pine_1",
+     "name": "Tree Pine 1",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor",
+      "plant",
+      "decor"
+     ],
+     "nodes": [
+      "Tree 1_Material.003_0",
+      "Tree 1_Material.031_0"
+     ],
+     "worldHeight": 3.923,
+     "footprint": [
+      2.041,
+      3.923,
+      2.107
+     ],
+     "detail": "fine",
+     "faces": 646,
+     "flags": [
+      "very tall — check units"
+     ]
+    },
+    {
+     "id": "tree_pine_2",
+     "name": "Tree Pine 2",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor",
+      "plant",
+      "decor"
+     ],
+     "nodes": [
+      "Tree 2_Material.004_0",
+      "Tree 2_Material.031_0"
+     ],
+     "worldHeight": 3.923,
+     "footprint": [
+      2.041,
+      3.923,
+      2.107
+     ],
+     "detail": "fine",
+     "faces": 646,
+     "flags": [
+      "very tall — check units"
+     ]
+    },
+    {
+     "id": "tree_log",
+     "name": "Tree Log",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor",
+      "plant",
+      "decor"
+     ],
+     "nodes": [
+      "TreeLog_Material.001_0",
+      "TreeLog_Material.015_0",
+      "TreeLog_Material.016_0",
+      "TreeLog_Material.017_0"
+     ],
+     "worldHeight": 0.746,
+     "footprint": [
+      1.473,
+      0.746,
+      1.467
+     ],
+     "detail": "fine",
+     "faces": 558,
+     "flags": []
+    },
+    {
+     "id": "bucket_water",
+     "name": "Bucket Water",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor",
+      "ingredient",
+      "tool"
+     ],
+     "nodes": [
+      "waterbucket_Material.001_0",
+      "waterbucket_Material.005_0",
+      "waterbucket_Material.006_0"
+     ],
+     "worldHeight": 0.611,
+     "footprint": [
+      0.618,
+      0.611,
+      0.679
+     ],
+     "detail": "fine",
+     "faces": 408,
+     "flags": []
+    },
+    {
+     "id": "water_pole",
+     "name": "Water Pole",
+     "folder": "farm/modular",
+     "tags": [
+      "farm",
+      "outdoor",
+      "ingredient"
+     ],
+     "nodes": [
+      "WaterPole_Material.001_0",
+      "WaterPole_Material.016_0",
+      "WaterPole_Material.018_0",
+      "WaterPole_Material.019_0"
+     ],
+     "worldHeight": 6.521,
+     "footprint": [
+      2.364,
+      6.521,
+      2.364
+     ],
+     "detail": "fine",
+     "faces": 728,
+     "flags": [
+      "very tall — check units"
+     ]
+    }
+   ]
+  },
+  {
+   "pack": "farm_set_part_3",
+   "file": "farm_set_part_3.glb",
+   "sourceFile": "/Users/pedrosaldanha/Downloads/3D/farm_set_part_3.glb",
+   "scale": 0.01,
+   "folder": "farm/tools",
+   "objects": [
+    {
+     "id": "rake",
+     "name": "Rake",
+     "folder": "farm/tools",
+     "tags": [
+      "farm",
+      "outdoor",
+      "tool"
+     ],
+     "nodes": [
+      "defaultMaterial"
+     ],
+     "worldHeight": 1.032,
+     "footprint": [
+      0.31,
+      1.032,
+      0.03
+     ],
+     "detail": "fine",
+     "faces": 2095,
+     "flags": []
+    },
+    {
+     "id": "hand_saw",
+     "name": "Hand Saw",
+     "folder": "farm/tools",
+     "tags": [
+      "farm",
+      "outdoor"
+     ],
+     "nodes": [
+      "defaultMaterial_1"
+     ],
+     "worldHeight": 0.136,
+     "footprint": [
+      0.562,
+      0.136,
+      0.021
+     ],
+     "detail": "fine",
+     "faces": 760,
+     "flags": []
+    },
+    {
+     "id": "hoe_wood",
+     "name": "Hoe Wood",
+     "folder": "farm/tools",
+     "tags": [
+      "farm",
+      "outdoor",
+      "tool"
+     ],
+     "nodes": [
+      "defaultMaterial_2"
+     ],
+     "worldHeight": 0.99,
+     "footprint": [
+      0.199,
+      0.99,
+      0.091
+     ],
+     "detail": "fine",
+     "faces": 1968,
+     "flags": []
+    },
+    {
+     "id": "spade",
+     "name": "Spade",
+     "folder": "farm/tools",
+     "tags": [
+      "farm",
+      "outdoor"
+     ],
+     "nodes": [
+      "defaultMaterial_3"
+     ],
+     "worldHeight": 1.294,
+     "footprint": [
+      0.335,
+      1.294,
+      0.057
+     ],
+     "detail": "fine",
+     "faces": 2340,
+     "flags": []
+    },
+    {
+     "id": "broom",
+     "name": "Broom",
+     "folder": "farm/tools",
+     "tags": [
+      "farm",
+      "outdoor"
+     ],
+     "nodes": [
+      "defaultMaterial_4"
+     ],
+     "worldHeight": 1.226,
+     "footprint": [
+      0.122,
+      1.226,
+      0.106
+     ],
+     "detail": "fine",
+     "faces": 19916,
+     "flags": []
+    }
+   ]
+  },
+  {
+   "pack": "folding_table",
+   "file": "folding_table.glb",
+   "sourceFile": "/Users/pedrosaldanha/Downloads/3D/folding_table.glb",
+   "scale": 1,
+   "folder": "dining/tables",
+   "objects": [
+    {
+     "id": "folding_table",
+     "name": "Folding Table",
+     "folder": "dining/tables",
+     "tags": [
+      "kitchen",
+      "furniture"
+     ],
+     "nodes": [
+      "defaultMaterial"
+     ],
+     "worldHeight": 0.806,
+     "footprint": [
+      1.946,
+      0.806,
+      0.788
+     ],
+     "detail": "fine",
+     "faces": 5556,
+     "flags": []
+    }
+   ]
+  },
+  {
+   "pack": "fruits_pack",
+   "file": "fruits_pack.glb",
+   "sourceFile": null,
+   "scale": 0.0254,
+   "folder": "food/market_displays",
+   "objects": []
+  },
+  {
+   "pack": "hanging_branch_of_dried_bay_leaves_for_cooking",
+   "file": "hanging_branch_of_dried_bay_leaves_for_cooking.glb",
+   "sourceFile": "/Users/pedrosaldanha/Downloads/3D/hanging_branch_of_dried_bay_leaves_for_cooking.glb",
+   "scale": 0.01,
+   "folder": "decor/hanging",
+   "objects": [
+    {
+     "id": "dried_bay_leaves_branch",
+     "name": "Dried Bay Leaves Branch",
+     "folder": "decor/hanging",
+     "tags": [
+      "kitchen",
+      "decor",
+      "ingredient",
+      "farm",
+      "plant"
+     ],
+     "nodes": [
+      "Object_2",
+      "Object_3",
+      "Object_4",
+      "Object_5"
+     ],
+     "worldHeight": 0.927,
+     "footprint": [
+      0.265,
+      0.927,
+      1.127
+     ],
+     "detail": "fine",
+     "faces": 41066,
+     "flags": []
+    }
+   ]
+  },
+  {
+   "pack": "hanging_plants_001",
+   "file": "hanging_plants_001.glb",
+   "sourceFile": "/Users/pedrosaldanha/Downloads/3D/hanging_plants_001.glb",
+   "scale": 0.001,
+   "folder": "decor/plants",
+   "objects": [
+    {
+     "id": "hanging_plant_trailing",
+     "name": "Hanging Plant (trailing)",
+     "folder": "decor/plants",
+     "tags": [
+      "farm",
+      "plant",
+      "decor"
+     ],
+     "nodes": [
+      "stern_Material.001_0",
+      "leaf_Material.001_0"
+     ],
+     "worldHeight": 1.948,
+     "footprint": [
+      0.866,
+      1.948,
+      0.886
+     ],
+     "detail": "fine",
+     "faces": 26992,
+     "flags": []
+    },
+    {
+     "id": "hanging_plant_trailing_2",
+     "name": "Hanging Plant Trailing 2",
+     "folder": "decor/plants",
+     "tags": [
+      "farm",
+      "plant",
+      "decor"
+     ],
+     "nodes": [
+      "stern.001_Material.001_0",
+      "leaf.001_Material.001_0"
+     ],
+     "worldHeight": 1.92,
+     "footprint": [
+      0.865,
+      1.92,
+      0.866
+     ],
+     "detail": "fine",
+     "faces": 26992,
+     "flags": []
+    },
+    {
+     "id": "hanging_plant_trailing_3",
+     "name": "Hanging Plant Trailing 3",
+     "folder": "decor/plants",
+     "tags": [
+      "farm",
+      "plant",
+      "decor"
+     ],
+     "nodes": [
+      "stern.002_Material.001_0",
+      "leaf.002_Material.001_0"
+     ],
+     "worldHeight": 1.838,
+     "footprint": [
+      0.868,
+      1.838,
+      0.859
+     ],
+     "detail": "fine",
+     "faces": 26992,
+     "flags": []
+    }
+   ]
+  },
+  {
+   "pack": "hanging_pothos",
+   "file": "hanging_pothos.glb",
+   "sourceFile": "/Users/pedrosaldanha/Downloads/3D/hanging_pothos.glb",
+   "scale": 0.01,
+   "folder": "decor/plants",
+   "objects": [
+    {
+     "id": "hanging_pothos",
+     "name": "Hanging Pothos",
+     "folder": "decor/plants",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "Constructed Sample_Pothos Leaf 2_0",
+      "Constructed Sample_Pothos Leaf 3_0",
+      "Constructed Sample_Pothos Leaf_0",
+      "Constructed Sample_Stem_0",
+      "Constructed Sample_String_0",
+      "Constructed Sample_Pot_0",
+      "String_String_0"
+     ],
+     "worldHeight": 0.205,
+     "footprint": [
+      0.09,
+      0.205,
+      0.399
+     ],
+     "detail": "ultra",
+     "faces": 29672,
+     "flags": []
+    }
+   ]
+  },
+  {
+   "pack": "house_plants_hanging_pot",
+   "file": "house_plants_hanging_pot.glb",
+   "sourceFile": "/Users/pedrosaldanha/Downloads/3D/house_plants_hanging_pot.glb",
+   "scale": 0.01,
+   "folder": "decor/plants",
+   "objects": [
+    {
+     "id": "hanging_pot_plant",
+     "name": "Hanging Pot Plant",
+     "folder": "decor/plants",
+     "tags": [
+      "farm",
+      "cooking",
+      "plant",
+      "decor"
+     ],
+     "nodes": [
+      "Plant hanging N050922_Ceramic_0",
+      "Plant hanging N050922_Ground_0",
+      "Plant hanging N050922_Leaf.001_0",
+      "Plant hanging N050922_Leaf.001_1",
+      "Plant hanging N050922_Metal_0",
+      "Plant hanging N050922_Stem_0",
+      "Plant hanging N050922_Leaf.001_0_2"
+     ],
+     "worldHeight": 0.221,
+     "footprint": [
+      0.093,
+      0.221,
+      0.091
+     ],
+     "detail": "ultra",
+     "faces": 404852,
+     "flags": [
+      "405k triangles — slow to convert"
+     ]
+    }
+   ]
+  },
+  {
+   "pack": "indoor_plants",
+   "file": "indoor_plants.glb",
+   "sourceFile": "/Users/pedrosaldanha/Downloads/3D/indoor_plants.glb",
+   "scale": 1,
+   "folder": "decor/plants",
+   "objects": [
+    {
+     "id": "aloe_vera_potted",
+     "name": "Aloe Vera Potted",
+     "folder": "decor/plants",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "AloeVera_AloeVera_0",
+      "AloeVera_Dirt_0",
+      "AloeVera_Pot_0"
+     ],
+     "worldHeight": 0.437,
+     "footprint": [
+      0.281,
+      0.437,
+      0.336
+     ],
+     "detail": "ultra",
+     "faces": 83063,
+     "flags": []
+    },
+    {
+     "id": "ficus_elastica",
+     "name": "Ficus Elastica",
+     "folder": "decor/plants",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "Ficus Elastica_Dirt2_0",
+      "Ficus Elastica_Leaf1_0",
+      "Ficus Elastica_Leaf2_0",
+      "Ficus Elastica_Pot2_0",
+      "Ficus Elastica_Sapling_0"
+     ],
+     "worldHeight": 1.112,
+     "footprint": [
+      0.776,
+      1.112,
+      0.914
+     ],
+     "detail": "fine",
+     "faces": 72093,
+     "flags": []
+    },
+    {
+     "id": "monstera",
+     "name": "Monstera",
+     "folder": "decor/plants",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "Monstera_Ceramic_0",
+      "Monstera_LilyGreen_0",
+      "Monstera_Monstera_0",
+      "Monstera_Soil_0",
+      "Monstera_Wood_0"
+     ],
+     "worldHeight": 1.074,
+     "footprint": [
+      0.923,
+      1.074,
+      0.831
+     ],
+     "detail": "fine",
+     "faces": 16626,
+     "flags": []
+    },
+    {
+     "id": "peace_lily",
+     "name": "Peace Lily",
+     "folder": "decor/plants",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "Peace Lily_LilyGreen_0",
+      "Peace Lily_LilyMetal_0",
+      "Peace Lily_LilyPorcelain_0",
+      "Peace Lily_lilysoil_0",
+      "Peace Lily_TCom_Plant_PeaceLily02_2K_albedo_0"
+     ],
+     "worldHeight": 0.912,
+     "footprint": [
+      0.76,
+      0.912,
+      0.781
+     ],
+     "detail": "fine",
+     "faces": 17020,
+     "flags": []
+    }
+   ]
+  },
+  {
+   "pack": "kitchen_-_assets",
+   "file": "kitchen_-_assets.glb",
+   "sourceFile": "/Users/pedrosaldanha/Downloads/3D/kitchen_-_assets.glb",
+   "scale": 1,
+   "folder": "kitchen/kitchen_assets",
+   "objects": [
+    {
+     "id": "sink_steel",
+     "name": "Sink Steel",
+     "folder": "kitchen/equipment",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "Object_90",
+      "Object_98",
+      "Object_96",
+      "Object_92",
+      "Object_94"
+     ],
+     "worldHeight": 1.183,
+     "footprint": [
+      0.689,
+      1.183,
+      0.659
+     ],
+     "detail": "fine",
+     "faces": 6601,
+     "flags": []
+    },
+    {
+     "id": "portable_stove",
+     "name": "Portable Stove",
+     "folder": "kitchen/equipment",
+     "tags": [
+      "kitchen",
+      "cooking",
+      "appliance"
+     ],
+     "nodes": [
+      "Object_78",
+      "Object_80",
+      "Object_82",
+      "Object_84",
+      "Object_86",
+      "Object_88"
+     ],
+     "worldHeight": 0.12,
+     "footprint": [
+      0.578,
+      0.12,
+      0.558
+     ],
+     "detail": "fine",
+     "faces": 11256,
+     "flags": []
+    },
+    {
+     "id": "gas_cylinder",
+     "name": "Gas Cylinder",
+     "folder": "kitchen/equipment",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "Object_70",
+      "Object_72"
+     ],
+     "worldHeight": 0.467,
+     "footprint": [
+      0.15,
+      0.467,
+      0.149
+     ],
+     "detail": "fine",
+     "faces": 2369,
+     "flags": []
+    },
+    {
+     "id": "gas_cylinder_small",
+     "name": "Gas Cylinder Small",
+     "folder": "kitchen/equipment",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "Object_74",
+      "Object_76"
+     ],
+     "worldHeight": 0.149,
+     "footprint": [
+      0.273,
+      0.149,
+      0.458
+     ],
+     "detail": "fine",
+     "faces": 2369,
+     "flags": []
+    },
+    {
+     "id": "glass_jar_lidded",
+     "name": "Glass Jar Lidded",
+     "folder": "food/pantry_assets",
+     "tags": [
+      "kitchen",
+      "dining",
+      "food",
+      "tableware",
+      "storage"
+     ],
+     "nodes": [
+      "Object_44",
+      "Object_46"
+     ],
+     "worldHeight": 0.138,
+     "footprint": [
+      0.09,
+      0.138,
+      0.09
+     ],
+     "detail": "ultra",
+     "faces": 1278,
+     "flags": []
+    },
+    {
+     "id": "tin_can_lidded",
+     "name": "Tin Can Lidded",
+     "folder": "food/pantry_assets",
+     "tags": [
+      "kitchen",
+      "food",
+      "storage"
+     ],
+     "nodes": [
+      "Object_38",
+      "Object_40"
+     ],
+     "worldHeight": 0.168,
+     "footprint": [
+      0.128,
+      0.168,
+      0.127
+     ],
+     "detail": "ultra",
+     "faces": 1512,
+     "flags": []
+    },
+    {
+     "id": "stew_pot_lidded",
+     "name": "Stew Pot Lidded",
+     "folder": "kitchen/kitchen_assets",
+     "tags": [
+      "kitchen",
+      "cooking"
+     ],
+     "nodes": [
+      "Object_24",
+      "Object_26"
+     ],
+     "worldHeight": 0.211,
+     "footprint": [
+      0.259,
+      0.211,
+      0.302
+     ],
+     "detail": "ultra",
+     "faces": 4776,
+     "flags": []
+    },
+    {
+     "id": "cooking_table_steel",
+     "name": "Cooking Table Steel",
+     "folder": "kitchen/equipment",
+     "tags": [
+      "kitchen",
+      "furniture"
+     ],
+     "nodes": [
+      "Object_4",
+      "Object_12",
+      "Object_10",
+      "Object_6",
+      "Object_8"
+     ],
+     "worldHeight": 0.88,
+     "footprint": [
+      0.598,
+      0.88,
+      1.011
+     ],
+     "detail": "fine",
+     "faces": 888,
+     "flags": []
+    },
+    {
+     "id": "pot_rack",
+     "name": "Pot Rack",
+     "folder": "kitchen/equipment",
+     "tags": [
+      "kitchen",
+      "cooking",
+      "storage"
+     ],
+     "nodes": [
+      "Object_14",
+      "Object_18",
+      "Object_16"
+     ],
+     "worldHeight": 0.661,
+     "footprint": [
+      0.35,
+      0.661,
+      0.813
+     ],
+     "detail": "fine",
+     "faces": 4712,
+     "flags": []
+    },
+    {
+     "id": "cooking_pot_steel",
+     "name": "Cooking Pot Steel",
+     "folder": "kitchen/kitchen_assets",
+     "tags": [
+      "kitchen",
+      "cooking"
+     ],
+     "nodes": [
+      "Object_20"
+     ],
+     "worldHeight": 0.369,
+     "footprint": [
+      0.14,
+      0.369,
+      0.206
+     ],
+     "detail": "ultra",
+     "faces": 966,
+     "flags": []
+    },
+    {
+     "id": "cast_iron_pan",
+     "name": "Cast Iron Pan",
+     "folder": "kitchen/kitchen_assets",
+     "tags": [
+      "kitchen",
+      "cooking"
+     ],
+     "nodes": [
+      "Object_22"
+     ],
+     "worldHeight": 0.465,
+     "footprint": [
+      0.067,
+      0.465,
+      0.281
+     ],
+     "detail": "ultra",
+     "faces": 1178,
+     "flags": []
+    },
+    {
+     "id": "plate_plain",
+     "name": "Plate Plain",
+     "folder": "kitchen/kitchen_assets",
+     "tags": [
+      "kitchen",
+      "dining",
+      "tableware"
+     ],
+     "nodes": [
+      "Object_28"
+     ],
+     "worldHeight": 0.025,
+     "footprint": [
+      0.216,
+      0.025,
+      0.216
+     ],
+     "detail": "ultra",
+     "faces": 1220,
+     "flags": []
+    },
+    {
+     "id": "canned_food_flat_1",
+     "name": "Canned Food Flat 1",
+     "folder": "food/pantry_assets",
+     "tags": [
+      "kitchen",
+      "food",
+      "storage"
+     ],
+     "nodes": [
+      "Object_30"
+     ],
+     "worldHeight": 0.021,
+     "footprint": [
+      0.086,
+      0.021,
+      0.086
+     ],
+     "detail": "ultra",
+     "faces": 1524,
+     "flags": []
+    },
+    {
+     "id": "canned_food_tall_1",
+     "name": "Canned Food Tall 1",
+     "folder": "food/pantry_assets",
+     "tags": [
+      "kitchen",
+      "food",
+      "storage"
+     ],
+     "nodes": [
+      "Object_32"
+     ],
+     "worldHeight": 0.079,
+     "footprint": [
+      0.059,
+      0.079,
+      0.059
+     ],
+     "detail": "ultra",
+     "faces": 2324,
+     "flags": []
+    },
+    {
+     "id": "cardboard_food_box",
+     "name": "Cardboard Food Box",
+     "folder": "food/pantry_assets",
+     "tags": [
+      "kitchen",
+      "food",
+      "storage"
+     ],
+     "nodes": [
+      "Object_34"
+     ],
+     "worldHeight": 0.204,
+     "footprint": [
+      0.172,
+      0.204,
+      0.092
+     ],
+     "detail": "ultra",
+     "faces": 44,
+     "flags": []
+    },
+    {
+     "id": "food_bag",
+     "name": "Food Bag",
+     "folder": "food/pantry_assets",
+     "tags": [
+      "kitchen",
+      "food",
+      "storage"
+     ],
+     "nodes": [
+      "Object_36"
+     ],
+     "worldHeight": 0.066,
+     "footprint": [
+      0.265,
+      0.066,
+      0.247
+     ],
+     "detail": "ultra",
+     "faces": 8148,
+     "flags": []
+    },
+    {
+     "id": "liquid_soap",
+     "name": "Liquid Soap",
+     "folder": "kitchen/cleaning",
+     "tags": [
+      "kitchen",
+      "storage"
+     ],
+     "nodes": [
+      "Object_42"
+     ],
+     "worldHeight": 0.232,
+     "footprint": [
+      0.051,
+      0.232,
+      0.07
+     ],
+     "detail": "fine",
+     "faces": 1714,
+     "flags": []
+    },
+    {
+     "id": "ketchup_bottle",
+     "name": "Ketchup Bottle",
+     "folder": "food/pantry_assets",
+     "tags": [
+      "kitchen",
+      "food",
+      "storage"
+     ],
+     "nodes": [
+      "Object_48"
+     ],
+     "worldHeight": 0.077,
+     "footprint": [
+      0.176,
+      0.077,
+      0.222
+     ],
+     "detail": "ultra",
+     "faces": 716,
+     "flags": []
+    },
+    {
+     "id": "cookies_package",
+     "name": "Cookies Package",
+     "folder": "food/pantry_assets",
+     "tags": [
+      "kitchen",
+      "food"
+     ],
+     "nodes": [
+      "Object_50"
+     ],
+     "worldHeight": 0.047,
+     "footprint": [
+      0.23,
+      0.047,
+      0.174
+     ],
+     "detail": "ultra",
+     "faces": 13384,
+     "flags": []
+    },
+    {
+     "id": "flour_bag",
+     "name": "Flour Bag",
+     "folder": "food/pantry_assets",
+     "tags": [
+      "kitchen",
+      "food",
+      "ingredient",
+      "storage"
+     ],
+     "nodes": [
+      "Object_52"
+     ],
+     "worldHeight": 0.225,
+     "footprint": [
+      0.123,
+      0.225,
+      0.107
+     ],
+     "detail": "ultra",
+     "faces": 13186,
+     "flags": []
+    },
+    {
+     "id": "canned_food_flat_2",
+     "name": "Canned Food Flat 2",
+     "folder": "food/pantry_assets",
+     "tags": [
+      "kitchen",
+      "food",
+      "storage"
+     ],
+     "nodes": [
+      "Object_54"
+     ],
+     "worldHeight": 0.021,
+     "footprint": [
+      0.086,
+      0.021,
+      0.086
+     ],
+     "detail": "ultra",
+     "faces": 1524,
+     "flags": []
+    },
+    {
+     "id": "canned_food_flat_3",
+     "name": "Canned Food Flat 3",
+     "folder": "food/pantry_assets",
+     "tags": [
+      "kitchen",
+      "food",
+      "storage"
+     ],
+     "nodes": [
+      "Object_56"
+     ],
+     "worldHeight": 0.021,
+     "footprint": [
+      0.086,
+      0.021,
+      0.086
+     ],
+     "detail": "ultra",
+     "faces": 1524,
+     "flags": []
+    },
+    {
+     "id": "canned_food_flat_4",
+     "name": "Canned Food Flat 4",
+     "folder": "food/pantry_assets",
+     "tags": [
+      "kitchen",
+      "food",
+      "storage"
+     ],
+     "nodes": [
+      "Object_58"
+     ],
+     "worldHeight": 0.021,
+     "footprint": [
+      0.086,
+      0.021,
+      0.086
+     ],
+     "detail": "ultra",
+     "faces": 1524,
+     "flags": []
+    },
+    {
+     "id": "canned_food_tall_2",
+     "name": "Canned Food Tall 2",
+     "folder": "food/pantry_assets",
+     "tags": [
+      "kitchen",
+      "food",
+      "storage"
+     ],
+     "nodes": [
+      "Object_60"
+     ],
+     "worldHeight": 0.079,
+     "footprint": [
+      0.059,
+      0.079,
+      0.059
+     ],
+     "detail": "ultra",
+     "faces": 2324,
+     "flags": []
+    },
+    {
+     "id": "canned_food_tall_3",
+     "name": "Canned Food Tall 3",
+     "folder": "food/pantry_assets",
+     "tags": [
+      "kitchen",
+      "food",
+      "storage"
+     ],
+     "nodes": [
+      "Object_62"
+     ],
+     "worldHeight": 0.079,
+     "footprint": [
+      0.06,
+      0.079,
+      0.06
+     ],
+     "detail": "ultra",
+     "faces": 2324,
+     "flags": []
+    },
+    {
+     "id": "canned_food_tall_4",
+     "name": "Canned Food Tall 4",
+     "folder": "food/pantry_assets",
+     "tags": [
+      "kitchen",
+      "food",
+      "storage"
+     ],
+     "nodes": [
+      "Object_64"
+     ],
+     "worldHeight": 0.079,
+     "footprint": [
+      0.06,
+      0.079,
+      0.06
+     ],
+     "detail": "ultra",
+     "faces": 2324,
+     "flags": []
+    },
+    {
+     "id": "canned_food_tall_5",
+     "name": "Canned Food Tall 5",
+     "folder": "food/pantry_assets",
+     "tags": [
+      "kitchen",
+      "food",
+      "storage"
+     ],
+     "nodes": [
+      "Object_66"
+     ],
+     "worldHeight": 0.079,
+     "footprint": [
+      0.06,
+      0.079,
+      0.06
+     ],
+     "detail": "ultra",
+     "faces": 2324,
+     "flags": []
+    },
+    {
+     "id": "food_bag_2",
+     "name": "Food Bag 2",
+     "folder": "food/pantry_assets",
+     "tags": [
+      "kitchen",
+      "food",
+      "storage"
+     ],
+     "nodes": [
+      "Object_68"
+     ],
+     "worldHeight": 0.119,
+     "footprint": [
+      0.249,
+      0.119,
+      0.249
+     ],
+     "detail": "ultra",
+     "faces": 8148,
+     "flags": []
+    }
+   ]
+  },
+  {
+   "pack": "kitchen_appliances",
+   "file": "kitchen_appliances.glb",
+   "sourceFile": "/Users/pedrosaldanha/Downloads/3D/kitchen_appliances.glb",
+   "scale": 0.33,
+   "folder": "kitchen/utensils_cartoon",
+   "objects": [
+    {
+     "id": "grill_barbecue_cartoon",
+     "name": "Grill Barbecue Cartoon",
+     "folder": "kitchen/utensils_cartoon",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "grill-barbecue top__0",
+      "grill-barbecue bottom__0"
+     ],
+     "worldHeight": 0.326,
+     "footprint": [
+      0.237,
+      0.326,
+      0.422
+     ],
+     "detail": "ultra",
+     "faces": 2504,
+     "flags": []
+    },
+    {
+     "id": "baking_form_cartoon",
+     "name": "Baking Form Cartoon",
+     "folder": "kitchen/utensils_cartoon",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "baking form top__0",
+      "bottom baking form__0"
+     ],
+     "worldHeight": 0.295,
+     "footprint": [
+      0.244,
+      0.295,
+      0.401
+     ],
+     "detail": "ultra",
+     "faces": 2254,
+     "flags": []
+    },
+    {
+     "id": "mug_cartoon",
+     "name": "Mug Cartoon",
+     "folder": "kitchen/utensils_cartoon",
+     "tags": [
+      "kitchen",
+      "dining",
+      "tableware"
+     ],
+     "nodes": [
+      "a mug1__0"
+     ],
+     "worldHeight": 0.143,
+     "footprint": [
+      0.262,
+      0.143,
+      0.261
+     ],
+     "detail": "ultra",
+     "faces": 1312,
+     "flags": []
+    },
+    {
+     "id": "mug_cartoon_2",
+     "name": "Mug Cartoon 2",
+     "folder": "kitchen/utensils_cartoon",
+     "tags": [
+      "kitchen",
+      "dining",
+      "tableware"
+     ],
+     "nodes": [
+      "a mug2__0"
+     ],
+     "worldHeight": 0.126,
+     "footprint": [
+      0.213,
+      0.126,
+      0.176
+     ],
+     "detail": "ultra",
+     "faces": 804,
+     "flags": []
+    },
+    {
+     "id": "frying_pan_big_cartoon",
+     "name": "Frying Pan Big Cartoon",
+     "folder": "kitchen/utensils_cartoon",
+     "tags": [
+      "kitchen",
+      "cooking"
+     ],
+     "nodes": [
+      "Big frying pan__0"
+     ],
+     "worldHeight": 0.47,
+     "footprint": [
+      0.258,
+      0.47,
+      0.044
+     ],
+     "detail": "ultra",
+     "faces": 648,
+     "flags": []
+    },
+    {
+     "id": "cutting_board_cartoon",
+     "name": "Cutting Board Cartoon",
+     "folder": "kitchen/utensils_cartoon",
+     "tags": [
+      "kitchen",
+      "prep"
+     ],
+     "nodes": [
+      "board__0"
+     ],
+     "worldHeight": 0.383,
+     "footprint": [
+      0.171,
+      0.383,
+      0.021
+     ],
+     "detail": "ultra",
+     "faces": 416,
+     "flags": []
+    },
+    {
+     "id": "bowl_cartoon",
+     "name": "Bowl Cartoon",
+     "folder": "kitchen/utensils_cartoon",
+     "tags": [
+      "kitchen",
+      "dining",
+      "tableware"
+     ],
+     "nodes": [
+      "bowl1__0"
+     ],
+     "worldHeight": 0.13,
+     "footprint": [
+      0.253,
+      0.13,
+      0.253
+     ],
+     "detail": "ultra",
+     "faces": 540,
+     "flags": []
+    },
+    {
+     "id": "bowl_cartoon_shallow",
+     "name": "Bowl Cartoon Shallow",
+     "folder": "kitchen/utensils_cartoon",
+     "tags": [
+      "kitchen",
+      "dining",
+      "tableware"
+     ],
+     "nodes": [
+      "bowl2__0"
+     ],
+     "worldHeight": 0.057,
+     "footprint": [
+      0.262,
+      0.057,
+      0.261
+     ],
+     "detail": "ultra",
+     "faces": 380,
+     "flags": []
+    },
+    {
+     "id": "knife_cartoon",
+     "name": "Knife Cartoon",
+     "folder": "kitchen/utensils_cartoon",
+     "tags": [
+      "kitchen",
+      "prep",
+      "tool"
+     ],
+     "nodes": [
+      "Cube.001__0"
+     ],
+     "worldHeight": 0.353,
+     "footprint": [
+      0.044,
+      0.353,
+      0.009
+     ],
+     "detail": "ultra",
+     "faces": 576,
+     "flags": []
+    },
+    {
+     "id": "knife_cartoon_2",
+     "name": "Knife Cartoon 2",
+     "folder": "kitchen/utensils_cartoon",
+     "tags": [
+      "kitchen",
+      "prep",
+      "tool"
+     ],
+     "nodes": [
+      "Cube.002__0"
+     ],
+     "worldHeight": 0.409,
+     "footprint": [
+      0.058,
+      0.409,
+      0.009
+     ],
+     "detail": "ultra",
+     "faces": 868,
+     "flags": []
+    },
+    {
+     "id": "carving_fork",
+     "name": "Carving Fork",
+     "folder": "kitchen/utensils_cartoon",
+     "tags": [
+      "kitchen",
+      "prep",
+      "tool"
+     ],
+     "nodes": [
+      "fork for meat__0"
+     ],
+     "worldHeight": 0.419,
+     "footprint": [
+      0.049,
+      0.419,
+      0.071
+     ],
+     "detail": "ultra",
+     "faces": 568,
+     "flags": []
+    },
+    {
+     "id": "fork_cartoon",
+     "name": "Fork Cartoon",
+     "folder": "kitchen/utensils_cartoon",
+     "tags": [
+      "kitchen",
+      "prep",
+      "tool"
+     ],
+     "nodes": [
+      "fork__0"
+     ],
+     "worldHeight": 0.206,
+     "footprint": [
+      0.034,
+      0.206,
+      0.01
+     ],
+     "detail": "ultra",
+     "faces": 304,
+     "flags": []
+    },
+    {
+     "id": "grater_cartoon",
+     "name": "Grater Cartoon",
+     "folder": "kitchen/utensils_cartoon",
+     "tags": [
+      "kitchen",
+      "prep",
+      "tool"
+     ],
+     "nodes": [
+      "grater__0"
+     ],
+     "worldHeight": 0.347,
+     "footprint": [
+      0.176,
+      0.347,
+      0.176
+     ],
+     "detail": "ultra",
+     "faces": 6560,
+     "flags": []
+    },
+    {
+     "id": "ladle_cartoon",
+     "name": "Ladle Cartoon",
+     "folder": "kitchen/utensils_cartoon",
+     "tags": [
+      "kitchen",
+      "prep",
+      "tool"
+     ],
+     "nodes": [
+      "ladle__0"
+     ],
+     "worldHeight": 0.421,
+     "footprint": [
+      0.124,
+      0.421,
+      0.169
+     ],
+     "detail": "ultra",
+     "faces": 780,
+     "flags": []
+    },
+    {
+     "id": "mixing_spoon",
+     "name": "Mixing Spoon",
+     "folder": "kitchen/utensils_cartoon",
+     "tags": [
+      "kitchen",
+      "prep",
+      "tool"
+     ],
+     "nodes": [
+      "Mixing spooni__0"
+     ],
+     "worldHeight": 0.396,
+     "footprint": [
+      0.087,
+      0.396,
+      0.043
+     ],
+     "detail": "ultra",
+     "faces": 564,
+     "flags": []
+    },
+    {
+     "id": "saucepan_cartoon",
+     "name": "Saucepan Cartoon",
+     "folder": "kitchen/utensils_cartoon",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "pan__0"
+     ],
+     "worldHeight": 0.255,
+     "footprint": [
+      0.346,
+      0.255,
+      0.261
+     ],
+     "detail": "ultra",
+     "faces": 1492,
+     "flags": []
+    },
+    {
+     "id": "saucepan_small_cartoon",
+     "name": "Saucepan Small Cartoon",
+     "folder": "kitchen/utensils_cartoon",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "pan_small__0"
+     ],
+     "worldHeight": 0.118,
+     "footprint": [
+      0.315,
+      0.118,
+      0.175
+     ],
+     "detail": "ultra",
+     "faces": 862,
+     "flags": []
+    },
+    {
+     "id": "pot_lid_cartoon",
+     "name": "Pot Lid Cartoon",
+     "folder": "kitchen/utensils_cartoon",
+     "tags": [
+      "kitchen",
+      "cooking"
+     ],
+     "nodes": [
+      "pot lid__0"
+     ],
+     "worldHeight": 0.123,
+     "footprint": [
+      0.266,
+      0.123,
+      0.266
+     ],
+     "detail": "ultra",
+     "faces": 1156,
+     "flags": []
+    },
+    {
+     "id": "rolling_pin",
+     "name": "Rolling Pin",
+     "folder": "kitchen/utensils_cartoon",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "rolling pin__0"
+     ],
+     "worldHeight": 0.444,
+     "footprint": [
+      0.077,
+      0.444,
+      0.077
+     ],
+     "detail": "ultra",
+     "faces": 636,
+     "flags": []
+    },
+    {
+     "id": "frying_pan_small_cartoon",
+     "name": "Frying Pan Small Cartoon",
+     "folder": "kitchen/utensils_cartoon",
+     "tags": [
+      "kitchen",
+      "cooking"
+     ],
+     "nodes": [
+      "small frying pan__0"
+     ],
+     "worldHeight": 0.346,
+     "footprint": [
+      0.195,
+      0.346,
+      0.033
+     ],
+     "detail": "ultra",
+     "faces": 648,
+     "flags": []
+    },
+    {
+     "id": "spatula_flat_cartoon",
+     "name": "Spatula Flat Cartoon",
+     "folder": "kitchen/utensils_cartoon",
+     "tags": [
+      "kitchen",
+      "prep",
+      "tool"
+     ],
+     "nodes": [
+      "Spatula for flipping pancakes__0"
+     ],
+     "worldHeight": 0.404,
+     "footprint": [
+      0.07,
+      0.404,
+      0.027
+     ],
+     "detail": "ultra",
+     "faces": 358,
+     "flags": []
+    },
+    {
+     "id": "spatula_cartoon",
+     "name": "Spatula Cartoon",
+     "folder": "kitchen/utensils_cartoon",
+     "tags": [
+      "kitchen",
+      "prep",
+      "tool"
+     ],
+     "nodes": [
+      "Spatula for frying__0"
+     ],
+     "worldHeight": 0.419,
+     "footprint": [
+      0.096,
+      0.419,
+      0.073
+     ],
+     "detail": "ultra",
+     "faces": 896,
+     "flags": []
+    },
+    {
+     "id": "spoon_cartoon",
+     "name": "Spoon Cartoon",
+     "folder": "kitchen/utensils_cartoon",
+     "tags": [
+      "kitchen",
+      "prep",
+      "tool"
+     ],
+     "nodes": [
+      "spoon__0"
+     ],
+     "worldHeight": 0.203,
+     "footprint": [
+      0.051,
+      0.203,
+      0.013
+     ],
+     "detail": "ultra",
+     "faces": 384,
+     "flags": []
+    }
+   ]
+  },
+  {
+   "pack": "lamp_02_lowpoly",
+   "file": "lamp_02_lowpoly.glb",
+   "sourceFile": "/Users/pedrosaldanha/Downloads/3D/lamp_02_lowpoly.glb",
+   "scale": 1,
+   "folder": "dining/lighting",
+   "objects": [
+    {
+     "id": "pendant_lamp_copper",
+     "name": "Copper Pendant Lamp",
+     "folder": "dining/lighting",
+     "tags": [
+      "dining",
+      "decor"
+     ],
+     "nodes": [
+      "Object_4"
+     ],
+     "worldHeight": 1.254,
+     "footprint": [
+      0.666,
+      1.254,
+      0.666
+     ],
+     "detail": "fine",
+     "faces": 1896,
+     "flags": []
+    }
+   ]
+  },
+  {
+   "pack": "low_poly_farm_v2",
+   "file": "low_poly_farm_v2.glb",
+   "sourceFile": null,
+   "scale": 0.5,
+   "folder": "farm/animals_and_buildings",
+   "objects": []
+  },
+  {
+   "pack": "modular_plant_shelf",
+   "file": "modular_plant_shelf.glb",
+   "sourceFile": "/Users/pedrosaldanha/Downloads/3D/modular_plant_shelf.glb",
+   "scale": 1,
+   "folder": "decor/plant_shelf",
+   "objects": [
+    {
+     "id": "carrot_potted",
+     "name": "Carrot Potted",
+     "folder": "decor/plant_shelf",
+     "tags": [
+      "farm",
+      "ingredient",
+      "storage",
+      "plant",
+      "decor"
+     ],
+     "nodes": [
+      "carrot_plants_0"
+     ],
+     "worldHeight": 0.768,
+     "footprint": [
+      0.554,
+      0.768,
+      0.27
+     ],
+     "detail": "fine",
+     "faces": 122,
+     "flags": []
+    },
+    {
+     "id": "plant_shelf_connector_first",
+     "name": "Plant Shelf Connector First",
+     "folder": "decor/plant_shelf",
+     "tags": [
+      "farm",
+      "storage",
+      "plant",
+      "decor"
+     ],
+     "nodes": [
+      "connector_first_shelf_0"
+     ],
+     "worldHeight": 0.974,
+     "footprint": [
+      1.41,
+      0.974,
+      0.169
+     ],
+     "detail": "fine",
+     "faces": 368,
+     "flags": []
+    },
+    {
+     "id": "plant_shelf_connector_2",
+     "name": "Plant Shelf Connector 2",
+     "folder": "decor/plant_shelf",
+     "tags": [
+      "farm",
+      "storage",
+      "plant",
+      "decor"
+     ],
+     "nodes": [
+      "connector_modular_1_shelf_0"
+     ],
+     "worldHeight": 0.866,
+     "footprint": [
+      1.365,
+      0.866,
+      0.181
+     ],
+     "detail": "fine",
+     "faces": 368,
+     "flags": []
+    },
+    {
+     "id": "plant_shelf_connector",
+     "name": "Plant Shelf Connector",
+     "folder": "decor/plant_shelf",
+     "tags": [
+      "farm",
+      "storage",
+      "plant",
+      "decor"
+     ],
+     "nodes": [
+      "connector_modular_shelf_0"
+     ],
+     "worldHeight": 0.866,
+     "footprint": [
+      1.365,
+      0.866,
+      0.181
+     ],
+     "detail": "fine",
+     "faces": 368,
+     "flags": []
+    },
+    {
+     "id": "flowers_potted",
+     "name": "Flowers Potted",
+     "folder": "decor/plant_shelf",
+     "tags": [
+      "farm",
+      "storage",
+      "plant",
+      "decor"
+     ],
+     "nodes": [
+      "flowers_plants_0"
+     ],
+     "worldHeight": 0.679,
+     "footprint": [
+      1.125,
+      0.679,
+      0.624
+     ],
+     "detail": "fine",
+     "faces": 1070,
+     "flags": []
+    },
+    {
+     "id": "rutabaga_potted",
+     "name": "Rutabaga Potted",
+     "folder": "decor/plant_shelf",
+     "tags": [
+      "farm",
+      "storage",
+      "plant",
+      "decor"
+     ],
+     "nodes": [
+      "rutabaga_plants_0"
+     ],
+     "worldHeight": 0.847,
+     "footprint": [
+      0.598,
+      0.847,
+      0.507
+     ],
+     "detail": "fine",
+     "faces": 137,
+     "flags": []
+    },
+    {
+     "id": "plant_shelf_first",
+     "name": "Plant Shelf First",
+     "folder": "decor/plant_shelf",
+     "tags": [
+      "farm",
+      "storage",
+      "plant",
+      "decor"
+     ],
+     "nodes": [
+      "shelf_first_shelf_0"
+     ],
+     "worldHeight": 0.481,
+     "footprint": [
+      1.488,
+      0.481,
+      0.644
+     ],
+     "detail": "fine",
+     "faces": 326,
+     "flags": []
+    },
+    {
+     "id": "plant_shelf_module_2",
+     "name": "Plant Shelf Module 2",
+     "folder": "decor/plant_shelf",
+     "tags": [
+      "farm",
+      "storage",
+      "plant",
+      "decor"
+     ],
+     "nodes": [
+      "shelf_modular_1_shelf_0"
+     ],
+     "worldHeight": 0.552,
+     "footprint": [
+      1.488,
+      0.552,
+      0.644
+     ],
+     "detail": "fine",
+     "faces": 289,
+     "flags": []
+    },
+    {
+     "id": "plant_shelf_module",
+     "name": "Plant Shelf Module",
+     "folder": "decor/plant_shelf",
+     "tags": [
+      "farm",
+      "storage",
+      "plant",
+      "decor"
+     ],
+     "nodes": [
+      "shelf_modular_shelf_0"
+     ],
+     "worldHeight": 0.552,
+     "footprint": [
+      1.488,
+      0.552,
+      0.644
+     ],
+     "detail": "fine",
+     "faces": 289,
+     "flags": []
+    },
+    {
+     "id": "spinach_potted",
+     "name": "Spinach Potted",
+     "folder": "decor/plant_shelf",
+     "tags": [
+      "farm",
+      "storage",
+      "plant",
+      "decor"
+     ],
+     "nodes": [
+      "spinnach_plants_0"
+     ],
+     "worldHeight": 0.507,
+     "footprint": [
+      1.034,
+      0.507,
+      0.829
+     ],
+     "detail": "fine",
+     "faces": 51,
+     "flags": []
+    },
+    {
+     "id": "plant_shelf_wall_holder",
+     "name": "Plant Shelf Wall Holder",
+     "folder": "decor/plant_shelf",
+     "tags": [
+      "outdoor",
+      "storage",
+      "plant",
+      "fence",
+      "decor",
+      "structure"
+     ],
+     "nodes": [
+      "wallholder_shelf_0"
+     ],
+     "worldHeight": 0.677,
+     "footprint": [
+      1.98,
+      0.677,
+      0.465
+     ],
+     "detail": "fine",
+     "faces": 372,
+     "flags": []
+    }
+   ]
+  },
+  {
+   "pack": "shelf",
+   "file": "shelf.glb",
+   "sourceFile": "/Users/pedrosaldanha/Downloads/3D/shelf.glb",
+   "scale": 1,
+   "folder": "kitchen/shelving",
+   "objects": [
+    {
+     "id": "wall_shelf_wood_metal",
+     "name": "Wall Shelf (wood & metal)",
+     "folder": "kitchen/shelving",
+     "tags": [
+      "kitchen",
+      "outdoor",
+      "storage",
+      "fence",
+      "structure"
+     ],
+     "nodes": [
+      "Cube_WOOD_0",
+      "POLITA 1.001_Pine Wood Texture.002_0",
+      "POLITA 2.001_Pine Wood Texture.001_0",
+      "POLITA 3.001_Pine Wood Texture_0",
+      "POLITE RAFT WOOD.001_METAL 1_0"
+     ],
+     "worldHeight": 0.98,
+     "footprint": [
+      0.418,
+      0.98,
+      1.561
+     ],
+     "detail": "fine",
+     "faces": 13837,
+     "flags": []
+    }
+   ]
+  },
+  {
+   "pack": "stainless_steel_shelving_restaurant_equipment",
+   "file": "stainless_steel_shelving_restaurant_equipment.glb",
+   "sourceFile": "/Users/pedrosaldanha/Downloads/3D/stainless_steel_shelving_restaurant_equipment.glb",
+   "scale": 0.0254,
+   "folder": "kitchen/shelving",
+   "objects": [
+    {
+     "id": "steel_shelving_unit",
+     "name": "Stainless Steel Shelving",
+     "folder": "kitchen/shelving",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "Material2",
+      "Material2_1",
+      "Material2_2"
+     ],
+     "worldHeight": 2.134,
+     "footprint": [
+      1.876,
+      2.134,
+      0.657
+     ],
+     "detail": "fine",
+     "faces": 4804,
+     "flags": []
+    }
+   ]
+  },
+  {
+   "pack": "steel_table",
+   "file": "steel_table.glb",
+   "sourceFile": "/Users/pedrosaldanha/Downloads/3D/steel_table.glb",
+   "scale": 0.001,
+   "folder": "kitchen/equipment",
+   "objects": [
+    {
+     "id": "steel_work_table",
+     "name": "Steel Work Table",
+     "folder": "kitchen/equipment",
+     "tags": [
+      "kitchen",
+      "furniture"
+     ],
+     "nodes": [
+      "Cube.001_Material.018_0",
+      "Cube.001_Material.025_0"
+     ],
+     "worldHeight": 0.849,
+     "footprint": [
+      2,
+      0.849,
+      0.638
+     ],
+     "detail": "fine",
+     "faces": 10652,
+     "flags": []
+    }
+   ]
+  },
+  {
+   "pack": "stylized_farm_objects_mobile_game_ready",
+   "file": "stylized_farm_objects_mobile_game_ready.glb",
+   "sourceFile": "/Users/pedrosaldanha/Downloads/3D/stylized_farm_objects_mobile_game_ready.glb",
+   "scale": 1,
+   "folder": "farm",
+   "objects": []
+  },
+  {
+   "pack": "stylized_medieval_props",
+   "file": "stylized_medieval_props.glb",
+   "sourceFile": "/Users/pedrosaldanha/Downloads/3D/stylized_medieval_props.glb",
+   "scale": 1.3,
+   "folder": "outdoor/rustic_props",
+   "objects": [
+    {
+     "id": "barrel_rustic",
+     "name": "Barrel Rustic",
+     "folder": "outdoor/rustic_props",
+     "tags": [
+      "kitchen",
+      "storage"
+     ],
+     "nodes": [
+      "MESH_Barrel_03_MAT_TrimSheet_Wood_0"
+     ],
+     "worldHeight": 0.705,
+     "footprint": [
+      0.612,
+      0.705,
+      0.612
+     ],
+     "detail": "fine",
+     "faces": 1008,
+     "flags": []
+    },
+    {
+     "id": "barrel_and_crates",
+     "name": "Barrel And Crates",
+     "folder": "outdoor/rustic_props",
+     "tags": [
+      "kitchen",
+      "storage"
+     ],
+     "nodes": [
+      "MESH_BarrelAndCrates_MAT_Atlas_Foliage_0",
+      "MESH_BarrelAndCrates_MAT_TrimSheet_Wood_0"
+     ],
+     "worldHeight": 1.206,
+     "footprint": [
+      1.135,
+      1.206,
+      1.156
+     ],
+     "detail": "fine",
+     "faces": 3916,
+     "flags": []
+    },
+    {
+     "id": "rustic_chair",
+     "name": "Rustic Chair",
+     "folder": "dining/seating",
+     "tags": [
+      "dining",
+      "seating",
+      "furniture"
+     ],
+     "nodes": [
+      "MESH_Chair_MAT_TrimSheet_Wood_0"
+     ],
+     "worldHeight": 0.766,
+     "footprint": [
+      0.472,
+      0.766,
+      0.465
+     ],
+     "detail": "fine",
+     "faces": 540,
+     "flags": []
+    },
+    {
+     "id": "climbing_vine",
+     "name": "Climbing Vine",
+     "folder": "decor/plants",
+     "tags": [
+      "farm",
+      "plant",
+      "decor"
+     ],
+     "nodes": [
+      "MESH_ClimbingVine_01_MAT_Atlas_Foliage_0"
+     ],
+     "worldHeight": 0.108,
+     "footprint": [
+      0.7,
+      0.108,
+      1.126
+     ],
+     "detail": "fine",
+     "faces": 336,
+     "flags": []
+    },
+    {
+     "id": "climbing_vine_2",
+     "name": "Climbing Vine 2",
+     "folder": "decor/plants",
+     "tags": [
+      "farm",
+      "plant",
+      "decor"
+     ],
+     "nodes": [
+      "MESH_ClimbingVine_02_MAT_Atlas_Foliage_0"
+     ],
+     "worldHeight": 0.132,
+     "footprint": [
+      0.81,
+      0.132,
+      1.109
+     ],
+     "detail": "fine",
+     "faces": 384,
+     "flags": []
+    },
+    {
+     "id": "climbing_vine_3",
+     "name": "Climbing Vine 3",
+     "folder": "decor/plants",
+     "tags": [
+      "farm",
+      "plant",
+      "decor"
+     ],
+     "nodes": [
+      "MESH_ClimbingVine_03_MAT_Atlas_Foliage_0"
+     ],
+     "worldHeight": 0.119,
+     "footprint": [
+      1.028,
+      0.119,
+      1.167
+     ],
+     "detail": "fine",
+     "faces": 752,
+     "flags": []
+    },
+    {
+     "id": "crate_rustic",
+     "name": "Crate Rustic",
+     "folder": "outdoor/rustic_props",
+     "tags": [
+      "kitchen",
+      "storage"
+     ],
+     "nodes": [
+      "MESH_Crate_01_MAT_TrimSheet_Wood_0"
+     ],
+     "worldHeight": 0.202,
+     "footprint": [
+      0.613,
+      0.202,
+      0.574
+     ],
+     "detail": "fine",
+     "faces": 352,
+     "flags": []
+    },
+    {
+     "id": "crate_rustic_open",
+     "name": "Crate Rustic Open",
+     "folder": "outdoor/rustic_props",
+     "tags": [
+      "kitchen",
+      "storage"
+     ],
+     "nodes": [
+      "MESH_Crate_02_MAT_Atlas_Foliage_0",
+      "MESH_Crate_02_MAT_TrimSheet_Wood_0"
+     ],
+     "worldHeight": 0.496,
+     "footprint": [
+      0.657,
+      0.496,
+      0.673
+     ],
+     "detail": "fine",
+     "faces": 1548,
+     "flags": []
+    },
+    {
+     "id": "fence_rustic",
+     "name": "Fence Rustic",
+     "folder": "outdoor/rustic_props",
+     "tags": [
+      "outdoor",
+      "fence",
+      "structure"
+     ],
+     "nodes": [
+      "MESH_Fence_01_MAT_TrimSheet_Wood_0"
+     ],
+     "worldHeight": 0.822,
+     "footprint": [
+      1.633,
+      0.822,
+      0.173
+     ],
+     "detail": "fine",
+     "faces": 612,
+     "flags": []
+    },
+    {
+     "id": "fence_rustic_2",
+     "name": "Fence Rustic 2",
+     "folder": "outdoor/rustic_props",
+     "tags": [
+      "outdoor",
+      "fence",
+      "structure"
+     ],
+     "nodes": [
+      "MESH_Fence_02_MAT_TrimSheet_Wood_0"
+     ],
+     "worldHeight": 0.822,
+     "footprint": [
+      1.622,
+      0.822,
+      0.269
+     ],
+     "detail": "fine",
+     "faces": 594,
+     "flags": []
+    },
+    {
+     "id": "fence_rustic_3",
+     "name": "Fence Rustic 3",
+     "folder": "outdoor/rustic_props",
+     "tags": [
+      "outdoor",
+      "fence",
+      "structure"
+     ],
+     "nodes": [
+      "MESH_Fence_03_MAT_TrimSheet_Wood_0"
+     ],
+     "worldHeight": 0.822,
+     "footprint": [
+      1.622,
+      0.822,
+      0.258
+     ],
+     "detail": "fine",
+     "faces": 600,
+     "flags": []
+    },
+    {
+     "id": "flower_patch",
+     "name": "Flower Patch",
+     "folder": "outdoor/nature",
+     "tags": [
+      "farm",
+      "plant",
+      "decor"
+     ],
+     "nodes": [
+      "MESH_Flower_01_MAT_Atlas_Foliage_0"
+     ],
+     "worldHeight": 0.038,
+     "footprint": [
+      0.182,
+      0.038,
+      0.182
+     ],
+     "detail": "fine",
+     "faces": 180,
+     "flags": []
+    },
+    {
+     "id": "flower_patch_2",
+     "name": "Flower Patch 2",
+     "folder": "outdoor/nature",
+     "tags": [
+      "farm",
+      "plant",
+      "decor"
+     ],
+     "nodes": [
+      "MESH_Flower_02_MAT_Atlas_Foliage_0"
+     ],
+     "worldHeight": 0.038,
+     "footprint": [
+      0.182,
+      0.038,
+      0.182
+     ],
+     "detail": "fine",
+     "faces": 180,
+     "flags": []
+    },
+    {
+     "id": "flower_patch_3",
+     "name": "Flower Patch 3",
+     "folder": "outdoor/nature",
+     "tags": [
+      "farm",
+      "plant",
+      "decor"
+     ],
+     "nodes": [
+      "MESH_Flower_03_MAT_Atlas_Foliage_0"
+     ],
+     "worldHeight": 0.038,
+     "footprint": [
+      0.182,
+      0.038,
+      0.182
+     ],
+     "detail": "fine",
+     "faces": 180,
+     "flags": []
+    },
+    {
+     "id": "foliage_clump",
+     "name": "Foliage Clump",
+     "folder": "outdoor/nature",
+     "tags": [
+      "farm",
+      "plant",
+      "decor"
+     ],
+     "nodes": [
+      "MESH_Foliage_01_MAT_Atlas_Foliage_0"
+     ],
+     "worldHeight": 0.14,
+     "footprint": [
+      0.58,
+      0.14,
+      0.58
+     ],
+     "detail": "fine",
+     "faces": 64,
+     "flags": []
+    },
+    {
+     "id": "foliage_clump_2",
+     "name": "Foliage Clump 2",
+     "folder": "outdoor/nature",
+     "tags": [
+      "farm",
+      "plant",
+      "decor"
+     ],
+     "nodes": [
+      "MESH_Foliage_02_MAT_Atlas_Foliage_0"
+     ],
+     "worldHeight": 0.132,
+     "footprint": [
+      0.458,
+      0.132,
+      0.505
+     ],
+     "detail": "fine",
+     "faces": 64,
+     "flags": []
+    },
+    {
+     "id": "foliage_clump_3",
+     "name": "Foliage Clump 3",
+     "folder": "outdoor/nature",
+     "tags": [
+      "farm",
+      "plant",
+      "decor"
+     ],
+     "nodes": [
+      "MESH_Foliage_03_MAT_Atlas_Foliage_0"
+     ],
+     "worldHeight": 0.14,
+     "footprint": [
+      0.603,
+      0.14,
+      0.605
+     ],
+     "detail": "fine",
+     "faces": 64,
+     "flags": []
+    },
+    {
+     "id": "grass_card",
+     "name": "Grass Card",
+     "folder": "outdoor/nature",
+     "tags": [
+      "farm",
+      "plant",
+      "decor"
+     ],
+     "nodes": [
+      "MESH_Grass_MAT_Atlas_Foliage_0"
+     ],
+     "worldHeight": 0.273,
+     "footprint": [
+      0.271,
+      0.273,
+      0.242
+     ],
+     "detail": "chunky",
+     "faces": 4,
+     "flags": []
+    },
+    {
+     "id": "grassy_flower",
+     "name": "Grassy Flower",
+     "folder": "outdoor/nature",
+     "tags": [
+      "farm",
+      "plant",
+      "decor"
+     ],
+     "nodes": [
+      "MESH_GrassyFlower_01_MAT_Atlas_Foliage_0"
+     ],
+     "worldHeight": 0.273,
+     "footprint": [
+      0.272,
+      0.273,
+      0.251
+     ],
+     "detail": "fine",
+     "faces": 544,
+     "flags": []
+    },
+    {
+     "id": "grassy_flower_2",
+     "name": "Grassy Flower 2",
+     "folder": "outdoor/nature",
+     "tags": [
+      "farm",
+      "plant",
+      "decor"
+     ],
+     "nodes": [
+      "MESH_GrassyFlower_02_MAT_Atlas_Foliage_0"
+     ],
+     "worldHeight": 0.273,
+     "footprint": [
+      0.27,
+      0.273,
+      0.24
+     ],
+     "detail": "fine",
+     "faces": 544,
+     "flags": []
+    },
+    {
+     "id": "grassy_flower_3",
+     "name": "Grassy Flower 3",
+     "folder": "outdoor/nature",
+     "tags": [
+      "farm",
+      "plant",
+      "decor"
+     ],
+     "nodes": [
+      "MESH_GrassyFlower_03_MAT_Atlas_Foliage_0"
+     ],
+     "worldHeight": 0.273,
+     "footprint": [
+      0.269,
+      0.273,
+      0.267
+     ],
+     "detail": "fine",
+     "faces": 544,
+     "flags": []
+    },
+    {
+     "id": "hay_bale",
+     "name": "Hay Bale",
+     "folder": "outdoor/rustic_props",
+     "tags": [
+      "outdoor",
+      "decor"
+     ],
+     "nodes": [
+      "MESH_HayBale_01_MAT_Props_Straw_0"
+     ],
+     "worldHeight": 0.567,
+     "footprint": [
+      1.254,
+      0.567,
+      1.315
+     ],
+     "detail": "fine",
+     "faces": 108,
+     "flags": []
+    },
+    {
+     "id": "hay_bale_stack",
+     "name": "Hay Bale Stack",
+     "folder": "outdoor/rustic_props",
+     "tags": [
+      "outdoor",
+      "decor"
+     ],
+     "nodes": [
+      "MESH_HayBaleStack_01_MAT_Props_Straw_0"
+     ],
+     "worldHeight": 1.09,
+     "footprint": [
+      1.749,
+      1.09,
+      1.687
+     ],
+     "detail": "fine",
+     "faces": 324,
+     "flags": []
+    },
+    {
+     "id": "ladder_wood",
+     "name": "Ladder Wood",
+     "folder": "outdoor/rustic_props",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "MESH_Ladder_01_MAT_TrimSheet_Wood_0"
+     ],
+     "worldHeight": 1.51,
+     "footprint": [
+      0.572,
+      1.51,
+      1.286
+     ],
+     "detail": "fine",
+     "faces": 1824,
+     "flags": []
+    },
+    {
+     "id": "metal_rod",
+     "name": "Metal Rod",
+     "folder": "outdoor/rustic_props",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "MESH_MetalRod_MAT_TrimSheet_Wood_0"
+     ],
+     "worldHeight": 0.055,
+     "footprint": [
+      0.844,
+      0.055,
+      1.142
+     ],
+     "detail": "fine",
+     "faces": 108,
+     "flags": []
+    },
+    {
+     "id": "stone_wall_section",
+     "name": "Stone Wall Section",
+     "folder": "outdoor/rustic_props",
+     "tags": [
+      "outdoor",
+      "fence",
+      "decor",
+      "structure"
+     ],
+     "nodes": [
+      "MESH_SturdyWall_01_MAT_Tileable_DamagedWall_0"
+     ],
+     "worldHeight": 0.985,
+     "footprint": [
+      1.75,
+      0.985,
+      0.482
+     ],
+     "detail": "fine",
+     "faces": 108,
+     "flags": []
+    },
+    {
+     "id": "rustic_table",
+     "name": "Rustic Table",
+     "folder": "dining/tables",
+     "tags": [
+      "kitchen",
+      "furniture"
+     ],
+     "nodes": [
+      "MESH_Table_01_MAT_TrimSheet_Wood_0"
+     ],
+     "worldHeight": 0.583,
+     "footprint": [
+      1.258,
+      0.583,
+      1.51
+     ],
+     "detail": "fine",
+     "faces": 552,
+     "flags": []
+    },
+    {
+     "id": "rustic_table_2",
+     "name": "Rustic Table 2",
+     "folder": "dining/tables",
+     "tags": [
+      "kitchen",
+      "furniture"
+     ],
+     "nodes": [
+      "MESH_Table_02_MAT_TrimSheet_Wood_0"
+     ],
+     "worldHeight": 0.586,
+     "footprint": [
+      1.275,
+      0.586,
+      1.515
+     ],
+     "detail": "fine",
+     "faces": 912,
+     "flags": []
+    },
+    {
+     "id": "wooden_wagon",
+     "name": "Wooden Wagon",
+     "folder": "outdoor/rustic_props",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "MESH_Wagon_MAT_TrimSheet_Wood_0"
+     ],
+     "worldHeight": 1.019,
+     "footprint": [
+      2.447,
+      1.019,
+      2.273
+     ],
+     "detail": "fine",
+     "faces": 1982,
+     "flags": []
+    },
+    {
+     "id": "stone_well",
+     "name": "Stone Well",
+     "folder": "outdoor/rustic_props",
+     "tags": [
+      "outdoor",
+      "decor"
+     ],
+     "nodes": [
+      "MESH_Well_MAT_Tileable_Tiles_0",
+      "MESH_Well_MAT_TrimSheet_Wood_0"
+     ],
+     "worldHeight": 2.04,
+     "footprint": [
+      1.513,
+      2.04,
+      1.284
+     ],
+     "detail": "fine",
+     "faces": 4384,
+     "flags": []
+    },
+    {
+     "id": "wooden_plank",
+     "name": "Wooden Plank",
+     "folder": "outdoor/rustic_props",
+     "tags": [
+      "outdoor",
+      "fence",
+      "structure"
+     ],
+     "nodes": [
+      "MESH_WoodenPlank_MAT_TrimSheet_Wood_0"
+     ],
+     "worldHeight": 0.072,
+     "footprint": [
+      0.908,
+      0.072,
+      1.199
+     ],
+     "detail": "fine",
+     "faces": 12,
+     "flags": []
+    },
+    {
+     "id": "wooden_pole",
+     "name": "Wooden Pole",
+     "folder": "outdoor/rustic_props",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "MESH_WoodenPole_MAT_TrimSheet_Wood_0"
+     ],
+     "worldHeight": 0.052,
+     "footprint": [
+      0.783,
+      0.052,
+      1.086
+     ],
+     "detail": "fine",
+     "faces": 144,
+     "flags": []
+    }
+   ]
+  },
+  {
+   "pack": "trash_can_package_02",
+   "file": "trash_can_package_02.glb",
+   "sourceFile": "/Users/pedrosaldanha/Downloads/3D/trash_can_package_02.glb",
+   "scale": 30,
+   "folder": "kitchen/waste",
+   "objects": [
+    {
+     "id": "bin_11",
+     "name": "Bin 11",
+     "folder": "kitchen/waste",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "TrasCan_11_MtrashCan_11_0"
+     ],
+     "worldHeight": 1.032,
+     "footprint": [
+      0.756,
+      1.032,
+      0.723
+     ],
+     "detail": "normal",
+     "faces": 26318,
+     "flags": []
+    },
+    {
+     "id": "bin_08",
+     "name": "Bin 08",
+     "folder": "kitchen/waste",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "TrashCan_08_MTrashCan_08_0"
+     ],
+     "worldHeight": 1.245,
+     "footprint": [
+      0.822,
+      1.245,
+      0.81
+     ],
+     "detail": "normal",
+     "faces": 26384,
+     "flags": []
+    },
+    {
+     "id": "bin_09",
+     "name": "Bin 09",
+     "folder": "kitchen/waste",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "TrashCan_09_MTrashCan_09_0"
+     ],
+     "worldHeight": 1.05,
+     "footprint": [
+      0.78,
+      1.05,
+      0.681
+     ],
+     "detail": "normal",
+     "faces": 27598,
+     "flags": []
+    },
+    {
+     "id": "bin_10",
+     "name": "Bin 10",
+     "folder": "kitchen/waste",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "TrashCan_10_MTrashCan_10_0"
+     ],
+     "worldHeight": 0.972,
+     "footprint": [
+      0.687,
+      0.972,
+      0.723
+     ],
+     "detail": "normal",
+     "faces": 26944,
+     "flags": []
+    },
+    {
+     "id": "bin_12",
+     "name": "Bin 12",
+     "folder": "kitchen/waste",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "TrashCan_12_MTrashCan_12_0"
+     ],
+     "worldHeight": 0.537,
+     "footprint": [
+      0.822,
+      0.537,
+      0.822
+     ],
+     "detail": "normal",
+     "faces": 34902,
+     "flags": []
+    },
+    {
+     "id": "bin_13",
+     "name": "Bin 13",
+     "folder": "kitchen/waste",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "TrashCan_13_MTrashCan_13_0"
+     ],
+     "worldHeight": 1.275,
+     "footprint": [
+      1.206,
+      1.275,
+      1.035
+     ],
+     "detail": "normal",
+     "faces": 34166,
+     "flags": []
+    },
+    {
+     "id": "bin_14",
+     "name": "Bin 14",
+     "folder": "kitchen/waste",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "TrashCan_14_MTrashcan_14_0"
+     ],
+     "worldHeight": 0.978,
+     "footprint": [
+      0.993,
+      0.978,
+      0.984
+     ],
+     "detail": "normal",
+     "faces": 35238,
+     "flags": []
+    },
+    {
+     "id": "bin_15",
+     "name": "Bin 15",
+     "folder": "kitchen/waste",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "TrashCan_15_MTRashCan_15_0"
+     ],
+     "worldHeight": 0.789,
+     "footprint": [
+      0.852,
+      0.789,
+      0.957
+     ],
+     "detail": "normal",
+     "faces": 35684,
+     "flags": []
+    },
+    {
+     "id": "bin_16",
+     "name": "Bin 16",
+     "folder": "kitchen/waste",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "TrashCan_16_MTrashCan_16_0"
+     ],
+     "worldHeight": 0.612,
+     "footprint": [
+      0.834,
+      0.612,
+      0.858
+     ],
+     "detail": "normal",
+     "faces": 35748,
+     "flags": []
+    },
+    {
+     "id": "bin_17",
+     "name": "Bin 17",
+     "folder": "kitchen/waste",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "TrashCan_17_MTrashCan_17_0"
+     ],
+     "worldHeight": 1.188,
+     "footprint": [
+      1.386,
+      1.188,
+      1.398
+     ],
+     "detail": "normal",
+     "faces": 37112,
+     "flags": []
+    },
+    {
+     "id": "bin_18",
+     "name": "Bin 18",
+     "folder": "kitchen/waste",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "TrashCan_18_MTrashCan_18_0"
+     ],
+     "worldHeight": 0.618,
+     "footprint": [
+      0.666,
+      0.618,
+      0.63
+     ],
+     "detail": "normal",
+     "faces": 32946,
+     "flags": []
+    },
+    {
+     "id": "bin_19",
+     "name": "Bin 19",
+     "folder": "kitchen/waste",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "TrashCan_19_MTrashCan_19_0"
+     ],
+     "worldHeight": 1.818,
+     "footprint": [
+      1.41,
+      1.818,
+      1.248
+     ],
+     "detail": "normal",
+     "faces": 39958,
+     "flags": []
+    },
+    {
+     "id": "bin_20",
+     "name": "Bin 20",
+     "folder": "kitchen/waste",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "TrashCan_20_MTrashCan_20_0"
+     ],
+     "worldHeight": 0.786,
+     "footprint": [
+      0.663,
+      0.786,
+      0.663
+     ],
+     "detail": "normal",
+     "faces": 35940,
+     "flags": []
+    },
+    {
+     "id": "bin_21",
+     "name": "Bin 21",
+     "folder": "kitchen/waste",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "TrashCan_21_MTrashCan_21_0"
+     ],
+     "worldHeight": 0.723,
+     "footprint": [
+      0.543,
+      0.723,
+      0.462
+     ],
+     "detail": "normal",
+     "faces": 24346,
+     "flags": []
+    },
+    {
+     "id": "bin_22",
+     "name": "Bin 22",
+     "folder": "kitchen/waste",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "TrashCan_22_MTrashCan_22_0"
+     ],
+     "worldHeight": 0.597,
+     "footprint": [
+      0.471,
+      0.597,
+      0.465
+     ],
+     "detail": "normal",
+     "faces": 31602,
+     "flags": []
+    },
+    {
+     "id": "bin_23",
+     "name": "Bin 23",
+     "folder": "kitchen/waste",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "TrashCan_23_MTrashCan_23_0"
+     ],
+     "worldHeight": 0.597,
+     "footprint": [
+      0.447,
+      0.597,
+      0.432
+     ],
+     "detail": "normal",
+     "faces": 24738,
+     "flags": []
+    },
+    {
+     "id": "bin_24",
+     "name": "Bin 24",
+     "folder": "kitchen/waste",
+     "tags": [
+      "kitchen"
+     ],
+     "nodes": [
+      "TrashCan_24_MTrashCan_24_0"
+     ],
+     "worldHeight": 0.597,
+     "footprint": [
+      0.531,
+      0.597,
+      0.48
+     ],
+     "detail": "normal",
+     "faces": 28810,
+     "flags": []
+    }
+   ]
+  }
+ ]
+}
