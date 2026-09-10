@@ -1,5 +1,6 @@
-import { Mesh, Scene, ShadowGenerator, TransformNode, Vector3, VertexBuffer } from "@babylonjs/core";
+import { Color3, Mesh, PointLight, Scene, ShadowGenerator, TransformNode, Vector3, VertexBuffer } from "@babylonjs/core";
 import { createBlendVoxelMesh, createVoxelMaterial, createVoxelMesh, type VoxelCell } from "./voxelGeometry";
+import { emissiveByHex, glowInfoOf, glowMaterialFor, splitGlowCells, tagGlow } from "./lighting";
 import type { StandardMaterial } from "@babylonjs/core";
 import { cellsOfPartState, partStateNames, type AuthoredClip, type AuthoredVoxelModel, type ClipEvent } from "./voxelModel";
 import { ease, eventsBetween, REST_POSE, sampleClip, type PartPose, type StateTransitionSample } from "./voxelClips";
@@ -69,11 +70,15 @@ export interface VoxelRig {
   material: StandardMaterial;
   /** Cells of a part's state in the part's grid (pivot not yet subtracted); transitions are built from these. */
   stateCells: (part: string, state: string) => VoxelCell[];
+  /** PointLights created from model.lights when `lights: true` was requested (the lab preview). */
+  lights: PointLight[];
   dispose(options?: { keepMaterial?: boolean }): void;
 }
 
-export function createVoxelRig(model: AuthoredVoxelModel, scene: Scene, options: { name?: string; shadows?: ShadowGenerator; receiveShadows?: boolean; material?: StandardMaterial; stateCells?: (part: string, state: string) => VoxelCell[] } = {}): VoxelRig {
+export function createVoxelRig(model: AuthoredVoxelModel, scene: Scene, options: { name?: string; shadows?: ShadowGenerator; receiveShadows?: boolean; material?: StandardMaterial; stateCells?: (part: string, state: string) => VoxelCell[]; lights?: boolean } = {}): VoxelRig {
   const name = options.name ?? `rig ${model.id}`;
+  // Palette colours that glow: meshed apart, unlit, bloomed by the scene's GlowLayer.
+  const glow = emissiveByHex(model);
   const stateCells = options.stateCells ?? ((part: string, state: string) => { const found = model.parts.find((candidate) => candidate.id === part); return found ? cellsOfPartState(model, found, state) : []; });
   const anchor = new TransformNode(`${name} anchor`, scene);
   const root = new TransformNode(name, scene);
@@ -112,15 +117,26 @@ export function createVoxelRig(model: AuthoredVoxelModel, scene: Scene, options:
         const cells = cellsOfPartState(model, part, state);
         if (!cells.length) { stateMeshes.set(state, []); continue; }
         const local = cells.map((cell) => ({ x: cell.x - part.pivot[0], y: cell.y - part.pivot[1], z: cell.z - part.pivot[2], color: cell.color }));
-        const mesh = createVoxelMesh(`${name}.${part.id}${state === "base" ? "" : `@${state}`} mesh`, local, model.pitch, scene, { material });
-        mesh.parent = node;
-        mesh.receiveShadows = options.receiveShadows ?? true;
-        options.shadows?.addShadowCaster(mesh);
-        mesh.metadata = { rigPart: part.id, state };
-        mesh.setEnabled(state === "base");
-        stateMeshes.set(state, [mesh]);
-        own.push(mesh);
-        meshes.push(mesh);
+        const { lit, glowing } = splitGlowCells(local, glow);
+        const built: Mesh[] = [];
+        if (lit.length || !glowing.length) {
+          const mesh = createVoxelMesh(`${name}.${part.id}${state === "base" ? "" : `@${state}`} mesh`, lit, model.pitch, scene, { material });
+          mesh.parent = node;
+          mesh.receiveShadows = options.receiveShadows ?? true;
+          options.shadows?.addShadowCaster(mesh);
+          mesh.metadata = { rigPart: part.id, state };
+          built.push(mesh);
+        }
+        if (glowing.length) {
+          const glowMesh = createVoxelMesh(`${name}.${part.id}${state === "base" ? "" : `@${state}`} glow`, glowing, model.pitch, scene, { material: glowMaterialFor(scene) });
+          glowMesh.parent = node;
+          glowMesh.receiveShadows = false;
+          glowMesh.metadata = { rigPart: part.id, state };
+          tagGlow(glowMesh, glowInfoOf(glowing, glow));
+          built.push(glowMesh);
+        }
+        for (const mesh of built) { mesh.setEnabled(state === "base"); own.push(mesh); meshes.push(mesh); }
+        stateMeshes.set(state, built);
       }
       parts.set(part.id, { id: part.id, node, mesh: stateMeshes.get("base")?.[0] ?? null, meshes: own, stateMeshes, state: "base", transitions: new Map(), fadeMaterial: null, opacity: 1, dither: new Map(), ditherActive: false, pivot, restPosition, restRotation, restScale });
       pending.splice(i, 1);
@@ -133,11 +149,26 @@ export function createVoxelRig(model: AuthoredVoxelModel, scene: Scene, options:
     }
   }
 
+  // Real point lights for a single rig on show (the lab); worlds use a light pool instead.
+  const lights: PointLight[] = [];
+  if (options.lights) {
+    for (const [index, spec] of (model.lights ?? []).entries()) {
+      const light = new PointLight(`${name} light ${index}`, new Vector3(spec.position[0] * model.pitch, spec.position[1] * model.pitch, spec.position[2] * model.pitch), scene);
+      light.parent = root;
+      const colour = Color3.FromHexString(spec.color ?? "#ffd9a0");
+      light.diffuse.copyFrom(colour); light.specular.copyFrom(colour).scaleInPlace(0.3);
+      light.intensity = spec.intensity ?? 1;
+      light.range = spec.range ?? 7;
+      light.falloffType = PointLight.FALLOFF_DEFAULT; // linear fade to `range`: a soft pool, not an inverse-square blowout
+      lights.push(light);
+    }
+  }
   return {
-    model, anchor, root, parts, meshes, material, stateCells,
+    model, anchor, root, parts, meshes, material, stateCells, lights,
     dispose(disposeOptions = {}) {
       for (const mesh of meshes) { options.shadows?.removeShadowCaster(mesh); mesh.dispose(false, false); }
       for (const part of parts.values()) part.fadeMaterial?.dispose();
+      for (const light of lights) light.dispose();
       root.dispose(false, false);
       anchor.dispose(false, false);
       if (!disposeOptions.keepMaterial) material.dispose();

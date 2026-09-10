@@ -198,6 +198,8 @@ export function createVoxelMaterial(name: string, scene: Scene): StandardMateria
   const material = new StandardMaterial(name, scene);
   material.diffuseColor.set(1, 1, 1);
   material.specularColor.set(0.08, 0.08, 0.08);
+  // Room lighting: the sun, the fill and up to six pooled point lights (src/game/lighting.ts).
+  material.maxSimultaneousLights = 8;
   return material;
 }
 

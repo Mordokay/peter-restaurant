@@ -1,5 +1,5 @@
-// The authored voxel catalog on disk, version 2: one compact JSON file per model in
-// src/assets/catalog/models/<id>.json plus a small src/assets/catalog/index.json
+// The authored voxel catalog on disk, version 2.1: one deflated VXM binary per model in
+// public/catalog-models/<id>.vxm plus a small src/assets/catalog/index.json
 // that lists every model (name, folder, tags, size, counts, clip ids, thumbnail)
 // so the lab and the game can browse 800 objects without parsing 500 MB of voxels.
 // Model files load lazily at runtime (src/assets/catalog/index.ts); thumbnails live
@@ -11,9 +11,14 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { deflateSync, inflateSync } from "node:zlib";
+import { decodeVxm, encodeVxm, isVxm } from "../src/game/vxmFormat.ts";
 
 export const catalogDir = fileURLToPath(new URL("../src/assets/catalog/", import.meta.url));
-export const modelsDir = join(catalogDir, "models");
+// Models are deflated VXM binaries (src/game/vxmFormat.ts) under public/, served at
+// /catalog-models/<id>.vxm like the thumbnails — static files, no import graph.
+export const modelsDir = fileURLToPath(new URL("../public/catalog-models/", import.meta.url));
+export const MODEL_EXT = ".vxm";
 // Thumbnails are static files (no import graph, no HMR reloads when 600 of them appear):
 // public/catalog-thumbs/<id>.png, served at /catalog-thumbs/<id>.png.
 export const thumbsDir = fileURLToPath(new URL("../public/catalog-thumbs/", import.meta.url));
@@ -21,7 +26,9 @@ export const indexPath = join(catalogDir, "index.json");
 
 const ID = /^[a-z0-9_]{1,64}$/;
 function assertId(id) { if (typeof id !== "string" || !ID.test(id)) throw new Error(`bad model id ${JSON.stringify(id)}`); }
-export function modelPath(id) { assertId(id); return join(modelsDir, `${id}.json`); }
+export function modelPath(id) { assertId(id); return join(modelsDir, `${id}${MODEL_EXT}`); }
+/** Legacy location of the JSON model files (catalog v2.0), read once by migrateModelsToVxm(). */
+export const legacyModelsDir = join(catalogDir, "models");
 export function thumbPath(id) { assertId(id); return join(thumbsDir, `${id}.png`); }
 
 // ------------------------------------------------------------------ index --
@@ -58,7 +65,10 @@ export function indexEntry(model, previous = {}) {
   if (states) entry.states = states;
   const clips = (model.clips ?? []).map((clip) => clip.id);
   if (clips.length) entry.clips = clips;
+  if (model.emissive && Object.keys(model.emissive).length) entry.glow = true;
+  if (model.lights && model.lights.length) entry.lights = model.lights.length;
   if (previous.thumb) entry.thumb = previous.thumb;  // seconds since epoch of the last render (cache-buster)
+  if (previous.rev) entry.rev = previous.rev;  // seconds since epoch of the last model write (cache-buster)
   return entry;
 }
 
@@ -88,6 +98,7 @@ export function rebuildIndex() {
   const index = emptyIndex();
   for (const id of listModelIds()) {
     const entry = indexEntry(readModel(id), previous.models[id] ?? {});
+    entry.rev = Math.floor(statSync(modelPath(id)).mtimeMs / 1000);
     if (existsSync(thumbPath(id))) entry.thumb = Math.floor(statSync(thumbPath(id)).mtimeMs / 1000); else delete entry.thumb;
     index.models[id] = entry;
   }
@@ -99,13 +110,15 @@ export function rebuildIndex() {
 
 export function listModelIds() {
   if (!existsSync(modelsDir)) return [];
-  return readdirSync(modelsDir).filter((name) => name.endsWith(".json")).map((name) => name.slice(0, -5)).filter((id) => ID.test(id)).sort();
+  return readdirSync(modelsDir).filter((name) => name.endsWith(MODEL_EXT)).map((name) => name.slice(0, -MODEL_EXT.length)).filter((id) => ID.test(id)).sort();
 }
 
 export function hasModel(id) { return ID.test(String(id)) && existsSync(modelPath(id)); }
 
 export function readModel(id) {
-  const parsed = JSON.parse(readFileSync(modelPath(id), "utf8"));
+  const raw = readFileSync(modelPath(id));
+  const bytes = new Uint8Array(isVxm(raw) ? raw : inflateSync(raw));
+  const parsed = decodeVxm(bytes);
   if (!parsed || parsed.id !== id) throw new Error(`${modelPath(id)} does not hold model ${id}`);
   return parsed;
 }
@@ -114,13 +127,12 @@ export function readModel(id) {
 export function readCatalog() {
   const models = {};
   const fileOf = new Map();
-  for (const id of listModelIds()) { models[id] = readModel(id); fileOf.set(id, `models/${id}.json`); }
+  for (const id of listModelIds()) { models[id] = readModel(id); fileOf.set(id, `catalog-models/${id}${MODEL_EXT}`); }
   return { version: 1, models, fileOf };
 }
 
-/** Model files are compact JSON: one line, no whitespace. Voxel data is not hand-edited and a
- *  pretty layout was 70 % larger on disk (312 MB vs 183 MB for 346 models). */
-export function stringifyModel(model) { return `${JSON.stringify(model)}\n`; }
+/** Model files are deflated VXM: 6.5× smaller than compact JSON (525 MB → 80 MB for 589 models). */
+export function encodeModelFile(model) { return deflateSync(Buffer.from(encodeVxm(model)), { level: 6 }); }
 
 /** Add or replace a model: its file plus its index line. */
 export function writeModel(model) {
@@ -128,13 +140,14 @@ export function writeModel(model) {
   assertId(model.id);
   mkdirSync(modelsDir, { recursive: true });
   const existed = existsSync(modelPath(model.id));
-  writeFileSync(modelPath(model.id), stringifyModel(model));
+  writeFileSync(modelPath(model.id), encodeModelFile(model));
   const index = readIndex();
   const entry = indexEntry(model, index.models[model.id] ?? {});
+  entry.rev = Math.floor(Date.now() / 1000);
   if (existsSync(thumbPath(model.id))) entry.thumb = entry.thumb || Math.floor(statSync(thumbPath(model.id)).mtimeMs / 1000);
   index.models[model.id] = entry;
   writeIndex(index);
-  return { file: `models/${model.id}.json`, existed };
+  return { file: `catalog-models/${model.id}${MODEL_EXT}`, existed };
 }
 
 /** Remove a model: file, thumbnail and index line. Returns the file name or null when absent. */
@@ -145,7 +158,7 @@ export function deleteModel(id) {
   if (existsSync(modelPath(id))) unlinkSync(modelPath(id));
   if (existsSync(thumbPath(id))) unlinkSync(thumbPath(id));
   if (id in index.models) { delete index.models[id]; writeIndex(index); }
-  return had ? `models/${id}.json` : null;
+  return had ? `catalog-models/${id}${MODEL_EXT}` : null;
 }
 
 /** Record that a thumbnail exists (written by the lab through /__lab/save-thumbnail). */
@@ -170,8 +183,27 @@ export function migrateCatalogV1() {
     const parsed = JSON.parse(readFileSync(path, "utf8"));
     if (!parsed || !parsed.models) continue;
     mkdirSync(modelsDir, { recursive: true });
-    for (const model of Object.values(parsed.models)) { writeFileSync(modelPath(model.id), stringifyModel(model)); moved.push(model.id); }
+    for (const model of Object.values(parsed.models)) { writeFileSync(modelPath(model.id), encodeModelFile(model)); moved.push(model.id); }
     unlinkSync(path);
+  }
+  rebuildIndex();
+  return moved;
+}
+
+/** Catalog v2.0 → v2.1: JSON model files in src/assets/catalog/models become deflated VXM files
+ *  in public/catalog-models. The JSON files are removed after a successful round-trip check. */
+export function migrateModelsToVxm() {
+  if (!existsSync(legacyModelsDir)) return [];
+  mkdirSync(modelsDir, { recursive: true });
+  const moved = [];
+  for (const name of readdirSync(legacyModelsDir).filter((n) => n.endsWith(".json"))) {
+    const model = JSON.parse(readFileSync(join(legacyModelsDir, name), "utf8"));
+    const file = encodeModelFile(model);
+    const back = decodeVxm(new Uint8Array(inflateSync(file)));
+    if (back.id !== model.id || back.parts.length !== model.parts.length) throw new Error(`VXM round-trip failed for ${model.id}`);
+    writeFileSync(modelPath(model.id), file);
+    unlinkSync(join(legacyModelsDir, name));
+    moved.push(model.id);
   }
   rebuildIndex();
   return moved;

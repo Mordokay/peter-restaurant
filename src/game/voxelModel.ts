@@ -100,6 +100,17 @@ export interface AuthoredClip {
   events?: readonly ClipEvent[];
 }
 
+/** A point light carried by a model, positioned in cell units of the model grid. */
+export interface ModelLight {
+  position: readonly [number, number, number];
+  /** Hex colour; default a warm white. */
+  color?: string;
+  /** Relative brightness, 1 = a normal lamp. */
+  intensity?: number;
+  /** Reach in metres. */
+  range?: number;
+}
+
 export interface AuthoredVoxelModel {
   /** Stable catalog key referenced by code (rigs, stages, plots). */
   id: string;
@@ -114,6 +125,10 @@ export interface AuthoredVoxelModel {
   palette: Readonly<Record<string, string>>;
   parts: readonly AuthoredVoxelPart[];
   clips?: readonly AuthoredClip[];
+  /** Palette keys that glow (unlit, bloomed) → intensity, 1 = a lit bulb. */
+  emissive?: Readonly<Record<string, number>>;
+  /** Point lights the object casts (a lamp, an oven window). */
+  lights?: readonly ModelLight[];
 }
 
 export interface AuthoredVoxelCatalog {

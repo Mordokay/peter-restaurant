@@ -17,11 +17,13 @@ import {
   TransformNode,
   Vector3,
 } from "@babylonjs/core";
-import { catalog as foodModelsCatalog, ensureModels } from "./assets/catalog/index";
+import { catalog as foodModelsCatalog, ensureModels, catalogIndex } from "./assets/catalog/index";
 import { decorLayout } from "./assets/scene/index";
 import { createDecorScene } from "./game/decor";
 import { createDecorateMode } from "./decorate";
 import { cellsFromAuthoredModel, type AuthoredVoxelCatalog } from "./game/voxelModel";
+import { attachGlow, createLightPool } from "./game/lighting";
+import { sourceCacheKey, warmSourceCache } from "./game/sourceCache";
 import { createVoxelMesh } from "./game/voxelGeometry";
 import { restaurantRecipes, tomatoPlotUpgradeTiers, tutorialSteps } from "./game/restaurant";
 import {
@@ -223,7 +225,13 @@ const guestCoatMaterials = [
 await ensureModels(["tomato", "cabbage", "wheat_scan", "tomato_sprout_scan", "tomato_vine_scan", "tomato_ripe_scan", ...decorLayout.props.map((prop) => prop.model)]);
 const foodModels: AuthoredVoxelCatalog = foodModelsCatalog;
 // Hand-placed decor (vases, tools, props) from src/assets/scene/decor.json.
-const decor = createDecorScene(scene, foodModels, decorLayout, { shadows });
+// Lamps: glowing voxels bloom; a pool of six real point lights follows the camera between placed lamps.
+attachGlow(scene, { intensity: 0.8 });
+const lightPool = createLightPool(scene, { max: 6 });
+// Static props are world-renderer instances; their meshed sources come from the IndexedDB cache when the model revision matches.
+const cacheRev = (modelId: string): number | undefined => catalogIndex[modelId]?.rev;
+await warmSourceCache([...new Set(decorLayout.props.map((prop) => prop.model))].map((modelId) => sourceCacheKey(modelId, cacheRev(modelId), 0.02)));
+const decor = createDecorScene(scene, foodModels, decorLayout, { shadows, lightPool, cacheRev });
 const authoredTomato = foodModels.models.tomato!;
 const tomatoSource = createVoxelMesh("authored tomato source", cellsFromAuthoredModel(authoredTomato), authoredTomato.pitch, scene);
 tomatoSource.setEnabled(false);

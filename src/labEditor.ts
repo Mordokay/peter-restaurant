@@ -7,6 +7,7 @@ import {
   type CellKey, type Coordinate, type EditableCell, type PartClipboard, type SerializedHistory,
 } from "./game/voxelEditing";
 import { createVoxelMesh, type VoxelCell } from "./game/voxelGeometry";
+import { glowInfoOf, glowMaterialFor, splitGlowCells, tagGlow } from "./game/lighting";
 import { FADE_MODES, STATE_TRANSITIONS, TRANSITION_DIRECTIONS, type AuthoredClip, type AuthoredVoxelModel, type ClipEase, type ClipKey, type FadeMode, type StateTransition, type TransitionDirection } from "./game/voxelModel";
 import { applyRig, inferRig } from "./game/rigInference";
 import { REST_POSE, sampleClip, type PartPose } from "./game/voxelClips";
@@ -744,9 +745,13 @@ export function createLabEditor(host: LabEditorHost): LabEditor {
         <div class="lab-editor-tools">${TOOLS.map((t) => `<button data-tool="${t.id}" class="lab-editor-tile ${tool === t.id ? "active" : ""}" title="${t.hint} (${t.key})"><span class="lab-editor-icon">${t.icon}</span><span class="lab-editor-label">${t.label}</span><kbd>${t.key}</kbd></button>`).join("")}</div>
         <div class="lab-panel-row lab-editor-brushes"><span class="lab-field-label">Brush</span>${BRUSH_SIZES.map((r) => `<button data-brush="${r}" class="${brush === r ? "active" : ""}" title="${2 * r + 1}³ voxels ([ and ])"><i style="width:${5 + r * 3}px;height:${5 + r * 3}px"></i>${2 * r + 1}</button>`).join("")}<span class="lab-editor-grow"></span><label class="lab-editor-swatch" style="background:${color}" title="Current color ${color}"><input type="color" data-action="color" value="${color}" /><span>🎨</span></label></div>
         <section class="lab-panel-section"><header class="lab-panel-head"><strong>🎨 Palette</strong><small>click: select · double-click: edit · Alt+click: replace all · ＋ adds a color</small></header>
-          <div class="lab-editor-palette">${palette.map((entry) => `<button data-palette="${entry.color}" class="lab-editor-chip ${selectedPaletteColor === entry.color ? "active" : ""}" style="background:${entry.color}" title="${entry.color} · ${entry.count} voxels"></button>`).join("")}${extraSwatches.filter((hex) => !palette.some((entry) => entry.color === hex)).map((hex) => `<button data-palette="${hex}" data-swatch="1" class="lab-editor-chip extra ${selectedPaletteColor === hex ? "active" : ""}" style="background:${hex}" title="${hex} · added, not used yet · Shift+click removes the swatch"></button>`).join("")}<label class="lab-editor-chip add" title="Add a color to the palette"><input type="color" data-action="swatch-add" value="${color}" />＋</label><input type="color" data-action="palette-edit" class="lab-palette-editor" tabindex="-1" /></div>
+          <div class="lab-editor-palette">${palette.map((entry) => `<button data-palette="${entry.color}" class="lab-editor-chip ${selectedPaletteColor === entry.color ? "active" : ""} ${session!.glowOf(entry.color) ? "glow" : ""}" style="background:${entry.color}" title="${entry.color} · ${entry.count} voxels${session!.glowOf(entry.color) ? ` · ✨ glows ×${session!.glowOf(entry.color)}` : ""}"></button>`).join("")}${extraSwatches.filter((hex) => !palette.some((entry) => entry.color === hex)).map((hex) => `<button data-palette="${hex}" data-swatch="1" class="lab-editor-chip extra ${selectedPaletteColor === hex ? "active" : ""}" style="background:${hex}" title="${hex} · added, not used yet · Shift+click removes the swatch"></button>`).join("")}<label class="lab-editor-chip add" title="Add a color to the palette"><input type="color" data-action="swatch-add" value="${color}" />＋</label><input type="color" data-action="palette-edit" class="lab-palette-editor" tabindex="-1" /></div>
           <div class="lab-panel-hint">Double-click a chip to edit that color everywhere it is used.</div>
-          ${selectedPaletteColor ? `<div class="lab-panel-row"><span class="lab-editor-mini" style="background:${selectedPaletteColor}"></span><code>${selectedPaletteColor}</code><span class="lab-editor-grow"></span><button data-action="replace">🔁 Replace all → current</button><button data-action="delete-color" title="Remove this color: erases every voxel using it (undoable); an unused swatch is just dropped">🗑 Delete</button></div>` : ""}
+          ${selectedPaletteColor ? `<div class="lab-panel-row"><span class="lab-editor-mini" style="background:${selectedPaletteColor}"></span><code>${selectedPaletteColor}</code><span class="lab-editor-grow"></span><button data-action="replace">🔁 Replace all → current</button><button data-action="delete-color" title="Remove this color: erases every voxel using it (undoable); an unused swatch is just dropped">🗑 Delete</button><button data-action="glow-toggle" class="${session!.glowOf(selectedPaletteColor) ? "active" : ""}" title="Glow: voxels of this color are drawn unlit and bloom in the world (a lamp shade, an oven window, embers). Toggle on/off">✨ Glow</button>${session!.glowOf(selectedPaletteColor) ? `<input type="range" data-action="glow-intensity" min="0.2" max="3" step="0.1" value="${session!.glowOf(selectedPaletteColor)}" title="Glow strength ×${session!.glowOf(selectedPaletteColor)}" style="width:70px" />` : ""}</div>` : ""}
+        </section>
+        <section class="lab-panel-section"><header class="lab-panel-head"><strong>💡 Lights</strong><small>point lights the model carries into the world (a few nearest the camera are real, the rest is glow)</small></header>
+          ${session!.lights.map((light, index) => `<div class="lab-panel-row lab-light-row"><input type="color" data-light-color="${index}" value="${escapeHtml(light.color ?? "#ffd9a0")}" title="Light color" /><label title="Intensity (1 = a lamp)">✦<input type="number" data-light-intensity="${index}" min="0" step="0.1" value="${light.intensity ?? 1}" /></label><label title="Range in metres: where the light fades to nothing">↔<input type="number" data-light-range="${index}" min="0.5" step="0.5" value="${light.range ?? 7}" /></label><code title="Cell position">${light.position.join(", ")}</code><span class="lab-editor-grow"></span><button data-light-here="${index}" title="Move this light to the centre of the active part (or of the model)">📍</button><button data-light-remove="${index}" title="Remove this light">✕</button></div>`).join("")}
+          <div class="lab-panel-row"><button data-action="light-add" title="Add a point light at the centre of the active part (or of the whole model); adjust it in the row above">＋ Add light</button></div>
         </section>
         ${partBox}
         ${status}${controls}`;
@@ -958,6 +963,8 @@ export function createLabEditor(host: LabEditorHost): LabEditor {
       updatePreview(lastHit);
       return;
     }
+    if (button.dataset.lightRemove !== undefined) { session.beginStroke(); session.removeLight(Number(button.dataset.lightRemove)); session.endStroke(); statusText = "Light removed"; markChanged(); return; }
+    if (button.dataset.lightHere !== undefined) { session.beginStroke(); session.updateLight(Number(button.dataset.lightHere), { position: lightAnchorCell() }); session.endStroke(); statusText = "Light moved"; markChanged(); return; }
     if (button.dataset.palette) {
       if (button.dataset.swatch && event.shiftKey) { extraSwatches = extraSwatches.filter((hex) => hex !== button.dataset.palette); storeSwatches(); renderRight(); return; }
       if (event.altKey) { session.beginStroke(); const changed = session.replaceColor(button.dataset.palette, color); session.endStroke(); statusText = `${changed} voxels ${button.dataset.palette} → ${color}`; markChanged(); }
@@ -1002,6 +1009,8 @@ export function createLabEditor(host: LabEditorHost): LabEditor {
         markChanged();
       } break;
       case "replace": if (selectedPaletteColor) { session.beginStroke(); const changed = session.replaceColor(selectedPaletteColor, color); session.endStroke(); statusText = `${changed} voxels ${selectedPaletteColor} → ${color}`; selectedPaletteColor = color; markChanged(); } break;
+      case "glow-toggle": if (selectedPaletteColor) { session.beginStroke(); session.setGlow(selectedPaletteColor, session.glowOf(selectedPaletteColor) ? 0 : 1); session.endStroke(); statusText = session.glowOf(selectedPaletteColor) ? `${selectedPaletteColor} glows` : `${selectedPaletteColor} no longer glows`; markChanged(); } break;
+      case "light-add": { session.beginStroke(); const index = session.addLight({ position: lightAnchorCell(), color: "#ffd9a0", intensity: 1, range: 7 }); session.endStroke(); statusText = `Light ${index + 1} added at the ${activePart ? `centre of ${activePart}` : "model's centre"}`; markChanged(); break; }
       case "part-add": addPart(); break;
       case "layer-sort": layerSort = layerSort === "size" ? "tree" : "size"; renderLeft(); break;
       case "state-add": {
@@ -1150,10 +1159,20 @@ export function createLabEditor(host: LabEditorHost): LabEditor {
     }
     renderAll();
   }
+  /** Cell at the centre of the active part (or of the whole model): where a new light goes. */
+  function lightAnchorCell(): [number, number, number] {
+    if (!session) return [0, 0, 0];
+    const cells = activePart ? session.cellsOfLayer(activePart) : session.parts.flatMap((part) => session!.cellsOfLayer(part));
+    if (!cells.length) return [0, 0, 0];
+    const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+    for (const cell of cells) { lo[0] = Math.min(lo[0], cell.x); lo[1] = Math.min(lo[1], cell.y); lo[2] = Math.min(lo[2], cell.z); hi[0] = Math.max(hi[0], cell.x); hi[1] = Math.max(hi[1], cell.y); hi[2] = Math.max(hi[2], cell.z); }
+    return [Math.round((lo[0]! + hi[0]!) / 2), Math.round((lo[1]! + hi[1]!) / 2), Math.round((lo[2]! + hi[2]!) / 2)];
+  }
   function onPanelInput(event: Event): void {
     const input = event.target as HTMLInputElement;
     if (!session) return;
     if (input.dataset.action === "color") { color = input.value; (input.parentElement as HTMLElement).style.background = color; return; }
+    if (input.dataset.action === "glow-intensity" && selectedPaletteColor) { session.beginStroke(); session.setGlow(selectedPaletteColor, Number(input.value) || 1); session.endStroke(); input.title = `Glow strength ×${session.glowOf(selectedPaletteColor)}`; needsRebuild = true; scheduleHistoryPersist(); return; }
     if ((input.dataset.pose || input.dataset.opacity) && input.dataset.multi) return; // committed on change, see onPanelChange
     if (input.dataset.opacity) {
       const base = draftPose ?? poseAtScrub();
@@ -1173,6 +1192,16 @@ export function createLabEditor(host: LabEditorHost): LabEditor {
     const input = event.target as HTMLInputElement | HTMLSelectElement;
     if (!session) return;
     if (input.dataset.action === "color") { setColor(input.value); return; }
+    if (input.dataset.action === "glow-intensity") { renderRight(); return; }
+    const lightIndex = input.dataset.lightColor ?? input.dataset.lightIntensity ?? input.dataset.lightRange;
+    if (lightIndex !== undefined) {
+      const index = Number(lightIndex);
+      const patch = input.dataset.lightColor !== undefined ? { color: input.value.toLowerCase() } : input.dataset.lightIntensity !== undefined ? { intensity: Math.max(0, Number(input.value) || 0) } : { range: Math.max(0.5, Number(input.value) || 7) };
+      session.beginStroke(); session.updateLight(index, patch); session.endStroke();
+      statusText = `Light ${index + 1} updated`;
+      markChanged();
+      return;
+    }
     if (input.dataset.action === "track-fade") {
       const part = activeTrackPart();
       if (activeClipId && part !== "*") { session.setTrackFade(activeClipId, part, (input.value as FadeMode) === "fade" ? undefined : (input.value as FadeMode)); applyScrubPose(); markChanged(); }
@@ -2259,13 +2288,13 @@ export function createLabEditor(host: LabEditorHost): LabEditor {
     // Per-layer version counters from the session (base + every voxel state): no scan of the cells.
     const meta = session.partMeta(part);
     const hidden = !meta || (() => { let cursor: string | undefined = part; const seen = new Set<string>(); while (cursor && !seen.has(cursor)) { if (session!.isPartHidden(cursor)) return true; seen.add(cursor); cursor = session!.partMeta(cursor)?.parent; } return false; })();
-    return `${hidden ? 0 : 1}|${session.layersOf(part).map((layer) => `${layer}:${session!.layerVersion(layer)}`).join(",")}|${meta?.pivot.join(",")}`;
+    return `${`${hidden ? 0 : 1}|${session.layersOf(part).map((layer) => `${layer}:${session!.layerVersion(layer)}`).join(",")}|${meta?.pivot.join(",")}`}|g:${session.glowSignature()}`;
   }
   function rebuild(): void { timed("rebuild", rebuildNow); }
   // Big parts are meshed in EDIT_CHUNK³ blocks; a stroke re-meshes only the
   // blocks it touched (plus border neighbours), so painting a 140k-voxel scan
   // costs the same as painting a pebble.
-  interface ChunkEntry { mesh: Mesh; version: number; pivot: string }
+  interface ChunkEntry { meshes: Mesh[]; version: number; pivot: string }
   const chunkCache = new Map<string, Map<string, ChunkEntry>>();
   function buildPartMeshes(partId: string, next: VoxelRig, previousMeshes: Mesh[]): void {
     if (!session) return;
@@ -2273,7 +2302,10 @@ export function createLabEditor(host: LabEditorHost): LabEditor {
     const meta = session.partMeta(partId);
     if (!rigPart || !meta) return;
     const [px, py, pz] = meta.pivot;
-    const pivotKey = meta.pivot.join(",");
+    // Glow is part of the cache key: toggling it re-splits the chunk into lit and glowing meshes.
+    const pivotKey = `${meta.pivot.join(",")}|${session.glowSignature()}`;
+    const glow = new Map<string, number>();
+    for (const entry of session.glowSignature().split(",").filter(Boolean)) { const [hex, value] = entry.split(":"); glow.set(hex!, Number(value)); }
     let cache = chunkCache.get(partId);
     if (!cache) chunkCache.set(partId, (cache = new Map()));
     // Every voxel state of the part gets its own chunk meshes; only the shown
@@ -2289,22 +2321,30 @@ export function createLabEditor(host: LabEditorHost): LabEditor {
       for (const chunk of chunks) {
         seen.add(chunk.key);
         let entry = cache.get(chunk.key);
-        if (entry && (entry.version !== chunk.version || entry.pivot !== pivotKey || entry.mesh.isDisposed())) entry = undefined; // stale: left in the old rig, disposed with it
+        if (entry && (entry.version !== chunk.version || entry.pivot !== pivotKey || entry.meshes.some((mesh) => mesh.isDisposed()))) entry = undefined; // stale: left in the old rig, disposed with it
         if (!entry) {
           const local = Array.from(chunk.cells, (cell) => ({ x: cell.x - px, y: cell.y - py, z: cell.z - pz, color: cell.color }));
-          const mesh = timed("rebuild:chunkmesh", () => createVoxelMesh(`${next.root.name}.${layer} chunk ${chunk.cx},${chunk.cy},${chunk.cz}`, local, session!.pitch, scene, { material: next.material, solid }));
-          mesh.receiveShadows = true;
-          timed("rebuild:shadow", () => shadows?.addShadowCaster(mesh));
-          mesh.metadata = { rigPart: partId, state };
-          entry = { mesh, version: chunk.version, pivot: pivotKey };
+          const { lit, glowing } = splitGlowCells(local, glow);
+          const meshes: Mesh[] = [];
+          if (lit.length || !glowing.length) {
+            const mesh = timed("rebuild:chunkmesh", () => createVoxelMesh(`${next.root.name}.${layer} chunk ${chunk.cx},${chunk.cy},${chunk.cz}`, lit, session!.pitch, scene, { material: next.material, solid }));
+            mesh.receiveShadows = true;
+            timed("rebuild:shadow", () => shadows?.addShadowCaster(mesh));
+            mesh.metadata = { rigPart: partId, state };
+            meshes.push(mesh);
+          }
+          if (glowing.length) {
+            const glowMesh = createVoxelMesh(`${next.root.name}.${layer} chunk ${chunk.cx},${chunk.cy},${chunk.cz} glow`, glowing, session!.pitch, scene, { material: glowMaterialFor(scene), solid });
+            glowMesh.metadata = { rigPart: partId, state };
+            tagGlow(glowMesh, glowInfoOf(glowing, glow));
+            meshes.push(glowMesh);
+          }
+          entry = { meshes, version: chunk.version, pivot: pivotKey };
           cache.set(chunk.key, entry);
         } else {
-          const index = previousMeshes.indexOf(entry.mesh);
-          if (index >= 0) previousMeshes.splice(index, 1); // reused: survives the old rig's dispose
+          for (const mesh of entry.meshes) { const index = previousMeshes.indexOf(mesh); if (index >= 0) previousMeshes.splice(index, 1); } // reused: survives the old rig's dispose
         }
-        entry.mesh.parent = rigPart.node;
-        list.push(entry.mesh);
-        out.push(entry.mesh);
+        for (const mesh of entry.meshes) { mesh.parent = rigPart.node; list.push(mesh); out.push(mesh); }
       }
       rigPart.stateMeshes.set(state, list);
     }
@@ -2328,7 +2368,7 @@ export function createLabEditor(host: LabEditorHost): LabEditor {
     // The rig is created without any geometry: unchanged parts carry their
     // meshes over, changed visible parts are (re)meshed chunk by chunk.
     const skeleton = timed("rebuild:encode", () => session!.toAuthoredModel(undefined, { cellsFor: () => false }));
-    const next = createVoxelRig(skeleton, scene, { name: previous.root.name, shadows, material: previous.material, stateCells: (part, state) => session!.cellsOfLayer(layerId(part, state)) });
+    const next = createVoxelRig(skeleton, scene, { name: previous.root.name, shadows, material: previous.material, lights: true, stateCells: (part, state) => session!.cellsOfLayer(layerId(part, state)) });
     for (const [partId, meshes] of keep) {
       const rigPart = next.parts.get(partId)!;
       for (const mesh of meshes) {

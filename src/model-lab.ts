@@ -15,6 +15,7 @@ import { TOMATO_STAGE_SECONDS } from "./game/stageTransition";
 import { createLabEditor } from "./labEditor";
 import { createHeadCamera } from "./labCamera";
 import { createClipPlayer, createVoxelRig, type ClipPlayer, type VoxelRig } from "./game/voxelRig";
+import { attachGlow } from "./game/lighting";
 
 const host = document.querySelector<HTMLElement>("#model-lab")!;
 host.innerHTML = `<div class="lab" id="lab-root">
@@ -67,6 +68,7 @@ const fill = new HemisphericLight("lab fill", new Vector3(0, 1, 0), scene);
 fill.intensity = 1.15;
 fill.groundColor = Color3.FromHexString("#506159");
 const shadows = new ShadowGenerator(2048, key);
+attachGlow(scene, { intensity: 0.8 });
 shadows.useBlurExponentialShadowMap = true;
 shadows.blurKernel = 18;
 const groundMaterial = new StandardMaterial("lab ground", scene);
@@ -234,7 +236,7 @@ function loadEntry(entry: LabEntry, options: { skipDirtyCheck?: boolean } = {}):
  * offer its clips in the toolbar; a looping clip plays on its own. */
 function showRig(model: AuthoredVoxelModel): VoxelRig {
   if (displayedRig) { displayedRig.dispose(); displayedRig = null; }
-  const rig = createVoxelRig(model, scene, { name: `inspected ${model.id}`, shadows });
+  const rig = createVoxelRig(model, scene, { name: `inspected ${model.id}`, shadows, lights: true });
   const cells = cellsFromAuthoredModel(model);
   const minY = cells.reduce((low, cell) => Math.min(low, cell.y), Infinity);
   rig.anchor.position.y = -(minY - 0.5) * model.pitch;

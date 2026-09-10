@@ -1,4 +1,4 @@
-import { ArcRotateCamera, Mesh, Ray, Scene, Vector3 } from "@babylonjs/core";
+import { ArcRotateCamera, Ray, Scene, Vector3, type AbstractMesh } from "@babylonjs/core";
 
 // "Head" camera for the Model Lab, on top of Babylon's ArcRotateCamera so the
 // orbit controls everyone knows keep working. Borrowed from game photo modes
@@ -22,9 +22,9 @@ export type ViewPreset = "front" | "back" | "left" | "right" | "top" | "bottom";
 
 export interface HeadCameraOptions {
   /** Meshes a middle-click may anchor the orbit on. */
-  pickable: () => readonly Mesh[];
+  pickable: () => readonly AbstractMesh[];
   /** Meshes F frames (the selection in the editor, the whole model otherwise). */
-  frameMeshes: () => readonly Mesh[];
+  frameMeshes: () => readonly AbstractMesh[];
   /** Keys the host needs for itself right now (typing in a field is skipped automatically). */
   keyBlocked?: (event: KeyboardEvent) => boolean;
   /** Short transient messages (fly speed, field of view). */
@@ -47,7 +47,7 @@ export interface HeadCamera {
   setFlyMode(on: boolean): void;
   /** Keyboard fly speed multiplier (the toolbar slider). */
   setSpeedScale(scale: number): void;
-  frame(meshes?: readonly Mesh[]): void;
+  frame(meshes?: readonly AbstractMesh[]): void;
   /** Orbit around this world point without moving the eye. */
   anchorAt(point: Vector3): void;
   preset(view: ViewPreset): void;
@@ -108,7 +108,7 @@ export function createHeadCamera(camera: ArcRotateCamera, canvas: HTMLCanvasElem
     const meshes = options.pickable().filter((mesh) => !mesh.isDisposed() && mesh.isEnabled() && mesh.getTotalVertices() > 0);
     if (meshes.length) {
       const set = new Set(meshes);
-      const hit = scene.pickWithRay(new Ray(eye, camera.getDirection(Vector3.Forward()), 50), (mesh) => set.has(mesh as Mesh));
+      const hit = scene.pickWithRay(new Ray(eye, camera.getDirection(Vector3.Forward()), 50), (mesh) => set.has(mesh as AbstractMesh));
       if (hit?.hit && hit.distance > 0) nearest = Math.min(nearest, hit.distance);
       for (const mesh of meshes) {
         const box = mesh.getBoundingInfo().boundingBox;
@@ -125,7 +125,7 @@ export function createHeadCamera(camera: ArcRotateCamera, canvas: HTMLCanvasElem
     const meshes = options.pickable().filter((mesh) => !mesh.isDisposed() && mesh.isEnabled());
     if (!meshes.length) return;
     const set = new Set(meshes);
-    const hit = scene.pickWithRay(new Ray(camera.position, camera.getDirection(Vector3.Forward()), 50), (mesh) => set.has(mesh as Mesh));
+    const hit = scene.pickWithRay(new Ray(camera.position, camera.getDirection(Vector3.Forward()), 50), (mesh) => set.has(mesh as AbstractMesh));
     if (hit?.hit && hit.pickedPoint && hit.distance > options.minRadius) anchorAt(hit.pickedPoint);
   }
   /** Turn the eye in place: new angles, target recomputed so the position stays. */
@@ -155,7 +155,7 @@ export function createHeadCamera(camera: ArcRotateCamera, canvas: HTMLCanvasElem
   }
   function status(text: string): void { options.onStatus?.(text); }
 
-  function frame(meshes: readonly Mesh[] = options.frameMeshes()): void {
+  function frame(meshes: readonly AbstractMesh[] = options.frameMeshes()): void {
     const live = meshes.filter((mesh) => !mesh.isDisposed() && mesh.getTotalVertices() > 0);
     if (!live.length) return;
     const minimum = new Vector3(Infinity, Infinity, Infinity);
@@ -234,7 +234,7 @@ export function createHeadCamera(camera: ArcRotateCamera, canvas: HTMLCanvasElem
       if (moved < 4) {
         const rect = canvas.getBoundingClientRect();
         const meshes = new Set(options.pickable());
-        const pick = scene.pick((event.clientX - rect.left) * (canvas.width / rect.width), (event.clientY - rect.top) * (canvas.height / rect.height), (mesh) => meshes.has(mesh as Mesh));
+        const pick = scene.pick((event.clientX - rect.left) * (canvas.width / rect.width), (event.clientY - rect.top) * (canvas.height / rect.height), (mesh) => meshes.has(mesh as AbstractMesh));
         if (pick?.hit && pick.pickedPoint) { anchorAt(pick.pickedPoint); status("Orbiting around the voxel you clicked"); }
       }
     }

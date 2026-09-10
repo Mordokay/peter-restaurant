@@ -1,6 +1,6 @@
 // The authored voxel catalog as the app sees it, version 2: a small index of every
 // model (name, folder, tags, size, counts, clip ids, thumbnail) loaded eagerly, and
-// the voxel data of each model loaded lazily from ./models/<id>.json the first time
+// the voxel data of each model fetched lazily from /catalog-models/<id>.vxm the first time
 // it is needed. `catalog.models` is the same object for the life of the page and
 // fills up as models load, so game code that reads `catalog.models[id]` keeps
 // working — it just has to `await ensureModels([...])` first.
@@ -8,6 +8,7 @@
 // Written by scripts/catalog-io.mjs (the lab's dev endpoints, the emitter, the
 // rigger). Thumbnails are public/catalog-thumbs/<id>.png, rendered by the lab.
 import type { AuthoredVoxelCatalog, AuthoredVoxelModel } from "../../game/voxelModel";
+import { fetchVxm } from "../../game/vxmFormat";
 import indexJson from "./index.json";
 
 export interface CatalogIndexEntry {
@@ -22,12 +23,18 @@ export interface CatalogIndexEntry {
   clips?: string[];
   /** Seconds since epoch of the last thumbnail render (doubles as the image cache-buster). */
   thumb?: number | boolean;
+  /** Seconds since epoch of the last model write (cache-buster for the .vxm file). */
+  rev?: number;
+  /** Has glowing palette colours. */
+  glow?: boolean;
+  /** Number of point lights the model carries. */
+  lights?: number;
 }
 
 type IndexFile = { version: number; models: Record<string, CatalogIndexEntry> };
-type ModelModule = { default: AuthoredVoxelModel };
 
-const modelFiles = import.meta.glob("./models/*.json") as Record<string, () => Promise<ModelModule>>;
+/** Where a model's deflated VXM file is served (public/catalog-models, no import graph). */
+export function modelUrl(id: string): string { return `/catalog-models/${id}.vxm?v=${catalogIndex[id]?.rev ?? 0}`; }
 
 /** Every model the catalog knows, without voxel data. Mutated in place on HMR and by the lab. */
 export const catalogIndex: Record<string, CatalogIndexEntry> = (indexJson as unknown as IndexFile).models;
@@ -36,6 +43,8 @@ export const catalogIndex: Record<string, CatalogIndexEntry> = (indexJson as unk
 export const catalog: AuthoredVoxelCatalog = { version: 1, models: {} };
 
 const pending = new Map<string, Promise<AuthoredVoxelModel | undefined>>();
+/** rev of the file each loaded model came from — HMR re-fetches only models whose rev moved. */
+const loadedRev = new Map<string, number>();
 
 export function labelOf(id: string, entry: CatalogIndexEntry | undefined = catalogIndex[id]): string {
   return entry?.name ?? id.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -54,13 +63,12 @@ export function thumbnailUrl(id: string): string | undefined {
 /** Load one model's voxel data (cached). Resolves undefined for ids the catalog does not know. */
 export function loadModel(id: string, options: { force?: boolean } = {}): Promise<AuthoredVoxelModel | undefined> {
   if (!options.force && catalog.models[id]) return Promise.resolve(catalog.models[id]);
-  const loader = modelFiles[`./models/${id}.json`];
-  if (!loader) return Promise.resolve(undefined);
+  if (!catalogIndex[id]) return Promise.resolve(undefined);
   let promise = options.force ? undefined : pending.get(id);
   if (!promise) {
-    promise = loader().then((module) => {
-      const model = module.default;
+    promise = fetchVxm(modelUrl(id)).then((model) => {
       (catalog.models as Record<string, AuthoredVoxelModel>)[id] = model;
+      loadedRev.set(id, catalogIndex[id]?.rev ?? 0);
       pending.delete(id);
       return model;
     }, (error) => { pending.delete(id); throw error; });
@@ -80,12 +88,15 @@ export async function ensureAllModels(): Promise<void> { await ensureModels(Obje
 /** A model the lab just created or imported: make it known without a reload. */
 export function registerModel(model: AuthoredVoxelModel, entry: CatalogIndexEntry): void {
   (catalog.models as Record<string, AuthoredVoxelModel>)[model.id] = model;
+  if (!entry.rev) entry.rev = Math.floor(Date.now() / 1000);
   catalogIndex[model.id] = entry;
+  loadedRev.set(model.id, entry.rev);
 }
 
 export function forgetModel(id: string): void {
   delete (catalog.models as Record<string, AuthoredVoxelModel>)[id];
   delete catalogIndex[id];
+  loadedRev.delete(id);
 }
 
 /** Index entry recomputed from a loaded model (mirrors scripts/catalog-io.mjs indexEntry). */
@@ -111,7 +122,10 @@ export function entryFor(model: AuthoredVoxelModel, previous?: CatalogIndexEntry
   if (model.tags?.length) entry.tags = [...model.tags];
   if (states) entry.states = states;
   if (model.clips?.length) entry.clips = model.clips.map((clip) => clip.id);
-  if (previous?.thumb) entry.thumb = true;
+  if (model.emissive && Object.keys(model.emissive).length) entry.glow = true;
+  if (model.lights?.length) entry.lights = model.lights.length;
+  if (previous?.thumb) entry.thumb = previous.thumb;
+  if (previous?.rev) entry.rev = previous.rev;
   return entry;
 }
 
@@ -130,8 +144,9 @@ if (import.meta.hot) {
       Object.assign(catalogIndex, fresh.catalogIndex);
       const loaded = Object.keys(catalog.models);
       for (const id of loaded) {
-        if (!(id in catalogIndex)) { delete (catalog.models as Record<string, AuthoredVoxelModel>)[id]; continue; }
-        fresh.loadModel(id, { force: true }).then((model) => { if (model) (catalog.models as Record<string, AuthoredVoxelModel>)[id] = model; }, (error) => console.warn(`[catalog] reload of ${id} failed`, error));
+        if (!(id in catalogIndex)) { delete (catalog.models as Record<string, AuthoredVoxelModel>)[id]; loadedRev.delete(id); continue; }
+        if ((catalogIndex[id]?.rev ?? 0) === (loadedRev.get(id) ?? -1)) continue;
+        fetchVxm(modelUrl(id)).then((model) => { (catalog.models as Record<string, AuthoredVoxelModel>)[id] = model; loadedRev.set(id, catalogIndex[id]?.rev ?? 0); }, (error) => console.warn(`[catalog] reload of ${id} failed`, error));
       }
     } catch (error) {
       console.warn("[catalog] HMR update failed", error);

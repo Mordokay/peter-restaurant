@@ -147,7 +147,7 @@ export function createDecorateMode(host: DecorateHost): DecorateMode {
   const pausedClips = new Map<string, { clip: string; time: number }>();
   function pausePropClip(id: string): void {
     const placed = decor.placed.get(id);
-    if (!placed || pausedClips.has(id) || !placed.player.clip) return;
+    if (!placed?.player || pausedClips.has(id) || !placed.player.clip) return;
     pausedClips.set(id, { clip: placed.player.clip.id, time: placed.player.time });
     placed.player.pause();
   }
@@ -155,7 +155,7 @@ export function createDecorateMode(host: DecorateHost): DecorateMode {
     const placed = decor.placed.get(id);
     const paused = pausedClips.get(id);
     pausedClips.delete(id);
-    if (!placed || !paused) return;
+    if (!placed?.player || !paused) return;
     placed.player.play(paused.clip, { loop: true, from: paused.time });
   }
   /** Where the pointer ray crosses the horizontal plane at height y. */
@@ -176,9 +176,14 @@ export function createDecorateMode(host: DecorateHost): DecorateMode {
     if (selected) ids.add(selected);
     return [...ids].filter((id) => decor.placed.has(id));
   }
+  /** Props held as rigs for editing; everything else stays a cheap world-renderer instance. */
+  let pinned = new Set<string>();
   function syncSelection(): void {
     highlight?.removeAllMeshes();
     const ids = selectionIds();
+    for (const id of pinned) if (!ids.includes(id)) decor.pin(id, false);
+    for (const id of ids) decor.pin(id, true);
+    pinned = new Set(ids);
     const members = ids.map((id) => decor.placed.get(id)!);
     let node: TransformNode | null = null;
     if (members.length > 1 && !groupDragging) {
@@ -195,7 +200,7 @@ export function createDecorateMode(host: DecorateHost): DecorateMode {
     if (positionGizmo) positionGizmo.attachedNode = gizmoMode === "move" ? node : null;
     if (rotationGizmo) rotationGizmo.attachedNode = gizmoMode === "turn" ? node : null;
     if (scaleGizmo) scaleGizmo.attachedNode = gizmoMode === "scale" ? node : null;
-    if (highlight) for (const placed of members) for (const mesh of placed.rig.meshes) highlight.addMesh(mesh, Color3.FromHexString(SELECTION_COLOR));
+    if (highlight) for (const placed of members) for (const mesh of placed.meshes()) if (mesh instanceof Mesh) highlight.addMesh(mesh, Color3.FromHexString(SELECTION_COLOR));
   }
   /** Group drag start: members ride on the pivot node (world transforms kept). */
   function beginGroupDrag(): void {
@@ -221,7 +226,7 @@ export function createDecorateMode(host: DecorateHost): DecorateMode {
       const axis = (value: number) => round3(Math.max(0.05, snap ? Math.round(value * 20) / 20 : value));
       const scale: [number, number, number] = [axis(placed.root.scaling.x), axis(placed.root.scaling.y), axis(placed.root.scaling.z)];
       prop.scale = scale[0] === scale[1] && scale[1] === scale[2] ? scale[0] : scale;
-      applyPropTransform(placed);
+      decor.refresh(id);
       resumePropClip(id);
     }
     status = `${selectionIds().length} objects transformed around their centre`;
@@ -241,7 +246,7 @@ export function createDecorateMode(host: DecorateHost): DecorateMode {
     const axis = (value: number) => round3(Math.max(0.05, snap ? Math.round(value * 20) / 20 : value));
     const scale: [number, number, number] = [axis(placed.root.scaling.x), axis(placed.root.scaling.y), axis(placed.root.scaling.z)];
     prop.scale = scale[0] === scale[1] && scale[1] === scale[2] ? scale[0] : scale; // per axis when they differ
-    applyPropTransform(placed);
+    decor.refresh(prop.id);
     status = `${prop.id}: (${prop.position.join(", ")}) · rot (${prop.rotation.join(", ")})° · scale ${typeof prop.scale === "number" ? `×${prop.scale}` : `(${prop.scale.join(", ")})`}`;
     render();
   }
@@ -254,7 +259,7 @@ export function createDecorateMode(host: DecorateHost): DecorateMode {
     if (!catalog.models[model]) { status = `Loading ${labelOf(model)}…`; render(); void ensureModels([model]).then(() => { if (catalog.models[model]) hold(model); else { status = `${model} is not in the catalog`; render(); } }); return; }
     const ghost = decor.add({ id: "__ghost", model, position: [0, -100, 0], rotation: [0, 0, 0], scale: 1 });
     if (!ghost) return;
-    for (const mesh of ghost.rig.meshes) mesh.isPickable = false;
+    for (const mesh of ghost.meshes()) mesh.isPickable = false;
     holding = { model, ghost, yaw: 0 };
     selected = null;
     syncSelection();
@@ -283,7 +288,7 @@ export function createDecorateMode(host: DecorateHost): DecorateMode {
     status = `Placed ${prop.id} — click another spot to place more, Esc to stop`;
     // Keep holding the same model for quick repeats, with the same yaw.
     const ghost = decor.add({ id: "__ghost", model, position: [at.x, at.y, at.z], rotation: yaw, scale: prop.scale });
-    if (ghost) { for (const mesh of ghost.rig.meshes) mesh.isPickable = false; holding = { model, ghost, yaw: heldYaw }; }
+    if (ghost) { for (const mesh of ghost.meshes()) mesh.isPickable = false; holding = { model, ghost, yaw: heldYaw }; }
     syncSelection();
     render();
   }
@@ -464,10 +469,10 @@ export function createDecorateMode(host: DecorateHost): DecorateMode {
         bodyDrag.moved = true;
         const delta = point.subtract(bodyDrag.startPoint);
         prop.position = [round3(snapValue(bodyDrag.startPos[0] + delta.x)), bodyDrag.startPos[1], round3(snapValue(bodyDrag.startPos[2] + delta.z))];
-        applyPropTransform(placed);
+        decor.refresh(prop.id);
         for (const other of bodyDrag.others) {
-          const otherProp = layout.props.find((candidate) => candidate.id === other.id); const otherPlaced = decor.placed.get(other.id);
-          if (otherProp && otherPlaced) { otherProp.position = [round3(snapValue(other.startPos[0] + delta.x)), other.startPos[1], round3(snapValue(other.startPos[2] + delta.z))]; applyPropTransform(otherPlaced); }
+          const otherProp = layout.props.find((candidate) => candidate.id === other.id);
+          if (otherProp && decor.placed.has(other.id)) { otherProp.position = [round3(snapValue(other.startPos[0] + delta.x)), other.startPos[1], round3(snapValue(other.startPos[2] + delta.z))]; decor.refresh(other.id); }
         }
         status = `${prop.id}: (${prop.position.join(", ")})`;
         const statusEl = root?.querySelector(".decorate-status");
@@ -649,7 +654,7 @@ export function createDecorateMode(host: DecorateHost): DecorateMode {
         case "duplicate": duplicateSelected(); break;
         case "copy": copySelection(); break;
         case "paste": pasteClipboard(); break;
-        case "frame": head?.frame(ids.flatMap((member) => decor.placed.get(member)?.rig.meshes ?? [])); break;
+        case "frame": head?.frame(ids.flatMap((member) => decor.meshesOf(member))); break;
         case "delete": deleteSelected(); break;
       }
     });
@@ -711,7 +716,7 @@ export function createDecorateMode(host: DecorateHost): DecorateMode {
       }
       selectedSet.clear();
       selected = select; syncSelection();
-      const placed = decor.placed.get(select); if (placed && head && !mouse.shiftKey) head.frame(placed.rig.meshes);
+      if (head && !mouse.shiftKey && decor.placed.has(select)) head.frame(decor.meshesOf(select));
       render(); return;
     }
     const gizmo = target.closest<HTMLElement>("[data-gizmo]")?.dataset.gizmo as typeof gizmoMode | undefined;
@@ -786,8 +791,8 @@ export function createDecorateMode(host: DecorateHost): DecorateMode {
     host.onCameraSwap?.(camera);
     head = createHeadCamera(camera, canvas, scene, {
       minRadius: 0.3, maxRadius: 60,
-      pickable: () => [...decor.placed.values()].flatMap((placed) => placed.rig.meshes).concat(scene.meshes.filter((mesh) => host.isSurface(mesh as Mesh)) as Mesh[]),
-      frameMeshes: () => { const placed = selected ? decor.placed.get(selected) : undefined; return placed ? placed.rig.meshes : [...decor.placed.values()].flatMap((entry) => entry.rig.meshes); },
+      pickable: () => decor.pickables().concat(scene.meshes.filter((mesh) => host.isSurface(mesh as Mesh))),
+      frameMeshes: () => (selected && decor.placed.has(selected) ? decor.meshesOf(selected) : decor.pickables()),
       onStatus: (text) => { status = text; const out = root?.querySelector<HTMLOutputElement>(".decorate-speed output"); const slider = root?.querySelector<HTMLInputElement>('[data-act="fly-speed"]'); if (head && out && slider) { out.textContent = `×${head.speedScale.toFixed(2)}`; slider.value = String(Math.round((Math.log10(head.speedScale / 0.05) / 2) * 100)); } render(); },
       // W and Q are gizmo hotkeys when tapped and fly keys when held.
       holdDelayKeys: new Set(["w", "q"]),

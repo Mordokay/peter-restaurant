@@ -1,0 +1,12 @@
+html, body, #stress { margin: 0; height: 100%; overflow: hidden; background: #b7c9b3; font: 13px/1.4 "Nunito", "Avenir Next", system-ui, sans-serif; color: #e6efe8; }
+#stress-canvas { position: absolute; inset: 0; width: 100%; height: 100%; outline: none; display: block; }
+.stress-hud { position: absolute; left: 14px; top: 14px; display: flex; flex-direction: column; gap: 8px; max-width: min(760px, 90vw); padding: 12px 14px; border: 1px solid #ffffff22; border-radius: 14px; background: #1c2724e6; backdrop-filter: blur(10px); box-shadow: 0 12px 40px #0c14116a; }
+.stress-title { font-size: 15px; font-weight: 800; }
+.stress-stats { font-variant-numeric: tabular-nums; color: #cfe0d4; }
+.stress-stats b { color: #f0c674; font-size: 15px; }
+.stress-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.stress-controls a { padding: 4px 10px; border: 1px solid #ffffff22; border-radius: 999px; color: #e6efe8; background: #ffffff0a; text-decoration: none; font-weight: 600; }
+.stress-controls a:hover { border-color: #ffffff44; }
+.stress-controls a.on { border-color: #72bd63; background: #72bd6333; color: white; }
+.stress-sep { width: 1px; height: 18px; background: #ffffff22; margin: 0 4px; }
+.stress-hint { color: #9fb3a6; font-size: 11px; }
