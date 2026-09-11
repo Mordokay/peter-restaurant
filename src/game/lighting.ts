@@ -52,7 +52,11 @@ export function glowMaterialFor(scene: Scene): StandardMaterial {
     material = new StandardMaterial("voxel glow material", scene);
     material.disableLighting = true;
     material.diffuseColor.set(1, 1, 1);
-    material.emissiveColor.set(0, 0, 0);
+    // White emissive is what actually carries the colour. Turning lighting off leaves nothing driving
+    // the diffuse term, so these meshes rendered BLACK and were visible only through the GlowLayer's
+    // bloom — which is why a lit display or a lamp faded out in daylight and at any distance. The
+    // emissive term is added regardless of lights, and the cell's own colour multiplies it.
+    material.emissiveColor.set(1, 1, 1);
     material.specularColor.set(0, 0, 0);
     material.metadata = { glow: true };
     glowMaterials.set(scene, material);

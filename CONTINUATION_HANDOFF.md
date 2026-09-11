@@ -2348,3 +2348,17 @@ The first freezer was too coarse, opened inward, and had its produce painted on.
   colour per mesh, so a dim field and bright digits in the same part bloom identically and the number
   vanishes into a slab of light. `display_field` is therefore a part of its own, blooming softly at 0.3
   while the segments burn at 1.4 in front of it.
+
+### Glowing voxels were rendering black (2026-09-11)
+
+`glowMaterialFor` set `disableLighting` with a black `emissiveColor`. With lighting off nothing drives the
+diffuse term, so **every emissive voxel in the game rendered black** and was visible only through the
+GlowLayer's bloom — which spreads with the blur kernel (so it fades with distance) and is scaled by the
+day/night curve (0.3 at noon against 1.15 at night). That is why the freezer's readout and lamps vanished
+unless you were right on top of them, and why they looked fine in the night screenshots.
+
+`emissiveColor = white` fixes it: the emissive term is added regardless of lights and the cell's own colour
+multiplies it. Measured in the lab under the ☀️ Day preset, the readout's greenest pixel was (179,208,160)
+— the background wall, nothing on the model was green at all — and is now (101,255,172), the authored
+`#5ef5a0`. It holds that strength at 14 m (95,247,161) where before it decayed to a single pixel. Every
+glowing thing in the catalog is brighter for it: lamps, displays, the lava log, the light bar.
