@@ -1,0 +1,16 @@
+html, body, #world { margin: 0; height: 100%; overflow: hidden; background: #93a98c; font: 13px/1.45 "Nunito", "Avenir Next", system-ui, sans-serif; color: #eef3ea; }
+#world-canvas { position: absolute; inset: 0; width: 100%; height: 100%; outline: none; display: block; }
+
+.world-hud { position: absolute; left: 14px; top: 14px; display: flex; flex-direction: column; gap: 8px; max-width: min(720px, 92vw); padding: 12px 14px; border: 1px solid #ffffff22; border-radius: 14px; background: #1d2724e0; backdrop-filter: blur(10px); box-shadow: 0 12px 40px #0c14116a; }
+.world-title { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 800; }
+.world-title a { color: #cfe0d4; font-size: 11px; font-weight: 700; text-decoration: none; padding: 3px 8px; border: 1px solid #ffffff22; border-radius: 999px; }
+.world-title a:hover { border-color: #ffffff55; }
+.world-room { color: #f0c674; font-weight: 800; }
+.world-stats { color: #cfe0d4; font-variant-numeric: tabular-nums; font-size: 12px; }
+.world-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.world-controls button, .world-controls a { padding: 4px 10px; border: 1px solid #ffffff22; border-radius: 999px; color: #e6efe8; background: #ffffff0a; font: inherit; font-weight: 700; font-size: 11px; cursor: pointer; text-decoration: none; }
+.world-controls button:hover { border-color: #ffffff55; }
+.world-controls button.on { border-color: #72bd63; background: #72bd6333; color: #fff; }
+.world-sep { width: 1px; height: 18px; background: #ffffff22; margin: 0 4px; }
+.world-hint { color: #9fb3a6; font-size: 11px; }
+.world-clock { margin-left: auto; color: #f3ead6; font-weight: 800; font-variant-numeric: tabular-nums; }

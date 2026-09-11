@@ -1,0 +1,2100 @@
+{
+  "version": 1,
+  "grid": 0.25,
+  "wallTypes": [
+    {
+      "id": "stone_grey",
+      "name": "Grey stone",
+      "color": "#8f8d87",
+      "topColor": "#63615c",
+      "baseColor": "#55534f",
+      "pattern": "stone",
+      "thickness": 0.3,
+      "height": 2.9
+    },
+    {
+      "id": "plaster_cream",
+      "name": "Cream plaster",
+      "color": "#e8ddc8",
+      "topColor": "#c2b49a",
+      "baseColor": "#a99a80",
+      "pattern": "plaster",
+      "thickness": 0.2,
+      "height": 2.7
+    },
+    {
+      "id": "tile_white",
+      "name": "White tile",
+      "color": "#e2e7e3",
+      "topColor": "#b4bdb7",
+      "baseColor": "#9aa49d",
+      "pattern": "tile",
+      "thickness": 0.18,
+      "height": 2.7
+    },
+    {
+      "id": "plank_barn",
+      "name": "Barn plank",
+      "color": "#8a6a4a",
+      "topColor": "#63482f",
+      "baseColor": "#553d28",
+      "pattern": "plank",
+      "thickness": 0.18,
+      "height": 2.5
+    },
+    {
+      "id": "cellar_stone",
+      "name": "Cellar stone",
+      "color": "#7d7468",
+      "topColor": "#574f45",
+      "baseColor": "#4a433a",
+      "pattern": "stone",
+      "thickness": 0.38,
+      "height": 2.4
+    },
+    {
+      "id": "glass_house",
+      "name": "Glasshouse frame",
+      "color": "#cfe6e2",
+      "topColor": "#8fb5ae",
+      "baseColor": "#6f8f89",
+      "pattern": "plain",
+      "thickness": 0.12,
+      "height": 3
+    }
+  ],
+  "floorTypes": [
+    {
+      "id": "tile_pale",
+      "name": "Pale tile",
+      "color": "#ded5c0",
+      "accentColor": "#c3b89e",
+      "pattern": "tile",
+      "patternScale": 0.5
+    },
+    {
+      "id": "tile_cool",
+      "name": "Cool tile",
+      "color": "#cfd6d3",
+      "accentColor": "#b4beba",
+      "pattern": "tile",
+      "patternScale": 0.5
+    },
+    {
+      "id": "plank_warm",
+      "name": "Warm plank",
+      "color": "#a8764a",
+      "accentColor": "#8f6540",
+      "pattern": "plank",
+      "patternScale": 0.28
+    },
+    {
+      "id": "plank_dining",
+      "name": "Dining oak",
+      "color": "#b07c4e",
+      "accentColor": "#976846",
+      "pattern": "plank",
+      "patternScale": 0.3
+    },
+    {
+      "id": "cellar_floor",
+      "name": "Cellar flags",
+      "color": "#8a8074",
+      "accentColor": "#736a5f",
+      "pattern": "stone",
+      "patternScale": 0.6
+    },
+    {
+      "id": "soil_rich",
+      "name": "Rich soil",
+      "color": "#6b4a33",
+      "accentColor": "#5d4029",
+      "pattern": "soil",
+      "patternScale": 0.35
+    },
+    {
+      "id": "soil_dark",
+      "name": "Compost",
+      "color": "#4f3726",
+      "accentColor": "#453020",
+      "pattern": "soil",
+      "patternScale": 0.35
+    },
+    {
+      "id": "grass",
+      "name": "Grass",
+      "color": "#7ea563",
+      "accentColor": "#71975a",
+      "pattern": "grass",
+      "patternScale": 0.5
+    },
+    {
+      "id": "gravel",
+      "name": "Gravel yard",
+      "color": "#a8a396",
+      "accentColor": "#948f84",
+      "pattern": "gravel",
+      "patternScale": 0.3
+    },
+    {
+      "id": "stone_path",
+      "name": "Stone path",
+      "color": "#b9b2a4",
+      "accentColor": "#a39c8f",
+      "pattern": "stone",
+      "patternScale": 0.6
+    }
+  ],
+  "parcels": [
+    {
+      "id": "p_farm_a2",
+      "name": "Home Plot",
+      "rect": [
+        -7,
+        -23,
+        7,
+        7
+      ],
+      "cost": 0
+    },
+    {
+      "id": "p_farm_a1",
+      "name": "Farm Plot A1",
+      "rect": [
+        -14,
+        -23,
+        7,
+        7
+      ],
+      "cost": 400,
+      "requires": [
+        "p_farm_a2"
+      ]
+    },
+    {
+      "id": "p_farm_a3",
+      "name": "Farm Plot A3",
+      "rect": [
+        0,
+        -23,
+        7,
+        7
+      ],
+      "cost": 400,
+      "requires": [
+        "p_farm_a2"
+      ]
+    },
+    {
+      "id": "p_farm_a4",
+      "name": "Farm Plot A4",
+      "rect": [
+        7,
+        -23,
+        7,
+        7
+      ],
+      "cost": 600,
+      "requires": [
+        "p_farm_a3"
+      ]
+    },
+    {
+      "id": "p_farm_b1",
+      "name": "Farm Plot B1",
+      "rect": [
+        -14,
+        -30,
+        7,
+        7
+      ],
+      "cost": 800,
+      "requires": [
+        "p_farm_a1"
+      ]
+    },
+    {
+      "id": "p_farm_b2",
+      "name": "Farm Plot B2",
+      "rect": [
+        -7,
+        -30,
+        7,
+        7
+      ],
+      "cost": 800,
+      "requires": [
+        "p_farm_a2"
+      ]
+    },
+    {
+      "id": "p_farm_b3",
+      "name": "Farm Plot B3",
+      "rect": [
+        0,
+        -30,
+        7,
+        7
+      ],
+      "cost": 800,
+      "requires": [
+        "p_farm_a3"
+      ]
+    },
+    {
+      "id": "p_farm_b4",
+      "name": "Farm Plot B4",
+      "rect": [
+        7,
+        -30,
+        7,
+        7
+      ],
+      "cost": 900,
+      "requires": [
+        "p_farm_a4"
+      ]
+    },
+    {
+      "id": "p_herb",
+      "name": "Herb Garden",
+      "rect": [
+        -14,
+        -16,
+        28,
+        3.5
+      ],
+      "cost": 500,
+      "requires": [
+        "p_farm_a2"
+      ]
+    },
+    {
+      "id": "p_core",
+      "name": "Dining & Pass",
+      "rect": [
+        -17,
+        3.5,
+        34,
+        10.5
+      ],
+      "cost": 2000,
+      "requires": [
+        "p_herb"
+      ]
+    },
+    {
+      "id": "p_kitchen",
+      "name": "Kitchen",
+      "rect": [
+        -11,
+        -4,
+        22,
+        7.5
+      ],
+      "cost": 2600,
+      "requires": [
+        "p_core"
+      ]
+    },
+    {
+      "id": "p_west_wing",
+      "name": "West Wing",
+      "rect": [
+        -17,
+        -4,
+        6,
+        7.5
+      ],
+      "cost": 900,
+      "requires": [
+        "p_kitchen"
+      ]
+    },
+    {
+      "id": "p_east_wing",
+      "name": "East Wing",
+      "rect": [
+        11,
+        -4,
+        6,
+        7.5
+      ],
+      "cost": 900,
+      "requires": [
+        "p_kitchen"
+      ]
+    },
+    {
+      "id": "p_corridor",
+      "name": "Back Corridor",
+      "rect": [
+        -17,
+        -6.5,
+        34,
+        2.5
+      ],
+      "cost": 800,
+      "requires": [
+        "p_kitchen"
+      ]
+    },
+    {
+      "id": "p_north_west",
+      "name": "North West Stores",
+      "rect": [
+        -17,
+        -12.5,
+        12,
+        6
+      ],
+      "cost": 1200,
+      "requires": [
+        "p_corridor"
+      ]
+    },
+    {
+      "id": "p_north_east",
+      "name": "North East Rooms",
+      "rect": [
+        -5,
+        -12.5,
+        22,
+        6
+      ],
+      "cost": 1500,
+      "requires": [
+        "p_corridor"
+      ]
+    },
+    {
+      "id": "p_plaza",
+      "name": "Entrance Plaza",
+      "rect": [
+        -7,
+        14,
+        14,
+        6
+      ],
+      "cost": 300,
+      "requires": [
+        "p_core"
+      ]
+    },
+    {
+      "id": "p_yard",
+      "name": "Delivery Yard",
+      "rect": [
+        -27,
+        -8,
+        9,
+        8
+      ],
+      "cost": 700,
+      "requires": [
+        "p_west_wing"
+      ]
+    },
+    {
+      "id": "p_compost",
+      "name": "Compost",
+      "rect": [
+        -25,
+        -30,
+        8,
+        6
+      ],
+      "cost": 600,
+      "requires": [
+        "p_farm_b1"
+      ]
+    },
+    {
+      "id": "p_cellar",
+      "name": "Fermentation Cellar",
+      "rect": [
+        -27,
+        -22,
+        10,
+        8
+      ],
+      "cost": 2200,
+      "requires": [
+        "p_corridor"
+      ]
+    },
+    {
+      "id": "p_greenhouse",
+      "name": "Greenhouse",
+      "rect": [
+        15,
+        -28,
+        9,
+        10
+      ],
+      "cost": 2500,
+      "requires": [
+        "p_farm_a4"
+      ]
+    }
+  ],
+  "rooms": [
+    {
+      "id": "dining",
+      "name": "Dining Area",
+      "zone": "dining",
+      "rect": [
+        -17,
+        5,
+        34,
+        9
+      ],
+      "floor": "plank_dining",
+      "parcel": "p_core",
+      "cost": 2400
+    },
+    {
+      "id": "service_pass",
+      "name": "Service Pass",
+      "zone": "pass",
+      "rect": [
+        -17,
+        3.5,
+        34,
+        1.5
+      ],
+      "floor": "tile_pale",
+      "parcel": "p_core",
+      "cost": 900
+    },
+    {
+      "id": "kitchen",
+      "name": "Main Kitchen",
+      "zone": "kitchen",
+      "rect": [
+        -11,
+        -4,
+        22,
+        7.5
+      ],
+      "floor": "tile_pale",
+      "parcel": "p_kitchen",
+      "cost": 3200
+    },
+    {
+      "id": "receiving",
+      "name": "Receiving & Inspection",
+      "zone": "receiving",
+      "rect": [
+        -17,
+        -4,
+        6,
+        4
+      ],
+      "floor": "tile_pale",
+      "parcel": "p_west_wing",
+      "cost": 900
+    },
+    {
+      "id": "trash_recycling",
+      "name": "Trash & Recycling",
+      "zone": "waste",
+      "rect": [
+        -17,
+        0,
+        6,
+        3.5
+      ],
+      "floor": "tile_cool",
+      "parcel": "p_west_wing",
+      "cost": 700
+    },
+    {
+      "id": "dishwashing",
+      "name": "Dishwashing",
+      "zone": "dish",
+      "rect": [
+        11,
+        -4,
+        6,
+        4
+      ],
+      "floor": "tile_cool",
+      "parcel": "p_east_wing",
+      "cost": 1100
+    },
+    {
+      "id": "office",
+      "name": "Office",
+      "zone": "office",
+      "rect": [
+        11,
+        0,
+        6,
+        3.5
+      ],
+      "floor": "plank_warm",
+      "parcel": "p_east_wing",
+      "cost": 800
+    },
+    {
+      "id": "back_corridor",
+      "name": "Back of House Corridor",
+      "zone": "corridor",
+      "rect": [
+        -17,
+        -6.5,
+        34,
+        2.5
+      ],
+      "floor": "tile_pale",
+      "parcel": "p_corridor",
+      "cost": 1000
+    },
+    {
+      "id": "dry_pantry",
+      "name": "Dry Pantry",
+      "zone": "pantry",
+      "rect": [
+        -17,
+        -12.5,
+        6,
+        6
+      ],
+      "floor": "tile_pale",
+      "parcel": "p_north_west",
+      "cost": 900
+    },
+    {
+      "id": "cold_storage",
+      "name": "Cold Storage",
+      "zone": "cold",
+      "rect": [
+        -11,
+        -12.5,
+        6,
+        6
+      ],
+      "floor": "tile_cool",
+      "parcel": "p_north_west",
+      "cost": 1400
+    },
+    {
+      "id": "passage_west",
+      "name": "West Garden Passage",
+      "zone": "corridor",
+      "rect": [
+        -5,
+        -12.5,
+        2,
+        6
+      ],
+      "floor": "tile_pale",
+      "parcel": "p_north_east",
+      "cost": 300
+    },
+    {
+      "id": "prep_kitchen",
+      "name": "Prep Kitchen",
+      "zone": "prep",
+      "rect": [
+        -3,
+        -12.5,
+        8,
+        6
+      ],
+      "floor": "tile_pale",
+      "parcel": "p_north_east",
+      "cost": 1800
+    },
+    {
+      "id": "staff_area",
+      "name": "Staff Area",
+      "zone": "staff",
+      "rect": [
+        5,
+        -12.5,
+        4.5,
+        6
+      ],
+      "floor": "plank_warm",
+      "parcel": "p_north_east",
+      "cost": 800
+    },
+    {
+      "id": "passage_east",
+      "name": "East Garden Passage",
+      "zone": "corridor",
+      "rect": [
+        9.5,
+        -12.5,
+        2,
+        6
+      ],
+      "floor": "tile_pale",
+      "parcel": "p_north_east",
+      "cost": 300
+    },
+    {
+      "id": "staff_restrooms",
+      "name": "Staff Restrooms",
+      "zone": "staff",
+      "rect": [
+        11.5,
+        -12.5,
+        3,
+        6
+      ],
+      "floor": "tile_cool",
+      "parcel": "p_north_east",
+      "cost": 700
+    },
+    {
+      "id": "cleaning_supplies",
+      "name": "Cleaning Supplies",
+      "zone": "cleaning",
+      "rect": [
+        14.5,
+        -12.5,
+        2.5,
+        6
+      ],
+      "floor": "tile_cool",
+      "parcel": "p_north_east",
+      "cost": 600
+    },
+    {
+      "id": "fermentation_cellar",
+      "name": "Fermentation Cellar",
+      "zone": "cellar",
+      "rect": [
+        -27,
+        -22,
+        10,
+        8
+      ],
+      "floor": "cellar_floor",
+      "parcel": "p_cellar",
+      "cost": 2200
+    },
+    {
+      "id": "greenhouse",
+      "name": "Greenhouse",
+      "zone": "greenhouse",
+      "rect": [
+        15,
+        -28,
+        9,
+        10
+      ],
+      "floor": "soil_rich",
+      "parcel": "p_greenhouse",
+      "cost": 2500
+    }
+  ],
+  "walls": [
+    {
+      "id": "w001",
+      "from": [
+        15,
+        -28
+      ],
+      "to": [
+        24,
+        -28
+      ],
+      "type": "glass_house",
+      "room": "greenhouse",
+      "cost": 630,
+      "requires": [
+        "p_greenhouse"
+      ]
+    },
+    {
+      "id": "w002",
+      "from": [
+        -27,
+        -22
+      ],
+      "to": [
+        -17,
+        -22
+      ],
+      "type": "cellar_stone",
+      "room": "fermentation_cellar",
+      "cost": 700,
+      "requires": [
+        "p_cellar"
+      ]
+    },
+    {
+      "id": "w003",
+      "from": [
+        15,
+        -18
+      ],
+      "to": [
+        24,
+        -18
+      ],
+      "type": "glass_house",
+      "room": "greenhouse",
+      "cost": 630,
+      "requires": [
+        "p_greenhouse"
+      ]
+    },
+    {
+      "id": "w004",
+      "from": [
+        -27,
+        -14
+      ],
+      "to": [
+        -17,
+        -14
+      ],
+      "type": "cellar_stone",
+      "room": "fermentation_cellar",
+      "cost": 700,
+      "requires": [
+        "p_cellar"
+      ],
+      "openings": [
+        {
+          "at": 5,
+          "width": 1.2,
+          "kind": "door"
+        }
+      ]
+    },
+    {
+      "id": "w005",
+      "from": [
+        -17,
+        -12.5
+      ],
+      "to": [
+        -11,
+        -12.5
+      ],
+      "type": "stone_grey",
+      "room": "dry_pantry",
+      "cost": 420,
+      "requires": [
+        "p_north_west"
+      ]
+    },
+    {
+      "id": "w006",
+      "from": [
+        -11,
+        -12.5
+      ],
+      "to": [
+        -5,
+        -12.5
+      ],
+      "type": "stone_grey",
+      "room": "cold_storage",
+      "cost": 420,
+      "requires": [
+        "p_north_west"
+      ]
+    },
+    {
+      "id": "w007",
+      "from": [
+        -5,
+        -12.5
+      ],
+      "to": [
+        -3,
+        -12.5
+      ],
+      "type": "stone_grey",
+      "room": "passage_west",
+      "cost": 140,
+      "requires": [
+        "p_north_east"
+      ],
+      "openings": [
+        {
+          "at": 1,
+          "width": 1.6,
+          "kind": "door"
+        }
+      ]
+    },
+    {
+      "id": "w008",
+      "from": [
+        -3,
+        -12.5
+      ],
+      "to": [
+        5,
+        -12.5
+      ],
+      "type": "stone_grey",
+      "room": "prep_kitchen",
+      "cost": 560,
+      "requires": [
+        "p_north_east"
+      ],
+      "openings": [
+        {
+          "at": 4,
+          "width": 1.4,
+          "kind": "window"
+        }
+      ]
+    },
+    {
+      "id": "w009",
+      "from": [
+        5,
+        -12.5
+      ],
+      "to": [
+        9.5,
+        -12.5
+      ],
+      "type": "stone_grey",
+      "room": "staff_area",
+      "cost": 315,
+      "requires": [
+        "p_north_east"
+      ],
+      "openings": [
+        {
+          "at": 2.25,
+          "width": 1.4,
+          "kind": "window"
+        }
+      ]
+    },
+    {
+      "id": "w010",
+      "from": [
+        9.5,
+        -12.5
+      ],
+      "to": [
+        11.5,
+        -12.5
+      ],
+      "type": "stone_grey",
+      "room": "passage_east",
+      "cost": 140,
+      "requires": [
+        "p_north_east"
+      ],
+      "openings": [
+        {
+          "at": 1,
+          "width": 1.6,
+          "kind": "door"
+        }
+      ]
+    },
+    {
+      "id": "w011",
+      "from": [
+        11.5,
+        -12.5
+      ],
+      "to": [
+        14.5,
+        -12.5
+      ],
+      "type": "stone_grey",
+      "room": "staff_restrooms",
+      "cost": 210,
+      "requires": [
+        "p_north_east"
+      ]
+    },
+    {
+      "id": "w012",
+      "from": [
+        14.5,
+        -12.5
+      ],
+      "to": [
+        17,
+        -12.5
+      ],
+      "type": "stone_grey",
+      "room": "cleaning_supplies",
+      "cost": 175,
+      "requires": [
+        "p_north_east"
+      ]
+    },
+    {
+      "id": "w013",
+      "from": [
+        -17,
+        -6.5
+      ],
+      "to": [
+        -11,
+        -6.5
+      ],
+      "type": "plaster_cream",
+      "room": "back_corridor",
+      "back": "dry_pantry",
+      "cost": 240,
+      "requires": [
+        "p_corridor"
+      ],
+      "openings": [
+        {
+          "at": 3,
+          "width": 1.1,
+          "kind": "door"
+        }
+      ]
+    },
+    {
+      "id": "w014",
+      "from": [
+        -11,
+        -6.5
+      ],
+      "to": [
+        -5,
+        -6.5
+      ],
+      "type": "plaster_cream",
+      "room": "back_corridor",
+      "back": "cold_storage",
+      "cost": 240,
+      "requires": [
+        "p_corridor"
+      ],
+      "openings": [
+        {
+          "at": 3,
+          "width": 1.1,
+          "kind": "door"
+        }
+      ]
+    },
+    {
+      "id": "w015",
+      "from": [
+        -5,
+        -6.5
+      ],
+      "to": [
+        -3,
+        -6.5
+      ],
+      "type": "plaster_cream",
+      "room": "back_corridor",
+      "back": "passage_west",
+      "cost": 80,
+      "requires": [
+        "p_corridor"
+      ],
+      "openings": [
+        {
+          "at": 1,
+          "width": 1.6,
+          "kind": "arch"
+        }
+      ]
+    },
+    {
+      "id": "w016",
+      "from": [
+        -3,
+        -6.5
+      ],
+      "to": [
+        5,
+        -6.5
+      ],
+      "type": "plaster_cream",
+      "room": "back_corridor",
+      "back": "prep_kitchen",
+      "cost": 320,
+      "requires": [
+        "p_corridor"
+      ],
+      "openings": [
+        {
+          "at": 4,
+          "width": 1.6,
+          "kind": "arch"
+        }
+      ]
+    },
+    {
+      "id": "w017",
+      "from": [
+        5,
+        -6.5
+      ],
+      "to": [
+        9.5,
+        -6.5
+      ],
+      "type": "plaster_cream",
+      "room": "back_corridor",
+      "back": "staff_area",
+      "cost": 180,
+      "requires": [
+        "p_corridor"
+      ],
+      "openings": [
+        {
+          "at": 2.25,
+          "width": 1.1,
+          "kind": "door"
+        }
+      ]
+    },
+    {
+      "id": "w018",
+      "from": [
+        9.5,
+        -6.5
+      ],
+      "to": [
+        11.5,
+        -6.5
+      ],
+      "type": "plaster_cream",
+      "room": "back_corridor",
+      "back": "passage_east",
+      "cost": 80,
+      "requires": [
+        "p_corridor"
+      ],
+      "openings": [
+        {
+          "at": 1,
+          "width": 1.6,
+          "kind": "arch"
+        }
+      ]
+    },
+    {
+      "id": "w019",
+      "from": [
+        11.5,
+        -6.5
+      ],
+      "to": [
+        14.5,
+        -6.5
+      ],
+      "type": "plaster_cream",
+      "room": "back_corridor",
+      "back": "staff_restrooms",
+      "cost": 120,
+      "requires": [
+        "p_corridor"
+      ],
+      "openings": [
+        {
+          "at": 1.5,
+          "width": 1,
+          "kind": "door"
+        }
+      ]
+    },
+    {
+      "id": "w020",
+      "from": [
+        14.5,
+        -6.5
+      ],
+      "to": [
+        17,
+        -6.5
+      ],
+      "type": "plaster_cream",
+      "room": "back_corridor",
+      "back": "cleaning_supplies",
+      "cost": 100,
+      "requires": [
+        "p_corridor"
+      ],
+      "openings": [
+        {
+          "at": 1.25,
+          "width": 1,
+          "kind": "door"
+        }
+      ]
+    },
+    {
+      "id": "w021",
+      "from": [
+        -17,
+        -4
+      ],
+      "to": [
+        -11,
+        -4
+      ],
+      "type": "plaster_cream",
+      "room": "receiving",
+      "back": "back_corridor",
+      "cost": 240,
+      "requires": [
+        "p_west_wing"
+      ],
+      "openings": [
+        {
+          "at": 3,
+          "width": 1.2,
+          "kind": "door"
+        }
+      ]
+    },
+    {
+      "id": "w022",
+      "from": [
+        -11,
+        -4
+      ],
+      "to": [
+        11,
+        -4
+      ],
+      "type": "tile_white",
+      "room": "kitchen",
+      "back": "back_corridor",
+      "cost": 880,
+      "requires": [
+        "p_kitchen"
+      ],
+      "openings": [
+        {
+          "at": 4,
+          "width": 1.4,
+          "kind": "door"
+        },
+        {
+          "at": 18,
+          "width": 1.4,
+          "kind": "door"
+        }
+      ]
+    },
+    {
+      "id": "w023",
+      "from": [
+        11,
+        -4
+      ],
+      "to": [
+        17,
+        -4
+      ],
+      "type": "tile_white",
+      "room": "dishwashing",
+      "back": "back_corridor",
+      "cost": 240,
+      "requires": [
+        "p_east_wing"
+      ],
+      "openings": [
+        {
+          "at": 3,
+          "width": 1.2,
+          "kind": "door"
+        }
+      ]
+    },
+    {
+      "id": "w024",
+      "from": [
+        -17,
+        0
+      ],
+      "to": [
+        -11,
+        0
+      ],
+      "type": "plaster_cream",
+      "room": "receiving",
+      "back": "trash_recycling",
+      "cost": 240,
+      "requires": [
+        "p_west_wing"
+      ],
+      "openings": [
+        {
+          "at": 3,
+          "width": 1.1,
+          "kind": "door"
+        }
+      ]
+    },
+    {
+      "id": "w025",
+      "from": [
+        11,
+        0
+      ],
+      "to": [
+        17,
+        0
+      ],
+      "type": "tile_white",
+      "room": "dishwashing",
+      "back": "office",
+      "cost": 240,
+      "requires": [
+        "p_east_wing"
+      ]
+    },
+    {
+      "id": "w026",
+      "from": [
+        -17,
+        3.5
+      ],
+      "to": [
+        -11,
+        3.5
+      ],
+      "type": "tile_white",
+      "room": "service_pass",
+      "back": "trash_recycling",
+      "cost": 240,
+      "requires": [
+        "p_core"
+      ],
+      "openings": [
+        {
+          "at": 3,
+          "width": 1.1,
+          "kind": "door"
+        }
+      ]
+    },
+    {
+      "id": "w027",
+      "from": [
+        -11,
+        3.5
+      ],
+      "to": [
+        11,
+        3.5
+      ],
+      "type": "tile_white",
+      "room": "service_pass",
+      "back": "kitchen",
+      "cost": 880,
+      "requires": [
+        "p_core"
+      ],
+      "openings": [
+        {
+          "at": 11,
+          "width": 6,
+          "kind": "arch"
+        }
+      ]
+    },
+    {
+      "id": "w028",
+      "from": [
+        11,
+        3.5
+      ],
+      "to": [
+        17,
+        3.5
+      ],
+      "type": "tile_white",
+      "room": "service_pass",
+      "back": "office",
+      "cost": 240,
+      "requires": [
+        "p_core"
+      ],
+      "openings": [
+        {
+          "at": 3,
+          "width": 1.1,
+          "kind": "door"
+        }
+      ]
+    },
+    {
+      "id": "w029",
+      "from": [
+        -17,
+        5
+      ],
+      "to": [
+        17,
+        5
+      ],
+      "type": "plaster_cream",
+      "room": "dining",
+      "back": "service_pass",
+      "cost": 1360,
+      "requires": [
+        "p_core"
+      ],
+      "openings": [
+        {
+          "at": 11,
+          "width": 4.5,
+          "kind": "arch"
+        },
+        {
+          "at": 23,
+          "width": 4.5,
+          "kind": "arch"
+        }
+      ]
+    },
+    {
+      "id": "w030",
+      "from": [
+        -17,
+        14
+      ],
+      "to": [
+        17,
+        14
+      ],
+      "type": "stone_grey",
+      "room": "dining",
+      "cost": 2380,
+      "requires": [
+        "p_core"
+      ],
+      "openings": [
+        {
+          "at": 17,
+          "width": 3.2,
+          "kind": "door"
+        },
+        {
+          "at": 8,
+          "width": 1.6,
+          "kind": "window"
+        },
+        {
+          "at": 26,
+          "width": 1.6,
+          "kind": "window"
+        }
+      ]
+    },
+    {
+      "id": "w031",
+      "from": [
+        -27,
+        -22
+      ],
+      "to": [
+        -27,
+        -14
+      ],
+      "type": "cellar_stone",
+      "room": "fermentation_cellar",
+      "cost": 560,
+      "requires": [
+        "p_cellar"
+      ]
+    },
+    {
+      "id": "w032",
+      "from": [
+        -17,
+        -22
+      ],
+      "to": [
+        -17,
+        -14
+      ],
+      "type": "cellar_stone",
+      "room": "fermentation_cellar",
+      "cost": 560,
+      "requires": [
+        "p_cellar"
+      ],
+      "openings": [
+        {
+          "at": 4,
+          "width": 0.9,
+          "kind": "window"
+        }
+      ]
+    },
+    {
+      "id": "w033",
+      "from": [
+        -17,
+        -12.5
+      ],
+      "to": [
+        -17,
+        -6.5
+      ],
+      "type": "stone_grey",
+      "room": "dry_pantry",
+      "cost": 420,
+      "requires": [
+        "p_north_west"
+      ]
+    },
+    {
+      "id": "w034",
+      "from": [
+        -17,
+        -6.5
+      ],
+      "to": [
+        -17,
+        -4
+      ],
+      "type": "stone_grey",
+      "room": "back_corridor",
+      "cost": 175,
+      "requires": [
+        "p_corridor"
+      ]
+    },
+    {
+      "id": "w035",
+      "from": [
+        -17,
+        -4
+      ],
+      "to": [
+        -17,
+        0
+      ],
+      "type": "stone_grey",
+      "room": "receiving",
+      "cost": 280,
+      "requires": [
+        "p_west_wing"
+      ],
+      "openings": [
+        {
+          "at": 2,
+          "width": 2.4,
+          "kind": "door"
+        }
+      ]
+    },
+    {
+      "id": "w036",
+      "from": [
+        -17,
+        0
+      ],
+      "to": [
+        -17,
+        3.5
+      ],
+      "type": "stone_grey",
+      "room": "trash_recycling",
+      "cost": 245,
+      "requires": [
+        "p_west_wing"
+      ]
+    },
+    {
+      "id": "w037",
+      "from": [
+        -17,
+        3.5
+      ],
+      "to": [
+        -17,
+        5
+      ],
+      "type": "stone_grey",
+      "room": "service_pass",
+      "cost": 105,
+      "requires": [
+        "p_core"
+      ]
+    },
+    {
+      "id": "w038",
+      "from": [
+        -17,
+        5
+      ],
+      "to": [
+        -17,
+        14
+      ],
+      "type": "stone_grey",
+      "room": "dining",
+      "cost": 630,
+      "requires": [
+        "p_core"
+      ],
+      "openings": [
+        {
+          "at": 4.5,
+          "width": 1.8,
+          "kind": "window"
+        }
+      ]
+    },
+    {
+      "id": "w039",
+      "from": [
+        -11,
+        -12.5
+      ],
+      "to": [
+        -11,
+        -6.5
+      ],
+      "type": "plaster_cream",
+      "room": "dry_pantry",
+      "back": "cold_storage",
+      "cost": 240,
+      "requires": [
+        "p_north_west"
+      ]
+    },
+    {
+      "id": "w040",
+      "from": [
+        -11,
+        -4
+      ],
+      "to": [
+        -11,
+        0
+      ],
+      "type": "tile_white",
+      "room": "kitchen",
+      "back": "receiving",
+      "cost": 160,
+      "requires": [
+        "p_kitchen"
+      ],
+      "openings": [
+        {
+          "at": 2,
+          "width": 1.4,
+          "kind": "door"
+        }
+      ]
+    },
+    {
+      "id": "w041",
+      "from": [
+        -11,
+        0
+      ],
+      "to": [
+        -11,
+        3.5
+      ],
+      "type": "tile_white",
+      "room": "kitchen",
+      "back": "trash_recycling",
+      "cost": 140,
+      "requires": [
+        "p_kitchen"
+      ]
+    },
+    {
+      "id": "w042",
+      "from": [
+        -5,
+        -12.5
+      ],
+      "to": [
+        -5,
+        -6.5
+      ],
+      "type": "tile_white",
+      "room": "cold_storage",
+      "back": "passage_west",
+      "cost": 240,
+      "requires": [
+        "p_north_west"
+      ]
+    },
+    {
+      "id": "w043",
+      "from": [
+        -3,
+        -12.5
+      ],
+      "to": [
+        -3,
+        -6.5
+      ],
+      "type": "plaster_cream",
+      "room": "passage_west",
+      "back": "prep_kitchen",
+      "cost": 240,
+      "requires": [
+        "p_north_east"
+      ]
+    },
+    {
+      "id": "w044",
+      "from": [
+        5,
+        -12.5
+      ],
+      "to": [
+        5,
+        -6.5
+      ],
+      "type": "tile_white",
+      "room": "prep_kitchen",
+      "back": "staff_area",
+      "cost": 240,
+      "requires": [
+        "p_north_east"
+      ]
+    },
+    {
+      "id": "w045",
+      "from": [
+        9.5,
+        -12.5
+      ],
+      "to": [
+        9.5,
+        -6.5
+      ],
+      "type": "plaster_cream",
+      "room": "staff_area",
+      "back": "passage_east",
+      "cost": 240,
+      "requires": [
+        "p_north_east"
+      ]
+    },
+    {
+      "id": "w046",
+      "from": [
+        11,
+        -4
+      ],
+      "to": [
+        11,
+        0
+      ],
+      "type": "tile_white",
+      "room": "kitchen",
+      "back": "dishwashing",
+      "cost": 160,
+      "requires": [
+        "p_kitchen"
+      ],
+      "openings": [
+        {
+          "at": 2,
+          "width": 1.4,
+          "kind": "door"
+        }
+      ]
+    },
+    {
+      "id": "w047",
+      "from": [
+        11,
+        0
+      ],
+      "to": [
+        11,
+        3.5
+      ],
+      "type": "tile_white",
+      "room": "kitchen",
+      "back": "office",
+      "cost": 140,
+      "requires": [
+        "p_kitchen"
+      ]
+    },
+    {
+      "id": "w048",
+      "from": [
+        11.5,
+        -12.5
+      ],
+      "to": [
+        11.5,
+        -6.5
+      ],
+      "type": "plaster_cream",
+      "room": "passage_east",
+      "back": "staff_restrooms",
+      "cost": 240,
+      "requires": [
+        "p_north_east"
+      ]
+    },
+    {
+      "id": "w049",
+      "from": [
+        14.5,
+        -12.5
+      ],
+      "to": [
+        14.5,
+        -6.5
+      ],
+      "type": "tile_white",
+      "room": "staff_restrooms",
+      "back": "cleaning_supplies",
+      "cost": 240,
+      "requires": [
+        "p_north_east"
+      ]
+    },
+    {
+      "id": "w050",
+      "from": [
+        15,
+        -28
+      ],
+      "to": [
+        15,
+        -18
+      ],
+      "type": "glass_house",
+      "room": "greenhouse",
+      "cost": 700,
+      "requires": [
+        "p_greenhouse"
+      ],
+      "openings": [
+        {
+          "at": 5,
+          "width": 1.6,
+          "kind": "door"
+        }
+      ]
+    },
+    {
+      "id": "w051",
+      "from": [
+        17,
+        -12.5
+      ],
+      "to": [
+        17,
+        -6.5
+      ],
+      "type": "stone_grey",
+      "room": "cleaning_supplies",
+      "cost": 420,
+      "requires": [
+        "p_north_east"
+      ]
+    },
+    {
+      "id": "w052",
+      "from": [
+        17,
+        -6.5
+      ],
+      "to": [
+        17,
+        -4
+      ],
+      "type": "stone_grey",
+      "room": "back_corridor",
+      "cost": 175,
+      "requires": [
+        "p_corridor"
+      ]
+    },
+    {
+      "id": "w053",
+      "from": [
+        17,
+        -4
+      ],
+      "to": [
+        17,
+        0
+      ],
+      "type": "stone_grey",
+      "room": "dishwashing",
+      "cost": 280,
+      "requires": [
+        "p_east_wing"
+      ]
+    },
+    {
+      "id": "w054",
+      "from": [
+        17,
+        0
+      ],
+      "to": [
+        17,
+        3.5
+      ],
+      "type": "stone_grey",
+      "room": "office",
+      "cost": 245,
+      "requires": [
+        "p_east_wing"
+      ]
+    },
+    {
+      "id": "w055",
+      "from": [
+        17,
+        3.5
+      ],
+      "to": [
+        17,
+        5
+      ],
+      "type": "stone_grey",
+      "room": "service_pass",
+      "cost": 105,
+      "requires": [
+        "p_core"
+      ]
+    },
+    {
+      "id": "w056",
+      "from": [
+        17,
+        5
+      ],
+      "to": [
+        17,
+        14
+      ],
+      "type": "stone_grey",
+      "room": "dining",
+      "cost": 630,
+      "requires": [
+        "p_core"
+      ],
+      "openings": [
+        {
+          "at": 4.5,
+          "width": 1.8,
+          "kind": "window"
+        }
+      ]
+    },
+    {
+      "id": "w057",
+      "from": [
+        24,
+        -28
+      ],
+      "to": [
+        24,
+        -18
+      ],
+      "type": "glass_house",
+      "room": "greenhouse",
+      "cost": 700,
+      "requires": [
+        "p_greenhouse"
+      ]
+    }
+  ],
+  "areas": [
+    {
+      "id": "site_grounds",
+      "name": "Grounds",
+      "zone": "outdoor",
+      "rect": [
+        -34,
+        -38,
+        68,
+        64
+      ],
+      "ground": "grass",
+      "cost": 0
+    },
+    {
+      "id": "entrance_plaza",
+      "name": "Main Entrance",
+      "zone": "dining",
+      "rect": [
+        -7,
+        14,
+        14,
+        6
+      ],
+      "ground": "stone_path",
+      "parcel": "p_plaza",
+      "cost": 300
+    },
+    {
+      "id": "delivery_yard",
+      "name": "Delivery Yard",
+      "zone": "receiving",
+      "rect": [
+        -27,
+        -8,
+        9,
+        8
+      ],
+      "ground": "gravel",
+      "parcel": "p_yard",
+      "cost": 700
+    },
+    {
+      "id": "herb_garden",
+      "name": "Herb Garden",
+      "zone": "herbs",
+      "rect": [
+        -14,
+        -16,
+        28,
+        3.5
+      ],
+      "ground": "soil_rich",
+      "parcel": "p_herb",
+      "cost": 500
+    },
+    {
+      "id": "compost",
+      "name": "Compost",
+      "zone": "waste",
+      "rect": [
+        -25,
+        -30,
+        8,
+        6
+      ],
+      "ground": "soil_dark",
+      "parcel": "p_compost",
+      "cost": 600
+    },
+    {
+      "id": "farm_a1",
+      "name": "Farm Plot A1",
+      "zone": "farm",
+      "rect": [
+        -14,
+        -23,
+        7,
+        7
+      ],
+      "ground": "soil_rich",
+      "parcel": "p_farm_a1",
+      "cost": 400
+    },
+    {
+      "id": "farm_b1",
+      "name": "Farm Plot B1",
+      "zone": "farm",
+      "rect": [
+        -14,
+        -30,
+        7,
+        7
+      ],
+      "ground": "soil_rich",
+      "parcel": "p_farm_b1",
+      "cost": 800
+    },
+    {
+      "id": "farm_a2",
+      "name": "Farm Plot A2",
+      "zone": "farm",
+      "rect": [
+        -7,
+        -23,
+        7,
+        7
+      ],
+      "ground": "soil_rich",
+      "parcel": "p_farm_a2",
+      "cost": 0
+    },
+    {
+      "id": "farm_b2",
+      "name": "Farm Plot B2",
+      "zone": "farm",
+      "rect": [
+        -7,
+        -30,
+        7,
+        7
+      ],
+      "ground": "soil_rich",
+      "parcel": "p_farm_b2",
+      "cost": 800
+    },
+    {
+      "id": "farm_a3",
+      "name": "Farm Plot A3",
+      "zone": "farm",
+      "rect": [
+        0,
+        -23,
+        7,
+        7
+      ],
+      "ground": "soil_rich",
+      "parcel": "p_farm_a3",
+      "cost": 400
+    },
+    {
+      "id": "farm_b3",
+      "name": "Farm Plot B3",
+      "zone": "farm",
+      "rect": [
+        0,
+        -30,
+        7,
+        7
+      ],
+      "ground": "soil_rich",
+      "parcel": "p_farm_b3",
+      "cost": 800
+    },
+    {
+      "id": "farm_a4",
+      "name": "Farm Plot A4",
+      "zone": "farm",
+      "rect": [
+        7,
+        -23,
+        7,
+        7
+      ],
+      "ground": "soil_rich",
+      "parcel": "p_farm_a4",
+      "cost": 400
+    },
+    {
+      "id": "farm_b4",
+      "name": "Farm Plot B4",
+      "zone": "farm",
+      "rect": [
+        7,
+        -30,
+        7,
+        7
+      ],
+      "ground": "soil_rich",
+      "parcel": "p_farm_b4",
+      "cost": 800
+    }
+  ]
+}

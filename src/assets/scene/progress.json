@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "parcels": ["p_farm_a2"],
+  "rooms": [],
+  "walls": [],
+  "areas": ["site_grounds", "farm_a2"]
+}
