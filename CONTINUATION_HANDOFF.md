@@ -2412,3 +2412,37 @@ the site would invalidate every floor on the other.
 520 ms → **~17 ms**; cold build unchanged at ~378 ms. Two tests cover it: an untouched floor keeps its
 mesh object while a painted one is replaced and its old mesh disposed, and the grounds are re-meshed when a
 room above them appears or goes.
+
+### Surfaces, phase 2: a material is a function of where you are standing (2026-09-12)
+
+`src/game/surfaces.ts`. A material is no longer a `switch` case with magic cell constants — it is a
+recipe (tones, lattice, joint, relief, scatter, patch) evaluated at a world point. Three things follow:
+there is no tile to copy and paste, so no seam and nothing reads as repetitive; coursing runs unbroken out
+of one room into the next instead of restarting at each rect corner; and two materials meeting at an edge
+can be asked cell by cell which owns it.
+
+- **Everything is metres, point-sampled at the cell centre — never cells.** That settles the question the
+  plan flagged: one material can serve a room meshed at 5 cm and the site grounds at 50 cm, because big
+  features survive both samplings and fine ones fall below the coarse one and vanish, which is the right
+  behaviour at sixty metres.
+- **Tone is drawn per FEATURE** — per board, per tile, per block — from the feature's integer address.
+  That is what keeps a whole board one colour and the mesher's merging alive. A test walks the inside of a
+  tile at 1 cm and asserts exactly one colour comes back.
+- Lattices: `grid`, `rows` (with stagger, so butt joints never align between courses — tested),
+  `corduroy` (ridges, crowned by `fromCentre`), `none`.
+
+**Measured with the real merger**, three rooms totalling 415 m², underside culled:
+
+| material | 0.1 m | 0.05 m | 0.025 m |
+|---|---|---|---|
+| quarry tile | 6,792 tris (16/m²) | 6,792 | 6,792 |
+| dining oak | 11,986 (29/m²) | 28,950 (70/m²) | 31,074 (75/m²) |
+
+**16–75 triangles per square metre, against ~246/m² for the old per-cell noise** — three to fifteen times
+cheaper *and* structured. The plank's jump between 0.1 and 0.05 is the design working: a 1.2 cm joint is
+below a 10 cm sampling and aliases away, and appears once the cells are fine enough to see it.
+
+The finding that matters for phase 4: **realistic relief depths are sub-cell at every pitch we can afford**
+(a 1.2 cm grout recess rounds to zero even at 2.5 cm cells). So the carpet carries joints as *colour* at
+5 cm, and geometric relief belongs to the crust near the camera, where a cell is small enough to express
+it. Cells are the cost that scales, not triangles: 802 cells/m² at 5 cm against 3,208 at 2.5 cm.
