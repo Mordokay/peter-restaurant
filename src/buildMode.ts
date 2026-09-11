@@ -15,8 +15,8 @@ import {
   type Area, type LevelLayout, type OpeningKind, type Rect, type Room,
 } from "./game/levelLayout";
 import {
-  addArea, addOpening, addRoom, itemAt, nextId, overlapsRoom, paintWall, rectFromDrag,
-  removeArea, removeOpeningAt, removeRoom, updateArea, updateRoom, wallNear,
+  addArea, addOpening, addRoom, edgeAt, itemAt, nextId, overlapsRoom, paintWall, rectFromDrag,
+  removeArea, removeOpeningAt, removeRoom, setEdgeOpen, updateArea, updateRoom, wallKey, wallNear,
 } from "./game/levelEdit";
 
 export interface BuildModeHost {
@@ -45,9 +45,9 @@ const TOOLS: { id: Tool; icon: string; label: string; key: string; hint: string 
   { id: "area", icon: "🌱", label: "Ground", key: "3", hint: "Drag a rectangle of outdoor ground — a farm plot, a path, a yard" },
   { id: "door", icon: "🚪", label: "Door", key: "4", hint: "Click a wall to cut a doorway there" },
   { id: "window", icon: "🪟", label: "Window", key: "5", hint: "Click a wall to cut a window there" },
-  { id: "paintWall", icon: "🧱", label: "Paint wall", key: "6", hint: "Click a wall to give it the selected wall type" },
+  { id: "paintWall", icon: "🧱", label: "Paint wall", key: "6", hint: "Click a wall to give it the selected wall type, or click a gap between rooms to build a wall there" },
   { id: "paintFloor", icon: "🪵", label: "Paint floor", key: "7", hint: "Click a room or ground to give it the selected floor type" },
-  { id: "erase", icon: "🗑", label: "Erase", key: "8", hint: "Click a room or ground to remove it, or a door or window to fill it in" },
+  { id: "erase", icon: "🗑", label: "Erase", key: "8", hint: "Click a door or window to fill it in, a wall to knock it through, or a selected room to remove it" },
 ];
 
 const clone = (layout: LevelLayout): LevelLayout => JSON.parse(JSON.stringify(layout)) as LevelLayout;
@@ -148,6 +148,22 @@ export function createBuildMode(host: BuildModeHost): BuildMode {
       return;
     }
     // Hovering a wall with a door or paint tool shows where it would land.
+    if (tool === "erase") {
+      const near = wallNear(layout, point.x, point.z, 0.9);
+      if (near) {
+        const opening = near.wall.openings?.find((candidate) => Math.abs(candidate.at - near.at) <= candidate.width / 2 + 0.3);
+        const horizontal = Math.abs(near.wall.from[1] - near.wall.to[1]) < 1e-6;
+        const span = opening ? opening.width : wallLength(near.wall);
+        const at = opening ? opening.at : wallLength(near.wall) / 2;
+        const cx = near.wall.from[0] + (horizontal ? at : 0);
+        const cz = near.wall.from[1] + (horizontal ? 0 : at);
+        showPreview(horizontal ? [cx - span / 2, cz - 0.3, span, 0.6] : [cx - 0.3, cz - span / 2, 0.6, span], false);
+        return;
+      }
+      const hit = itemAt(layout, point.x, point.z);
+      showPreview(hit && hit.item.id !== "site_grounds" ? hit.item.rect : null, false);
+      return;
+    }
     if (tool === "door" || tool === "window" || tool === "paintWall") {
       const near = wallNear(layout, point.x, point.z, 1);
       if (!near) { showPreview(null, true); return; }
@@ -200,14 +216,21 @@ export function createBuildMode(host: BuildModeHost): BuildMode {
         const kind: OpeningKind = tool === "door" ? "door" : "window";
         const width = kind === "door" ? 1.2 : 1;
         if (wallLength(near.wall) < width + 0.2) { status = "That wall is too short for an opening"; render(); return; }
-        commit(addOpening(layout, near.wall.id, near.at, { width, kind }), `${kind === "door" ? "Doorway" : "Window"} cut`);
+        commit(addOpening(layout, near.wall.id, near.at, { width, kind, id: nextId(layout, kind) }), `${kind === "door" ? "Doorway" : "Window"} cut`);
         break;
       }
       case "paintWall": {
-        const near = wallNear(layout, point.x, point.z, 1);
-        if (!near) { status = "Click closer to a wall"; render(); return; }
         const type = layout.wallTypes.find((candidate) => candidate.id === wallType);
-        commit(paintWall(layout, near.wall.id, wallType), `Wall painted ${type?.name ?? wallType}`);
+        const near = wallNear(layout, point.x, point.z, 0.9);
+        if (near) { commit(paintWall(layout, near.wall.id, wallType), `Wall painted ${type?.name ?? wallType}`); return; }
+        // No wall here, but there is a room edge: the player knocked it through earlier, so build it back.
+        const edge = edgeAt(layout, point.x, point.z, 0.9);
+        if (edge && (layout.openEdges ?? []).includes(edge.key)) {
+          commit(setEdgeOpen(layout, edge.key, false, wallType), `Wall built in ${type?.name ?? wallType}`);
+          return;
+        }
+        status = "Click closer to a wall";
+        render();
         break;
       }
       case "paintFloor": {
@@ -219,14 +242,22 @@ export function createBuildMode(host: BuildModeHost): BuildMode {
         break;
       }
       case "erase": {
-        // A door under the pointer goes first; otherwise the room or ground itself.
-        const near = wallNear(layout, point.x, point.z, 0.6);
-        const opening = near?.wall.openings?.find((candidate) => Math.abs(candidate.at - near.at) <= candidate.width / 2);
-        if (near && opening) { commit(removeOpeningAt(layout, near.wall.id, opening.at), "Opening filled in"); return; }
+        // Small things first, or a stray click would take the whole room with it: an opening, then the
+        // wall it is in, and only then the room — and a room needs a second, deliberate click.
+        const near = wallNear(layout, point.x, point.z, 0.9);
+        const opening = near?.wall.openings?.find((candidate) => Math.abs(candidate.at - near.at) <= candidate.width / 2 + 0.3);
+        if (near && opening) { commit(removeOpeningAt(layout, near.wall.id, opening.at), `${opening.kind === "window" ? "Window" : "Doorway"} filled in`); return; }
+        if (near) { commit(setEdgeOpen(layout, wallKey(near.wall.from, near.wall.to), true), "Wall knocked through — paint it back to rebuild"); return; }
         const hit = itemAt(layout, point.x, point.z);
         if (!hit) { status = "Nothing to erase there"; render(); return; }
         if (hit.item.id === "site_grounds") { status = "The grounds stay"; render(); return; }
-        if (selected?.id === hit.item.id) selected = null;
+        if (selected?.id !== hit.item.id) {
+          selected = { kind: hit.kind, id: hit.item.id };
+          status = `${hit.item.name} selected — click again to remove it`;
+          render();
+          return;
+        }
+        selected = null;
         commit(hit.kind === "room" ? removeRoom(layout, hit.item.id) : removeArea(layout, hit.item.id), `Removed ${hit.item.name}`);
         break;
       }

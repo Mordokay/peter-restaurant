@@ -203,15 +203,18 @@ function syncBuildButton(): void {
 const speed = 4.5;
 function walk(dt: number): void {
   if (build.active) return; // drawing, not walking
-  const forward = new Vector3(Math.sin(camera.alpha), 0, Math.cos(camera.alpha)).normalize();
-  const right = new Vector3(forward.z, 0, -forward.x);
-  const move = new Vector3(0, 0, 0);
-  if (keys.has("w")) move.addInPlace(forward);
-  if (keys.has("s")) move.subtractInPlace(forward);
-  if (keys.has("a")) move.subtractInPlace(right);
-  if (keys.has("d")) move.addInPlace(right);
-  if (move.lengthSquared() < 1e-6) return;
-  move.normalize().scaleInPlace(speed * dt * (keys.has("shift") ? 2.4 : 1));
+  // Movement follows the view, exactly as in the game scene: W is always up the screen.
+  let horizontal = 0, vertical = 0;
+  if (keys.has("w") || keys.has("arrowup")) vertical += 1;
+  if (keys.has("s") || keys.has("arrowdown")) vertical -= 1;
+  if (keys.has("a") || keys.has("arrowleft")) horizontal -= 1;
+  if (keys.has("d") || keys.has("arrowright")) horizontal += 1;
+  if (horizontal === 0 && vertical === 0) return;
+  const forward = camera.getForwardRay().direction;
+  forward.y = 0;
+  forward.normalize();
+  const right = Vector3.Cross(Vector3.Up(), forward).normalize();
+  const move = forward.scale(vertical).add(right.scale(horizontal)).normalize().scaleInPlace(speed * dt * (keys.has("shift") ? 2.4 : 1));
   player.position.addInPlace(move);
   player.rotation.y = Math.atan2(move.x, move.z);
   // Step up onto a floor slab, or back down to the ground.

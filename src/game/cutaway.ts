@@ -24,6 +24,9 @@ export interface CutawayOptions {
   /** How far in front of the player to look for those rooms, metres. The camera can sit eighty metres
    *  back, so probing all the way to the eye would open half the site. Default 14. */
   probeLength?: number;
+  /** Walls no taller than this stay up: a service counter or a balcony never blocks the view, and
+   *  dropping it would hide the very thing the open kitchen is for. Metres, default 1.4. */
+  keepBelow?: number;
 }
 
 export interface Cutaway {
@@ -55,6 +58,7 @@ export function createCutaway(scene: Scene, layout: LevelLayout, level: BuiltLev
   const speed = options.speed ?? 8;
   const openInTheWay = options.openRoomsInTheWay ?? true;
   const probeLength = options.probeLength ?? 14;
+  const keepBelow = options.keepBelow ?? 1.4;
   /** Current opacity per wall id, so a wall eases down and back rather than blinking. */
   const visibility = new Map<string, number>();
   let currentRoom: string | null = null;
@@ -84,13 +88,15 @@ export function createCutaway(scene: Scene, layout: LevelLayout, level: BuiltLev
       for (const [id, built] of level.walls) {
         const { wall, mesh, normal } = built;
         let facing = false;
-        // A wall can enclose two rooms; its outward normal flips depending on which side we stand.
-        for (const [roomId, sign] of [[wall.room, 1], [wall.back, -1]] as const) {
-          if (!roomId || !open.has(roomId)) continue;
-          const mid: Point2 = [(wall.from[0] + wall.to[0]) / 2, (wall.from[1] + wall.to[1]) / 2];
-          const outward: Point2 = [normal[0] * sign, normal[1] * sign];
-          // Outward face turned toward the eye means the wall stands between the camera and that room.
-          if (outward[0] * (eye.x - mid[0]) + outward[1] * (eye.z - mid[1]) > 0) { facing = true; break; }
+        if (built.height > keepBelow) {
+          // A wall can enclose two rooms; its outward normal flips depending on which side we stand.
+          for (const [roomId, sign] of [[wall.room, 1], [wall.back, -1]] as const) {
+            if (!roomId || !open.has(roomId)) continue;
+            const mid: Point2 = [(wall.from[0] + wall.to[0]) / 2, (wall.from[1] + wall.to[1]) / 2];
+            const outward: Point2 = [normal[0] * sign, normal[1] * sign];
+            // Outward face turned toward the eye means the wall stands between the camera and that room.
+            if (outward[0] * (eye.x - mid[0]) + outward[1] * (eye.z - mid[1]) > 0) { facing = true; break; }
+          }
         }
         const wanted = facing ? downVisibility : 1;
         const now = visibility.get(id) ?? 1;

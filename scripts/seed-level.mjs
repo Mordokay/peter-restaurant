@@ -10,6 +10,7 @@
 
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { deriveWalls, wallKey } from "../src/game/levelEdit.ts";
 
 // +x east, +z south — the same convention as the game scene, where dining is +z and the farm is -z.
 // So on docs/layout-reference.png, "up" (north, the farm) is -z.
@@ -111,9 +112,9 @@ const openings = [
   ["outside", "dining", "south", 1.6, 9, "window"],
   ["outside", "dining", "east", 1.8, 0, "window"],
   ["outside", "dining", "west", 1.8, 0, "window"],
-  ["between", "dining", "service_pass", 4.5, -6, "arch"],
-  ["between", "dining", "service_pass", 4.5, 6, "arch"],
-  ["between", "service_pass", "kitchen", 6, 0, "arch"],
+  // The pass counter has gaps at each end for waiters; the middle stays a counter to put dishes on.
+  ["between", "dining", "service_pass", 1.6, -12, "arch"],
+  ["between", "dining", "service_pass", 1.6, 12, "arch"],
   ["between", "service_pass", "office", 1.1, 0, "door"],
   ["between", "service_pass", "trash_recycling", 1.1, 0, "door"],
   ["between", "kitchen", "dishwashing", 1.4, 0, "door"],
@@ -144,63 +145,6 @@ const openings = [
 
 const round = (n) => Math.round(n * 1000) / 1000;
 const key = (a, b) => `${round(a)}|${round(b)}`;
-
-/** Room edges as segments on shared lines, so neighbours can be cut against each other. */
-function roomEdges(room) {
-  const [x, z, w, d] = room.rect;
-  return [
-    { axis: "h", line: z, start: x, end: x + w, room: room.id, side: "north" },
-    { axis: "h", line: z + d, start: x, end: x + w, room: room.id, side: "south" },
-    { axis: "v", line: x, start: z, end: z + d, room: room.id, side: "west" },
-    { axis: "v", line: x + w, start: z, end: z + d, room: room.id, side: "east" },
-  ];
-}
-
-function buildWalls(roomRecords, config) {
-  const groups = new Map();
-  for (const room of roomRecords) {
-    for (const edge of roomEdges(room)) {
-      const id = `${edge.axis}${round(edge.line)}`;
-      if (!groups.has(id)) groups.set(id, []);
-      groups.get(id).push(edge);
-    }
-  }
-  const segments = new Map();
-  for (const edges of groups.values()) {
-    // Cut every edge at each neighbour's boundary, so overlaps become shared pieces.
-    const cuts = [...new Set(edges.flatMap((edge) => [round(edge.start), round(edge.end)]))].sort((a, b) => a - b);
-    for (const edge of edges) {
-      const inside = cuts.filter((c) => c >= round(edge.start) - 1e-6 && c <= round(edge.end) + 1e-6);
-      for (let i = 0; i < inside.length - 1; i++) {
-        const start = inside[i], end = inside[i + 1];
-        if (end - start < 1e-6) continue;
-        const id = `${edge.axis}${round(edge.line)}:${key(start, end)}`;
-        if (!segments.has(id)) segments.set(id, { axis: edge.axis, line: edge.line, start, end, rooms: [], sides: [] });
-        const entry = segments.get(id);
-        if (!entry.rooms.includes(edge.room)) { entry.rooms.push(edge.room); entry.sides.push(edge.side); }
-      }
-    }
-  }
-  const walls = [];
-  let counter = 0;
-  for (const entry of [...segments.values()].sort((a, b) => a.axis.localeCompare(b.axis) || a.line - b.line || a.start - b.start)) {
-    const [first, second] = entry.rooms;
-    const cfg = config.get(first);
-    const shared = Boolean(second);
-    const wall = {
-      id: `w${String(++counter).padStart(3, "0")}`,
-      from: entry.axis === "h" ? [round(entry.start), round(entry.line)] : [round(entry.line), round(entry.start)],
-      to: entry.axis === "h" ? [round(entry.end), round(entry.line)] : [round(entry.line), round(entry.end)],
-      type: shared ? cfg.interior : cfg.exterior,
-      room: first,
-      ...(second ? { back: second } : {}),
-      cost: Math.round((shared ? 40 : 70) * (entry.end - entry.start)),
-      requires: [cfg.parcel],
-    };
-    walls.push(wall);
-  }
-  return walls;
-}
 
 /** Place an opening on the wall that matches a room pair, or an outside face of one room. */
 function applyOpenings(walls, roomRecords, specs) {
@@ -262,21 +206,29 @@ function placeOn(candidates, width, offset, kind, label, problems) {
   (hit.wall.openings ??= []).push({ at: round(at), width, kind });
 }
 
-const roomRecords = rooms.map(([id, name, zone, rect, floor, parcel, , , cost]) => ({ id, name, zone, rect, floor, parcel, cost }));
 const config = new Map(rooms.map(([id, , , , , parcel, exterior, interior]) => [id, { exterior, interior, parcel }]));
-const walls = buildWalls(roomRecords, config);
+const roomRecords = rooms.map(([id, name, zone, rect, floor, parcel, exteriorWall, interiorWall, cost]) => ({ id, name, zone, rect, floor, exteriorWall, interiorWall, parcel, cost }));
+
+// Open-view kitchen: no wall between the kitchen and the service pass, so diners see the brigade work.
+// The pass keeps its counter along the dining side — that is the balcony dishes are handed across.
+const openEdges = [wallKey([-11, 3.5], [11, 3.5])];
+const isPair = (wall, a, b) => (wall.room === a && wall.back === b) || (wall.room === b && wall.back === a);
+const walls = deriveWalls(roomRecords, [], {
+  openEdges,
+  costFor: (room, shared, length) => Math.round((shared ? 40 : 70) * length),
+}).map((wall) => (isPair(wall, "dining", "service_pass")
+  ? { ...wall, type: "plank_barn", height: 1.1 }   // a counter you can see and hand plates over
+  : wall));
 const problems = applyOpenings(walls, roomRecords, openings);
 
 const layout = {
   version: 1,
   grid: 0.25,
+  openEdges,
   wallTypes,
   floorTypes,
   parcels: parcels.map(([id, name, rect, cost, requires]) => ({ id, name, rect, cost, ...(requires.length ? { requires } : {}) })),
-  rooms: roomRecords.map((room) => {
-    const cfg = config.get(room.id);
-    return { id: room.id, name: room.name, zone: room.zone, rect: room.rect, floor: room.floor, exteriorWall: cfg.exterior, interiorWall: cfg.interior, parcel: room.parcel, cost: room.cost };
-  }),
+  rooms: roomRecords,
   walls,
   areas: areas.map(([id, name, zone, rect, ground, parcel, cost]) => ({ id, name, zone, rect, ground, ...(parcel ? { parcel } : {}), cost })),
 };

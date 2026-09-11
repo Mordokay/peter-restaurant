@@ -2240,3 +2240,11 @@ The layout reference is the **end state** — what a dedicated player owns after
 - `scripts/seed-level.mjs` now emits `exteriorWall`/`interiorWall` per room so a re-derive in the editor picks the same types. Verified: re-deriving the authored compound reproduces all 57 walls and all 33 openings.
 - Verified in the browser: drawing a 6 × 6 room added one room, four walls and a floor; cutting a doorway added an opening; two undos restored the plan exactly; saving wrote the file; a deliberately broken plan was refused with a 400 and a readable message.
 - Next: dress rooms one at a time with decorate mode and the catalog browser, then list what the catalog is missing.
+
+### Open-view kitchen and editor fixes (2026-09-11)
+
+- **Open-view kitchen.** `LevelLayout.openEdges` lists room edges deliberately left without a wall, keyed by geometry (`wallKey`) so they survive a re-derive. The kitchen/service-pass edge is one, so diners see the brigade work; the dining edge of the pass is a 1.1 m `plank_barn` counter (the balcony dishes are handed across) with a 1.6 m walk-through at each end. In the editor, Erase on a wall opens its edge and Paint wall on an open edge builds it back.
+- **Cutaway keeps low walls.** Walls at or below `keepBelow` (1.4 m) never drop: a counter does not block the view, and dropping it hid the very thing the open kitchen is for.
+- **WASD** in `world.html` now uses the game scene's rule — flatten `camera.getForwardRay()`, `right = Cross(Up, forward)` — so W is always up the screen. Arrow keys work too.
+- **Erasing hit the wrong thing** because `projectOntoWall` measured the perpendicular distance to a wall's *infinite line*: standing in the middle of the kitchen was "0.0 m from" the office wall twenty metres away, so a click erased that instead of the floor. It now measures to the segment. Erase also orders its targets — opening, then wall, then room — and a room needs a second, deliberate click.
+- **Doors and windows are becoming objects.** `Opening` now carries a stable `id` and an optional `model` (a catalog leaf and frame). Build mode assigns ids. Still to do: render the leaf, and let decorate mode select an opening and swap its model.

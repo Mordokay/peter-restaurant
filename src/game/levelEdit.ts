@@ -35,12 +35,15 @@ export interface DeriveOptions {
   typeFor?: (room: Room, shared: boolean) => string;
   /** Price a wall by its length. */
   costFor?: (room: Room, shared: boolean, length: number) => number | undefined;
+  /** Edges to leave open, by wallKey — an open-plan kitchen, a room that flows into a corridor. */
+  openEdges?: Iterable<string>;
 }
 
 /** Rebuild every wall from the rooms, carrying over the type and openings of walls that still exist. */
 export function deriveWalls(rooms: readonly Room[], previous: readonly Wall[] = [], options: DeriveOptions = {}): Wall[] {
   const typeFor = options.typeFor ?? ((room, shared) => (shared ? room.interiorWall : room.exteriorWall) ?? room.exteriorWall ?? room.interiorWall ?? "");
   const byKey = new Map(previous.map((wall) => [wallKey(wall.from, wall.to), wall]));
+  const open = new Set(options.openEdges ?? []);
 
   const groups = new Map<string, Edge[]>();
   for (const room of rooms) {
@@ -80,7 +83,9 @@ export function deriveWalls(rooms: readonly Room[], previous: readonly Wall[] = 
     const shared = Boolean(second);
     const from: Point2 = piece.axis === "h" ? [round3(piece.start), round3(piece.line)] : [round3(piece.line), round3(piece.start)];
     const to: Point2 = piece.axis === "h" ? [round3(piece.end), round3(piece.line)] : [round3(piece.line), round3(piece.end)];
-    const kept = byKey.get(wallKey(from, to));
+    const key = wallKey(from, to);
+    if (open.has(key)) continue; // deliberately open: no wall here
+    const kept = byKey.get(key);
     const length = Math.hypot(to[0] - from[0], to[1] - from[1]);
     const wall: Wall = {
       id: kept?.id ?? `w${String(++counter).padStart(3, "0")}_${round3(piece.line)}`.replace(/[.-]/g, "_"),
@@ -112,8 +117,43 @@ export function deriveWalls(rooms: readonly Room[], previous: readonly Wall[] = 
 }
 
 /** A layout with its walls re-derived from the rooms. */
-export function withDerivedWalls(layout: LevelLayout, options?: DeriveOptions): LevelLayout {
-  return { ...layout, walls: deriveWalls(layout.rooms, layout.walls, options) };
+export function withDerivedWalls(layout: LevelLayout, options: DeriveOptions = {}): LevelLayout {
+  return { ...layout, walls: deriveWalls(layout.rooms, layout.walls, { openEdges: layout.openEdges, ...options }) };
+}
+
+/** Leave a room edge open (knock the wall through) or close it again. */
+export function setEdgeOpen(layout: LevelLayout, key: string, open: boolean, type?: string): LevelLayout {
+  const edges = new Set(layout.openEdges ?? []);
+  if (open) edges.add(key); else edges.delete(key);
+  const next = withDerivedWalls({ ...layout, openEdges: [...edges] });
+  if (open || !type) return next;
+  // Re-closing: the restored wall takes the type the editor has selected.
+  return { ...next, walls: next.walls.map((wall) => (wallKey(wall.from, wall.to) === key ? { ...wall, type } : wall)) };
+}
+
+/** Every room edge, whether or not a wall stands on it — so the editor can offer to close an open one. */
+export function edgeAt(layout: LevelLayout, x: number, z: number, reach = 0.9): { key: string; from: Point2; to: Point2 } | null {
+  interface Hit { key: string; from: Point2; to: Point2; distance: number }
+  let best: Hit | null = null;
+  const consider = (from: Point2, to: Point2): void => {
+    const dx = to[0] - from[0], dz = to[1] - from[1];
+    const length = Math.hypot(dx, dz) || 1;
+    const ux = dx / length, uz = dz / length;
+    const px = x - from[0], pz = z - from[1];
+    const along = Math.min(length, Math.max(0, px * ux + pz * uz));
+    const distance = Math.hypot(x - (from[0] + ux * along), z - (from[1] + uz * along));
+    if (distance > reach) return;
+    if (!best || distance < (best as Hit).distance) best = { key: wallKey(from, to), from, to, distance };
+  };
+  for (const room of layout.rooms) {
+    const [rx, rz, w, d] = room.rect;
+    consider([rx, rz], [rx + w, rz]);
+    consider([rx, rz + d], [rx + w, rz + d]);
+    consider([rx, rz], [rx, rz + d]);
+    consider([rx + w, rz], [rx + w, rz + d]);
+  }
+  const hit = best as Hit | null;
+  return hit ? { key: hit.key, from: hit.from, to: hit.to } : null;
 }
 
 /** Next free id with a prefix, e.g. room_3. */
@@ -195,15 +235,17 @@ export function removeOpeningAt(layout: LevelLayout, id: string, at: number): Le
   };
 }
 
-/** Distance along a wall of the point on it nearest to (x, z), and how far off the wall that point is. */
+/** Distance along a wall of the point on it nearest to (x, z), and how far that point is from the wall.
+ *  The distance is to the SEGMENT, not to its infinite line: a point far down the corridor is not
+ *  "on" a short wall just because it happens to be collinear with it. */
 export function projectOntoWall(wall: Wall, x: number, z: number): { at: number; distance: number } {
   const dx = wall.to[0] - wall.from[0], dz = wall.to[1] - wall.from[1];
   const length = Math.hypot(dx, dz) || 1;
   const ux = dx / length, uz = dz / length;
   const px = x - wall.from[0], pz = z - wall.from[1];
   const at = Math.min(length, Math.max(0, px * ux + pz * uz));
-  const distance = Math.abs(px * -uz + pz * ux);
-  return { at, distance };
+  const nearestX = wall.from[0] + ux * at, nearestZ = wall.from[1] + uz * at;
+  return { at, distance: Math.hypot(x - nearestX, z - nearestZ) };
 }
 
 /** The wall nearest a point, within `reach` metres of it. */

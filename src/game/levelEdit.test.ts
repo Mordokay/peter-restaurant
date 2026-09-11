@@ -99,4 +99,11 @@ test("pointer helpers: snapping, dragging a rect, and finding what is under the 
   assert.ok(Math.abs(projected.at - 5) < 1e-6 && Math.abs(projected.distance - 0.3) < 1e-6);
   assert.equal(wallNear(plan, 5, 6.3, 0.8)?.wall.id, wall.id);
   assert.equal(wallNear(plan, 5, 3, 0.8), null, "the middle of the room is near no wall");
+
+  // Distance is measured to the wall itself, not to the endless line it sits on: a point twenty metres
+  // past the end of a wall is not "on" it, which is what made erasing hit the wrong thing.
+  const past = projectOntoWall(wall, 30, 6);
+  assert.equal(past.at, 10, "clamped to the end of the wall");
+  assert.equal(past.distance, 20, "and twenty metres away from it");
+  assert.equal(wallNear(plan, 30, 6, 0.9), null, "so it is not near any wall");
 });

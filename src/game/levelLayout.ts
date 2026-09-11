@@ -92,8 +92,14 @@ export interface Area extends Buildable {
   parcel?: string;
 }
 
-/** A gap in a wall, measured along it from the `from` end. */
+/** A gap in a wall, measured along it from the `from` end.
+ *  A doorway is more than a hole: it lets light and people through, and decorate mode can swap the
+ *  leaf and frame standing in it, so each one carries a stable id and an optional catalog model. */
 export interface Opening {
+  /** Stable id so decorate mode can point at this doorway. */
+  id?: string;
+  /** Catalog model of the leaf and frame standing in the hole. */
+  model?: string;
   /** Centre of the gap, metres from `from`. */
   at: number;
   width: number;
@@ -124,6 +130,9 @@ export interface LevelLayout {
   version: 1;
   /** Snap used by the editor, metres. */
   grid: number;
+  /** Room edges deliberately left without a wall — an open-plan kitchen looking onto the dining room.
+   *  Keyed by geometry (see wallKey in levelEdit.ts) so they survive a re-derive. */
+  openEdges?: readonly string[];
   wallTypes: readonly WallType[];
   floorTypes: readonly FloorType[];
   parcels: readonly Parcel[];
