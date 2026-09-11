@@ -168,7 +168,10 @@ export function createLevelBuilder(scene: Scene, layout: LevelLayout, options: {
   const material = options.material ?? createVoxelMaterial(`${name} material`, scene);
   const floors = new Map<string, Mesh>();
   const walls = new Map<string, BuiltWall>();
-  let cellCount = 0;
+  /** Cells per piece, so the total survives a rebuild that only touches some of them. */
+  const cellCounts = new Map<string, number>();
+  /** What each built piece was built FROM. A piece whose signature still matches is left alone. */
+  const signatures = new Map<string, string>();
   let buildMs = 0;
 
   const tagSurface = (mesh: Mesh, extra: Record<string, unknown>): void => {
@@ -209,7 +212,7 @@ export function createLevelBuilder(scene: Scene, layout: LevelLayout, options: {
     mesh.isPickable = true;
     tagSurface(mesh, { levelFloor: item.id });
     floors.set(item.id, mesh);
-    cellCount += kept.length;
+    cellCounts.set(`floor:${item.id}`, kept.length);
   };
 
   const buildWall = (wall: Wall): void => {
@@ -236,39 +239,83 @@ export function createLevelBuilder(scene: Scene, layout: LevelLayout, options: {
     options.shadows?.addShadowCaster(mesh);
     tagSurface(mesh, { levelWall: wall.id, wall: true });
     walls.set(wall.id, { wall, mesh, normal, height });
-    cellCount += cells.length;
+    cellCounts.set(`wall:${wall.id}`, cells.length);
   };
 
+  const dropFloor = (id: string): void => {
+    floors.get(id)?.dispose(false, false);
+    floors.delete(id);
+    cellCounts.delete(`floor:${id}`);
+    signatures.delete(`floor:${id}`);
+  };
+  const dropWall = (id: string): void => {
+    const built = walls.get(id);
+    if (built) { options.shadows?.removeShadowCaster(built.mesh); built.mesh.dispose(false, false); }
+    walls.delete(id);
+    cellCounts.delete(`wall:${id}`);
+    signatures.delete(`wall:${id}`);
+  };
   const clear = (): void => {
-    for (const mesh of floors.values()) mesh.dispose(false, false);
-    for (const built of walls.values()) { options.shadows?.removeShadowCaster(built.mesh); built.mesh.dispose(false, false); }
-    floors.clear();
-    walls.clear();
-    cellCount = 0;
+    for (const id of [...floors.keys()]) dropFloor(id);
+    for (const id of [...walls.keys()]) dropWall(id);
+  };
+
+  /** Everything a piece's geometry depends on. Equal signature, identical mesh — so leave it standing. */
+  const rectsOverlap = (a: Rect, b: Rect): boolean =>
+    a[0] < b[0] + b[2] && b[0] < a[0] + a[2] && a[1] < b[1] + b[3] && b[1] < a[1] + a[3];
+  const floorSignature = (item: Room | Area, floorTypeId: string, topY: number, covers: readonly Rect[]): string => {
+    const type = floorTypeOf(layout, floorTypeId);
+    return JSON.stringify([item.rect, type.color, type.accentColor, type.pattern, type.patternScale, topY, covers]);
+  };
+  const wallSignature = (wall: Wall): string => {
+    const type = wallTypeOf(layout, wall.type);
+    const room = wall.room ? layout.rooms.find((candidate) => candidate.id === wall.room) : undefined;
+    return JSON.stringify([wall.from, wall.to, type.color, type.topColor, type.baseColor, type.pattern, type.thickness,
+      wall.height ?? room?.wallHeight ?? type.height, wall.openings ?? []]);
   };
 
   const setProgress = (progress: LevelProgress): void => {
     const started = performance.now();
-    clear();
     const owned = new Set([...progress.parcels, ...progress.rooms, ...progress.walls, ...progress.areas]);
     // Floors stack rather than tile: the grounds lie under the yards and the yards under the rooms.
-    // Each slab is told which owned slabs sit above it so it can skip the cells they hide.
+    // Each slab is told which owned slabs sit above it so it can skip the cells they hide — only the
+    // ones that actually overlap it, or painting a far room would invalidate every floor on the site.
     const slabs = [
       ...layout.areas.filter((area) => owned.has(area.id)).map((area) => ({ rect: area.rect, topY: area.id === "site_grounds" ? GROUND_Y : OUTDOOR_FLOOR_Y })),
       ...layout.rooms.filter((room) => owned.has(room.id)).map((room) => ({ rect: room.rect, topY: ROOM_FLOOR_Y })),
     ];
-    const above = (topY: number): Rect[] => slabs.filter((slab) => slab.topY > topY + 1e-6).map((slab) => slab.rect);
-    for (const area of layout.areas) {
-      if (!owned.has(area.id)) continue;
-      const topY = area.id === "site_grounds" ? GROUND_Y : OUTDOOR_FLOOR_Y;
-      buildFloor(area, area.ground, topY, above(topY));
-    }
-    for (const room of layout.rooms) if (owned.has(room.id)) buildFloor(room, room.floor, ROOM_FLOOR_Y, above(ROOM_FLOOR_Y));
+    const above = (topY: number, rect: Rect): Rect[] =>
+      slabs.filter((slab) => slab.topY > topY + 1e-6 && rectsOverlap(slab.rect, rect)).map((slab) => slab.rect);
+
+    // What the level should be made of, and what each piece would be built from.
+    type WantedFloor = { item: Room | Area; floorType: string; topY: number; covers: Rect[]; signature: string };
+    const wantedFloors = new Map<string, WantedFloor>();
+    const wantFloor = (item: Room | Area, floorType: string, topY: number): void => {
+      const covers = above(topY, item.rect);
+      wantedFloors.set(item.id, { item, floorType, topY, covers, signature: floorSignature(item, floorType, topY, covers) });
+    };
+    for (const area of layout.areas) if (owned.has(area.id)) wantFloor(area, area.ground, area.id === "site_grounds" ? GROUND_Y : OUTDOOR_FLOOR_Y);
+    for (const room of layout.rooms) if (owned.has(room.id)) wantFloor(room, room.floor, ROOM_FLOOR_Y);
+    const wantedWalls = new Map<string, { wall: Wall; signature: string }>();
     for (const wall of layout.walls) {
       if (!owned.has(wall.id)) continue;
       // A wall needs at least one of its rooms to exist, or it fences off nothing.
       if (wall.room && !owned.has(wall.room) && !(wall.back && owned.has(wall.back))) continue;
-      buildWall(wall);
+      wantedWalls.set(wall.id, { wall, signature: wallSignature(wall) });
+    }
+
+    // Take down only what left or changed. Painting one floor used to re-mesh all 87 pieces.
+    for (const id of [...floors.keys()]) if (signatures.get(`floor:${id}`) !== wantedFloors.get(id)?.signature) dropFloor(id);
+    for (const id of [...walls.keys()]) if (signatures.get(`wall:${id}`) !== wantedWalls.get(id)?.signature) dropWall(id);
+    for (const [id, want] of wantedFloors) {
+      if (floors.has(id)) continue;
+      buildFloor(want.item, want.floorType, want.topY, want.covers);
+      signatures.set(`floor:${id}`, want.signature);
+    }
+    for (const [id, want] of wantedWalls) {
+      if (walls.has(id)) continue;
+      buildWall(want.wall);
+      signatures.set(`wall:${id}`, want.signature);
     }
     buildMs = performance.now() - started;
   };
@@ -283,7 +330,9 @@ export function createLevelBuilder(scene: Scene, layout: LevelLayout, options: {
       let triangles = 0;
       for (const mesh of floors.values()) triangles += mesh.getTotalIndices() / 3;
       for (const built of walls.values()) triangles += built.mesh.getTotalIndices() / 3;
-      return { floors: floors.size, walls: walls.size, cells: cellCount, triangles, buildMs };
+      let cells = 0;
+      for (const count of cellCounts.values()) cells += count;
+      return { floors: floors.size, walls: walls.size, cells, triangles, buildMs };
     },
     dispose() { clear(); root.dispose(false, false); },
   };

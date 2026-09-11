@@ -2392,3 +2392,23 @@ compound at the default camera, no props placed.
 triangles 303,936 → 173,626 · build 482 → 377 ms · 60 fps throughout. No visual change: the compound
 renders identically, and the lab's freezer readout still measures (109,255,188) against its authored
 `#5ef5a0` with the glow layer enabling itself on the tagged meshes.
+
+### Surfaces, phase 1: the level rebuilds only what changed (2026-09-12)
+
+`setProgress` tore the whole level down and rebuilt it — all 87 meshes — on every build-mode paint, every
+progress toggle and every `level.json` hot reload. At ~520 ms that was already a stutter; at the finer
+surfaces the plan calls for it would have been seconds.
+
+It now diffs by **content signature**. Each floor's signature is its rect, its resolved floor type, its
+top height and the rects of the owned slabs that cover it; each wall's is its endpoints, its resolved wall
+type, its height and its openings. Pieces whose signature still matches are left standing; only what
+changed or left is disposed, and only what is missing is built. `Object.assign(layout, next)` in build
+mode replaces the objects wholesale, so identity is useless and the comparison has to be on content.
+
+The covering rects are filtered to those that actually overlap the floor, or painting a room on one side of
+the site would invalidate every floor on the other.
+
+**Measured:** re-applying identical progress 520 ms → **0.3 ms** (nothing re-meshed); painting one room
+520 ms → **~17 ms**; cold build unchanged at ~378 ms. Two tests cover it: an untouched floor keeps its
+mesh object while a painted one is replaced and its old mesh disposed, and the grounds are re-meshed when a
+room above them appears or goes.

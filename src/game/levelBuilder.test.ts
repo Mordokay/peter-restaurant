@@ -1,8 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { floorCells, wallCells } from "./levelBuilder.ts";
+import { NullEngine, Scene } from "@babylonjs/core";
+import { createLevelBuilder, floorCells, wallCells } from "./levelBuilder.ts";
 import { segmentCrossesRect } from "./cutaway.ts";
-import type { Rect } from "./levelLayout.ts";
+import type { LevelLayout, LevelProgress, Rect } from "./levelLayout.ts";
 
 const colors = { color: "#c0c0c0", topColor: "#808080", baseColor: "#606060" };
 
@@ -58,4 +59,68 @@ test("the cutaway's crossing test finds rooms the view passes through", () => {
   assert.equal(segmentCrossesRect(rect, -5, -5, -1, -1), false, "entirely outside");
   assert.equal(segmentCrossesRect(rect, -5, 15, 15, 15), false, "passing alongside but never entering");
   assert.equal(segmentCrossesRect(rect, -5, -5, 15, 15), true, "diagonally across the corner");
+});
+
+/** A tiny site: grass under two rooms, one wall. Enough to exercise the rebuild diff. */
+const plan = (): LevelLayout => JSON.parse(JSON.stringify({
+  version: 1, grid: 0.25,
+  wallTypes: [{ id: "stone", name: "Stone", color: "#8f8d87", pattern: "stone" }, { id: "plaster", name: "Plaster", color: "#e8ddc8", pattern: "plaster" }],
+  floorTypes: [{ id: "grass", name: "Grass", color: "#7ea563", pattern: "grass" }, { id: "tile", name: "Tile", color: "#ded5c0", pattern: "tile" }, { id: "plank", name: "Plank", color: "#a8764a", pattern: "plank" }],
+  parcels: [], areas: [{ id: "site_grounds", name: "Grounds", rect: [0, 0, 12, 12], ground: "grass" }],
+  rooms: [
+    { id: "kitchen", name: "Kitchen", zone: "kitchen", rect: [1, 1, 4, 4], floor: "tile", parcel: "p" },
+    { id: "dining", name: "Dining", zone: "dining", rect: [6, 1, 4, 4], floor: "plank", parcel: "p" },
+  ],
+  walls: [{ id: "w1", from: [1, 1], to: [5, 1], type: "stone", room: "kitchen" }],
+}));
+const everything = (layout: LevelLayout): LevelProgress =>
+  ({ parcels: [], rooms: layout.rooms.map((r) => r.id), walls: layout.walls.map((w) => w.id), areas: layout.areas.map((a) => a.id) });
+
+test("rebuilding only re-meshes the pieces that actually changed", () => {
+  const engine = new NullEngine();
+  const scene = new Scene(engine);
+  const layout = plan();
+  const level = createLevelBuilder(scene, layout, { name: "t" });
+  try {
+    level.setProgress(everything(layout));
+    assert.equal(level.stats().floors, 3);
+    assert.equal(level.stats().walls, 1);
+    const kitchen = level.floors.get("kitchen")!;
+    const dining = level.floors.get("dining")!;
+    const wall = level.walls.get("w1")!.mesh;
+
+    // Nothing changed: every mesh is the same object, not a rebuilt twin.
+    level.setProgress(everything(layout));
+    assert.equal(level.floors.get("kitchen"), kitchen, "an untouched floor is left standing");
+    assert.equal(level.floors.get("dining"), dining);
+    assert.equal(level.walls.get("w1")!.mesh, wall);
+
+    // Paint the kitchen: only the kitchen is re-meshed.
+    layout.rooms[0]!.floor = "plank";
+    level.setProgress(everything(layout));
+    assert.notEqual(level.floors.get("kitchen"), kitchen, "the painted floor is rebuilt");
+    assert.equal(level.floors.get("dining"), dining, "and its neighbour is not");
+    assert.equal(level.walls.get("w1")!.mesh, wall, "nor is the wall");
+    assert.ok(kitchen.isDisposed(), "the old mesh is disposed, not leaked");
+  } finally { level.dispose(); scene.dispose(); engine.dispose(); }
+});
+
+test("a floor is rebuilt when a slab above it appears or goes", () => {
+  const engine = new NullEngine();
+  const scene = new Scene(engine);
+  const layout = plan();
+  const level = createLevelBuilder(scene, layout, { name: "t" });
+  try {
+    level.setProgress(everything(layout));
+    const grounds = level.floors.get("site_grounds")!;
+    const covered = grounds.getTotalIndices();
+
+    // Drop the kitchen: the grass that was hidden underneath has to come back.
+    level.setProgress({ parcels: [], rooms: ["dining"], walls: [], areas: ["site_grounds"] });
+    const exposed = level.floors.get("site_grounds")!;
+    assert.notEqual(exposed, grounds, "the grounds are re-meshed when what covers them changes");
+    assert.ok(exposed.getTotalIndices() > covered, `the buried grass is back: ${covered} -> ${exposed.getTotalIndices()} indices`);
+    assert.equal(level.floors.has("kitchen"), false);
+    assert.equal(level.walls.has("w1"), false, "a wall whose room went is gone too");
+  } finally { level.dispose(); scene.dispose(); engine.dispose(); }
 });
