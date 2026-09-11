@@ -86,6 +86,49 @@ export interface ClipEvent {
   t: number;
   name: string;
   swapModel?: string;
+  /** Particle emitter (model.emitters id) this event fires. */
+  emit?: string;
+  /** What the event does to that emitter: a burst (default), or start/stop a continuous one. */
+  emitAction?: "burst" | "start" | "stop";
+}
+
+/** A voxel particle source carried by a model: juice from a cut, steam over a pot, sparks, crumbs. */
+export interface ParticleEmitter {
+  id: string;
+  /** Part whose node the emitter follows (position in that part's cell grid); absent = the model grid. */
+  part?: string;
+  /** Cell position. */
+  position: [number, number, number];
+  /** Hex colours particles pick from. */
+  colors: string[];
+  /** Particle edge in cells (1 = one voxel of this model). */
+  size: number;
+  /** burst: `count` particles per fire · continuous: `rate` particles per second while running. */
+  mode: "burst" | "continuous";
+  count: number;
+  rate?: number;
+  /** continuous: seconds it runs once started or fired (absent/0 = until stopped). */
+  duration?: number;
+  /** Launch direction in the part's frame (any length) and cone half-angle in degrees. */
+  direction: [number, number, number];
+  spread: number;
+  /** m/s, min and max. */
+  speed: [number, number];
+  /** Seconds, min and max. */
+  life: [number, number];
+  /** Multiplier of world gravity: 1 falls, 0 floats, negative rises (steam). */
+  gravity: number;
+  /** Velocity kept on landing (0 = none). */
+  bounce: number;
+  /** Fraction of horizontal speed kept per landing. */
+  friction?: number;
+  /** Rest on the surface once landed until life ends (splashes, crumbs) instead of vanishing. */
+  stick?: boolean;
+  /** Shrink away over the last part of life. */
+  fade?: boolean;
+  spin?: boolean;
+  /** Velocity damping per second (smoke slows down). */
+  drag?: number;
 }
 
 export interface AuthoredClip {
@@ -129,6 +172,8 @@ export interface AuthoredVoxelModel {
   emissive?: Readonly<Record<string, number>>;
   /** Point lights the object casts (a lamp, an oven window). */
   lights?: readonly ModelLight[];
+  /** Particle emitters (see ParticleEmitter); clip events fire them by id. */
+  emitters?: readonly ParticleEmitter[];
 }
 
 export interface AuthoredVoxelCatalog {

@@ -45,6 +45,7 @@ const SELECTION_COLOR = "#38d3e0";
 export function createDecorateMode(host: DecorateHost): DecorateMode {
   const { scene, canvas, catalog, decor, layout } = host;
   let active = false;
+  decor.onDropped = (id) => { dirty = true; if (active) { status = `${id} landed`; render(); } };
   let root: HTMLElement | null = null;
   let camera: ArcRotateCamera | null = null;
   let head: HeadCamera | null = null;
@@ -290,6 +291,16 @@ export function createDecorateMode(host: DecorateHost): DecorateMode {
     const ghost = decor.add({ id: "__ghost", model, position: [at.x, at.y, at.z], rotation: yaw, scale: prop.scale });
     if (ghost) { for (const mesh of ghost.meshes()) mesh.isPickable = false; holding = { model, ghost, yaw: heldYaw }; }
     syncSelection();
+    render();
+  }
+  /** Gravity: the selection falls onto the surface below it; the record updates when it settles. */
+  function dropSelection(): void {
+    const ids = selectionIds();
+    if (!ids.length) return;
+    pushUndo();
+    let dropped = 0;
+    for (const id of ids) if (decor.drop(id)) dropped++;
+    status = dropped ? `Dropping ${dropped} object${dropped === 1 ? "" : "s"}…` : "Nothing to drop (no collider field)";
     render();
   }
   function deleteSelected(): void {
@@ -551,6 +562,7 @@ export function createDecorateMode(host: DecorateHost): DecorateMode {
     if (meta && key === "y") { event.preventDefault(); redo(); return; }
     if (meta && key === "s") { event.preventDefault(); void save(); return; }
     if (meta && key === "d") { event.preventDefault(); duplicateSelected(); return; }
+    if (!meta && key === "g" && selectionIds().length) { event.preventDefault(); dropSelection(); return; }
     if (meta && key === "c") { event.preventDefault(); copySelection(); return; }
     if (meta && key === "v") { event.preventDefault(); pasteClipboard(); return; }
     if (key === "delete" || key === "backspace") { if (selected) { event.preventDefault(); deleteSelected(); } return; }
@@ -608,7 +620,7 @@ export function createDecorateMode(host: DecorateHost): DecorateMode {
           <div class="decorate-row"><span>Scale ×</span>${[0, 1, 2].map((i) => `<input type="number" step="0.05" min="0.05" data-scale="${i}" value="${propScale(prop)[i]}" title="${"xyz"[i]}" />`).join("")}</div>
           <div class="decorate-row"><span>Reacts</span><select data-interact="1" title="Clip played once when the chef interacts with it (Space / Enter next to it), then back to the idle clip"><option value="" ${prop.interactClip ? "" : "selected"}>— none —</option>${(catalog.models[prop.model]!.clips ?? []).map((clip) => `<option value="${escapeHtml(clip.id)}" ${prop.interactClip === clip.id ? "selected" : ""}>${escapeHtml(clip.name ?? clip.id)}</option>`).join("")}</select>${prop.interactClip ? `<button data-act="test" title="Play the interaction clip now">▶ Test</button>` : ""}</div>
           <div class="decorate-row"><span>Clip</span><select data-clip="1"><option value="" ${prop.clip === undefined ? "selected" : ""}>first looping clip</option><option value="__none" ${prop.clip === null ? "selected" : ""}>still</option>${(catalog.models[prop.model]!.clips ?? []).map((clip) => `<option value="${escapeHtml(clip.id)}" ${prop.clip === clip.id ? "selected" : ""}>${escapeHtml(clip.name ?? clip.id)}</option>`).join("")}</select></div>
-          <div class="decorate-row"><button data-act="duplicate" title="Ctrl+D">⧉ Duplicate</button><button data-act="delete" title="Del">🗑️ Remove</button></div>
+          <div class="decorate-row"><button data-act="duplicate" title="Ctrl+D">⧉ Duplicate</button><button data-act="drop" title="Let it fall onto whatever is below — a table, a counter, the floor (G)">⬇ Drop</button><button data-act="delete" title="Del">🗑️ Remove</button></div>
         </section>` : `<div class="decorate-hint">Click a placed object to select it.</div>`}
       </aside>
       <div class="decorate-legend">Drag a library item onto a floor (ghost shows where it lands) · click a placed object to select it, Shift+click adds more · drag it by its body to move it · gizmo: tap <kbd>W</kbd> move · <kbd>R</kbd> rotate · <kbd>T</kbd> scale · <kbd>Q</kbd> none · Shift+R: turn 90° · Del: remove · Ctrl+C / Ctrl+V: copy & paste the selection (at the pointer) · Ctrl+D: duplicate · Ctrl+Z: undo · Camera: right-hold looks, hold <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> <kbd>Q</kbd><kbd>E</kbd> to fly (Shift fast), middle-drag pans, wheel zooms, <kbd>F</kbd> frames, middle-click orbits a point · left-drag never turns the camera · B / Esc: leave</div>`;
@@ -634,6 +646,7 @@ export function createDecorateMode(host: DecorateHost): DecorateMode {
       { label: `📋 Copy${ids.length > 1 ? ` ${ids.length}` : ""}`, action: "copy", keys: "Ctrl+C" },
       { label: `📥 Paste${clipboard.length ? ` ${clipboard.length}` : ""}`, action: "paste", keys: "Ctrl+V", disabled: !clipboard.length },
       { label: `⧉ Duplicate${ids.length > 1 ? ` ${ids.length}` : ""}`, action: "duplicate", keys: "Ctrl+D" },
+      { label: `⬇ Drop${ids.length > 1 ? ` ${ids.length}` : ""}`, action: "drop", keys: "G" },
       { label: "🎯 Frame", action: "frame", keys: "F" },
       { label: `🗑️ Remove${ids.length > 1 ? ` ${ids.length}` : ""}`, action: "delete", keys: "Del" },
     ];
@@ -655,6 +668,7 @@ export function createDecorateMode(host: DecorateHost): DecorateMode {
         case "copy": copySelection(); break;
         case "paste": pasteClipboard(); break;
         case "frame": head?.frame(ids.flatMap((member) => decor.meshesOf(member))); break;
+        case "drop": dropSelection(); break;
         case "delete": deleteSelected(); break;
       }
     });
@@ -729,6 +743,7 @@ export function createDecorateMode(host: DecorateHost): DecorateMode {
       case "done": toggle(); break;
       case "turn": turnSelected(90); break;
       case "duplicate": duplicateSelected(); break;
+      case "drop": dropSelection(); break;
       case "group": groupSelection(); break;
       case "test": if (selected) { decor.trigger(selected); status = `Playing ${selectedProp()?.interactClip} on ${selected}`; render(); } break;
       case "delete": deleteSelected(); break;

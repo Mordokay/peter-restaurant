@@ -1,5 +1,6 @@
 import "./restaurant-style.css";
 import {
+  AbstractMesh,
   ArcRotateCamera,
   Color3,
   Color4,
@@ -24,6 +25,10 @@ import { createDecorateMode } from "./decorate";
 import { cellsFromAuthoredModel, type AuthoredVoxelCatalog } from "./game/voxelModel";
 import { attachGlow, createLightPool } from "./game/lighting";
 import { sourceCacheKey, warmSourceCache } from "./game/sourceCache";
+import { collidersOfMeshes, createColliderField } from "./game/gravity";
+import { createParticleWorld } from "./game/voxelParticles";
+import type { ParticleEmitter } from "./game/voxelModel";
+import { createOccluderFader, createWall } from "./game/walls";
 import { createVoxelMesh } from "./game/voxelGeometry";
 import { restaurantRecipes, tomatoPlotUpgradeTiers, tutorialSteps } from "./game/restaurant";
 import {
@@ -174,6 +179,13 @@ block("island top", new Vector3(4.05, 0.14, 1.82), new Vector3(0.6, 1.14, -0.15)
 block("cutting board", new Vector3(1.25, 0.08, 0.78), new Vector3(-0.25, 1.25, -0.12), palette.walnut);
 block("sink", new Vector3(0.95, 0.08, 0.72), new Vector3(1.7, 1.25, -0.12), palette.steelShadow);
 
+// Kitchen side walls. They stand between the camera and the chef whenever the view
+// swings round, so the occluder fader (below) sees through them.
+const walls = [
+  createWall(scene, { name: "west wall", from: [-6.05, -4], to: [-6.05, 4], height: 2.4, material: palette.tile, shadows }),
+  createWall(scene, { name: "east wall", from: [6.05, -4], to: [6.05, 1.2], height: 2.4, material: palette.tile, shadows }),
+];
+
 interface BlockRig {
   root: TransformNode;
   torso: Mesh;
@@ -231,7 +243,11 @@ const lightPool = createLightPool(scene, { max: 6 });
 // Static props are world-renderer instances; their meshed sources come from the IndexedDB cache when the model revision matches.
 const cacheRev = (modelId: string): number | undefined => catalogIndex[modelId]?.rev;
 await warmSourceCache([...new Set(decorLayout.props.map((prop) => prop.model))].map((modelId) => sourceCacheKey(modelId, cacheRev(modelId), 0.02)));
-const decor = createDecorScene(scene, foodModels, decorLayout, { shadows, lightPool, cacheRev });
+// Gravity: everything that falls lands on the highest surface beneath it (counters, tables, placed props, the floor).
+const colliders = createColliderField({ groundY: 0 });
+// Voxel particles: crumbs, juice, steam — one pooled mesh, landing on the colliders.
+const particles = createParticleWorld(scene, { colliders, shadows, capacity: 3000 });
+const decor = createDecorScene(scene, foodModels, decorLayout, { shadows, lightPool, cacheRev, colliders, particles });
 const authoredTomato = foodModels.models.tomato!;
 const tomatoSource = createVoxelMesh("authored tomato source", cellsFromAuthoredModel(authoredTomato), authoredTomato.pitch, scene);
 tomatoSource.setEnabled(false);
@@ -515,17 +531,21 @@ const tutorialStepsDone = new Set<string>();
 const saveKey = "farm-to-table-shift";
 const keys = new Set<string>();
 
-interface BurstCube { mesh: Mesh; velocity: Vector3; life: number }
-const burstCubes: BurstCube[] = [];
-function burst(position: Vector3, material: StandardMaterial, count: number): void {
-  for (let index = 0; index < count; index++) {
-    const mesh = block("action fragment", new Vector3(0.09, 0.09, 0.09), position.clone(), material);
-    burstCubes.push({
-      mesh,
-      velocity: new Vector3((Math.random() - 0.5) * 1.5, 1.2 + Math.random(), (Math.random() - 0.5) * 1.5),
-      life: 0.65 + Math.random() * 0.35,
-    });
+/** Action feedback as voxel particles: crumbs and sparks that land on the counter; steam (the cream material) rises. */
+const burstSpecs = new Map<StandardMaterial, ParticleEmitter>();
+function burstSpec(material: StandardMaterial): ParticleEmitter {
+  let spec = burstSpecs.get(material);
+  if (!spec) {
+    const hex = material.diffuseColor.toHexString();
+    spec = material === palette.cream
+      ? { id: "steam", position: [0, 0, 0], colors: [hex, "#f7f1e6"], size: 1.2, mode: "burst", count: 1, direction: [0, 1, 0], spread: 18, speed: [0.35, 0.7], life: [1.1, 1.9], gravity: -0.12, bounce: 0, drag: 1.1, fade: true }
+      : { id: "burst", position: [0, 0, 0], colors: [hex], size: 1, mode: "burst", count: 6, direction: [0, 1, 0], spread: 55, speed: [0.9, 1.9], life: [0.7, 1.3], gravity: 0.55, bounce: 0.3, friction: 0.5, stick: true, fade: true, spin: true };
+    burstSpecs.set(material, spec);
   }
+  return spec;
+}
+function burst(position: Vector3, material: StandardMaterial, count: number): void {
+  particles.emitAt({ ...burstSpec(material), count }, position, Vector3.Up(), 0.09);
 }
 
 // ── Guests ───────────────────────────────────────────────────────────────────
@@ -1091,7 +1111,7 @@ decorateLaunch.title = "Decorate mode: place, move and turn catalog objects in t
 decorateLaunch.addEventListener("click", () => decorate.toggle());
 app.append(decorateLaunch);
 // Dev aid for driven browser sessions (decorate-mode checks), like the lab's __lab.
-(window as unknown as { __game: unknown }).__game = { scene, camera, decor, decorate, layout: decorLayout };
+(window as unknown as { __game: unknown }).__game = { scene, camera, decor, decorate, layout: decorLayout, particles, colliders, walls, fader: () => wallFader };
 
 let cameraTargetAlpha = camera.alpha;
 let cameraTargetRadius = camera.radius;
@@ -1540,7 +1560,7 @@ function updateWorld(dt: number): void {
     stoveLight.scaling.setAll(0.85 + Math.sin(elapsed * 4) * 0.15);
     spoonPivot.rotation.y += dt * 5;
     potRoot.scaling.y = 1 + Math.sin(elapsed * 6) * 0.025;
-    if (Math.floor(elapsed * 5) % 5 === 0 && burstCubes.length < 12) {
+    if (Math.floor(elapsed * 5) % 5 === 0) {
       burst(stoveRoot.position.add(new Vector3((Math.random() - 0.5) * 0.3, 1.85, (Math.random() - 0.5) * 0.2)), palette.cream, 1);
     }
     if (cooking >= cookSeconds) {
@@ -1647,23 +1667,24 @@ function updateWorld(dt: number): void {
     actionCue.scaling.set(footprint / 2.4, 0.85 + Math.sin(elapsed * 4) * 0.15, footprint / 2.4);
   }
 
-  for (let index = burstCubes.length - 1; index >= 0; index--) {
-    const particle = burstCubes[index]!;
-    particle.life -= dt;
-    particle.velocity.y -= dt * 3.8;
-    particle.mesh.position.addInPlace(particle.velocity.scale(dt));
-    particle.mesh.rotation.x += dt * 5;
-    particle.mesh.rotation.z += dt * 4;
-    particle.mesh.scaling.setAll(Math.max(0.01, Math.min(1, particle.life * 2)));
-    if (particle.life <= 0) {
-      particle.mesh.dispose();
-      burstCubes.splice(index, 1);
-    }
-  }
+  particles.update(dt);
 
   updateAutopilot(dt);
   actionEl.classList.toggle("show", bestPlayerAction() !== null || shift.phase === "close");
 }
+
+// Every static surface of the coded scene (people excluded: they move) is a landing spot.
+const isPerson = (mesh: AbstractMesh): boolean => { for (let node = mesh.parent; node; node = node.parent) if (/chef|guest|server/i.test(node.name)) return true; return false; };
+colliders.set("scene", collidersOfMeshes(scene.meshes.filter((mesh) => (mesh.metadata as { surface?: boolean } | null)?.surface === true && !isPerson(mesh) && mesh.name !== "grounds")));
+// See past walls: the coded walls, plus placed props tagged as structure (fences, wall pieces).
+const structureProps = () => [...decor.placed.values()].filter((entry) => (catalogIndex[entry.prop.model]?.tags ?? []).includes("structure")).flatMap((entry) => entry.meshes());
+const wallFader = createOccluderFader(scene, {
+  target: () => player.root.position,
+  occluders: () => [...walls, ...structureProps()],
+  keyOf: (mesh) => (mesh.metadata as { decorId?: string } | null)?.decorId ?? `mesh:${mesh.uniqueId}`,
+  resolve: (key, hit) => { if (key.startsWith("mesh:")) return [hit]; decor.pin(key, true); return decor.meshesOf(key); },
+  onClear: (key) => { if (!key.startsWith("mesh:") && !decorate.active) decor.pin(key, false); },
+});
 
 const simSpeed = Math.max(1, Math.round(captureNumber("simSpeed") || 1));
 const noRender = captureParams.has("noRender");
@@ -1678,6 +1699,7 @@ engine.runRenderLoop(() => {
   for (let step = 0; step < simSpeed; step++) updateWorld(dt);
   decor.update(dt);
   decorate.update(dt);
+  if (!decorate.active) wallFader.update(dt);
   decorateLaunch.classList.toggle("active", decorate.active);
   if (!noRender) scene.render();
 });

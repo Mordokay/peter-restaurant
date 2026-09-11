@@ -16,6 +16,8 @@ import { createLabEditor } from "./labEditor";
 import { createHeadCamera } from "./labCamera";
 import { createClipPlayer, createVoxelRig, type ClipPlayer, type VoxelRig } from "./game/voxelRig";
 import { attachGlow } from "./game/lighting";
+import { createParticleWorld, type EmitterHandle } from "./game/voxelParticles";
+import { collidersOfMeshes, createColliderField } from "./game/gravity";
 
 const host = document.querySelector<HTMLElement>("#model-lab")!;
 host.innerHTML = `<div class="lab" id="lab-root">
@@ -69,6 +71,18 @@ fill.intensity = 1.15;
 fill.groundColor = Color3.FromHexString("#506159");
 const shadows = new ShadowGenerator(2048, key);
 attachGlow(scene, { intensity: 0.8 });
+// Particle preview: cubes land on the ground plane and on the displayed model itself.
+const colliders = createColliderField({ groundY: 0 });
+const particles = createParticleWorld(scene, { colliders, shadows, capacity: 4000 });
+let emitterHandle: EmitterHandle | null = null;
+function attachParticles(rig: VoxelRig | null): void {
+  emitterHandle?.dispose();
+  emitterHandle = null;
+  if (!rig) { colliders.remove("model"); return; }
+  // The model's own particles fall past it to the ground; other things (a dropped cube, say) land on its parts.
+  emitterHandle = particles.attachRig(rig, { excludeCollider: "model" });
+  colliders.set("model", collidersOfMeshes(rig.meshes));
+}
 shadows.useBlurExponentialShadowMap = true;
 shadows.blurKernel = 18;
 const groundMaterial = new StandardMaterial("lab ground", scene);
@@ -190,7 +204,7 @@ function loadEntry(entry: LabEntry, options: { skipDirtyCheck?: boolean } = {}):
   editableModel = null;
   clipPlayer = null;
   clipBar.replaceChildren();
-  if (displayedRig) { displayedRig.dispose(); displayedRig = null; displayed = null; }
+  if (displayedRig) { attachParticles(null); displayedRig.dispose(); displayedRig = null; displayed = null; }
   // Clones share production geometry/materials with their hidden sources.
   // Dispose the selected hierarchy without destroying those shared assets.
   displayed?.dispose(false, false);
@@ -235,14 +249,16 @@ function loadEntry(entry: LabEntry, options: { skipDirtyCheck?: boolean } = {}):
 /** Display a catalog model as a rig (one mesh per part, joints honoured) and
  * offer its clips in the toolbar; a looping clip plays on its own. */
 function showRig(model: AuthoredVoxelModel): VoxelRig {
-  if (displayedRig) { displayedRig.dispose(); displayedRig = null; }
+  if (displayedRig) { attachParticles(null); displayedRig.dispose(); displayedRig = null; }
   const rig = createVoxelRig(model, scene, { name: `inspected ${model.id}`, shadows, lights: true });
   const cells = cellsFromAuthoredModel(model);
   const minY = cells.reduce((low, cell) => Math.min(low, cell.y), Infinity);
   rig.anchor.position.y = -(minY - 0.5) * model.pitch;
   displayed = rig.anchor;
   displayedRig = rig;
-  clipPlayer = createClipPlayer(rig, { onEvent: (event) => { stats.textContent = `event "${event.name}" at ${event.t.toFixed(2)}s${event.swapModel ? ` → ${event.swapModel}` : ""}`; } });
+  rig.anchor.computeWorldMatrix(true);
+  attachParticles(rig);
+  clipPlayer = createClipPlayer(rig, { onEvent: (event) => { emitterHandle?.handleEvent(event); stats.textContent = `event "${event.name}" at ${event.t.toFixed(2)}s${event.swapModel ? ` → ${event.swapModel}` : ""}`; } });
   frameMeshes(rig.meshes);
   const triangles = rig.meshes.reduce((sum, mesh) => sum + mesh.getTotalIndices() / 3, 0);
   stats.textContent = `${cells.length} cells · ${triangles} triangles (${visibleVoxelFaceCount(cells) * 2} before face merging) · ${model.parts.length} part${model.parts.length === 1 ? "" : "s"} · ${model.clips?.length ?? 0} clip${(model.clips?.length ?? 0) === 1 ? "" : "s"} · ${model.pitch} m cell`;
@@ -329,9 +345,11 @@ const editor = createLabEditor({
   onRigReplaced(rig) {
     displayed = rig.anchor;
     displayedRig = rig;
+    attachParticles(rig);
     // The view's player must drive the new rig, and resume the looping clip once editing ends.
-    clipPlayer = createClipPlayer(rig, { onEvent: (event) => { stats.textContent = `event "${event.name}" at ${event.t.toFixed(2)}s${event.swapModel ? ` → ${event.swapModel}` : ""}`; } });
+    clipPlayer = createClipPlayer(rig, { onEvent: (event) => { emitterHandle?.handleEvent(event); stats.textContent = `event "${event.name}" at ${event.t.toFixed(2)}s${event.swapModel ? ` → ${event.swapModel}` : ""}`; } });
   },
+  particles: { fire: (id) => { emitterHandle?.fire(id); }, handleEvent: (event) => { emitterHandle?.handleEvent(event); } },
   onStats(text) { stats.textContent = text; },
   setAutoRotate(on) { autoRotate = on; spinButton.classList.toggle("active", on); },
   onSaved(model, isNew) {
@@ -1036,6 +1054,7 @@ engine.runRenderLoop(() => {
   const dt = Math.min(0.05, engine.getDeltaTime() / 1000);
   elapsed += dt;
   if (autoRotate) camera.alpha += dt * 0.35;
+  particles.update(dt);
   if (clipPlayer && !editor.active) {
     if (!clipPlayer.clip && !restRequested && displayedRig) { const loop = displayedRig.model.clips?.find((clip) => clip.loop); if (loop) clipPlayer.play(loop.id); }
     clipPlayer.update(dt);

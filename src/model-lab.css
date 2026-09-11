@@ -274,3 +274,14 @@ html, body, #model-lab { width: 100%; height: 100%; margin: 0; overflow: hidden;
 .lab-light-row input[type="color"] { width: 26px; height: 22px; padding: 0; border: 1px solid #ffffff3a; border-radius: 6px; background: none; }
 .lab-light-row label { display: inline-flex; align-items: center; gap: 2px; color: #b9c8bd; }
 .lab-light-row code { font-size: 11px; color: #9fb3a6; }
+
+/* 💥 Particles and 🚩 Event editors. */
+.lab-editor-chip.small { width: 18px; height: 18px; min-height: 18px !important; border-radius: 5px !important; }
+.lab-editor-chip.small.active { border-color: #f0c674 !important; box-shadow: 0 0 0 2px #f0c67488, inset 0 0 0 1px #0005; }
+.lab-emitter-form { display: flex; flex-direction: column; gap: 5px; padding: 6px 8px; border: 1px solid #ffffff14; border-radius: 10px; background: #ffffff06; }
+.lab-emitter-form input[type="number"] { width: 50px; }
+.lab-emitter-form label { display: inline-flex; align-items: center; gap: 3px; color: #b9c8bd; font-size: 11px; }
+.lab-emitter-form .lab-emitter-id { width: 90px; }
+.lab-emitter-form code { font-size: 11px; color: #9fb3a6; }
+.lab-event-editor input[type="text"] { width: 110px; }
+.lab-sheet-event.selected { filter: drop-shadow(0 0 4px #f0c674); transform: translate(-50%, -50%) scale(1.25); }

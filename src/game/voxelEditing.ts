@@ -1,5 +1,5 @@
 import type { VoxelCell } from "./voxelGeometry";
-import { cellsFromAuthoredModel, cellsOfPartState, type AuthoredClip, type AuthoredVoxelModel, type AuthoredVoxelPart, type ClipEvent, type ClipKey, type ModelLight, type PartRestTransform, type VoxelRun } from "./voxelModel.ts";
+import { cellsFromAuthoredModel, cellsOfPartState, type AuthoredClip, type AuthoredVoxelModel, type AuthoredVoxelPart, type ClipEvent, type ClipKey, type ModelLight, type ParticleEmitter, type PartRestTransform, type VoxelRun } from "./voxelModel.ts";
 import { withKey, withoutKey } from "./voxelClips.ts";
 
 // Babylon-free voxel editing session for the Model Lab. Holds the cells of one
@@ -117,6 +117,7 @@ export class VoxelEditSession {
   /** Glowing colours (lower-case hex → intensity) and the model's point lights: meta, so undo covers them. */
   private glowByHex = new Map<string, number>();
   private lightList: ModelLight[];
+  private emitterList: ParticleEmitter[];
   private readonly originalPalette: Readonly<Record<string, string>>;
   private readonly hiddenParts = new Set<string>();
   private baseline: string;
@@ -151,6 +152,7 @@ export class VoxelEditSession {
     this.clipList = (model.clips ?? []).map((clip) => structuredClone(clip) as AuthoredClip);
     for (const [key, intensity] of Object.entries(model.emissive ?? {})) { const hex = model.palette[key]; if (hex && intensity > 0) this.glowByHex.set(hex.toLowerCase(), intensity); }
     this.lightList = (model.lights ?? []).map((light) => structuredClone(light) as ModelLight);
+    this.emitterList = (model.emitters ?? []).map((emitter) => structuredClone(emitter) as ParticleEmitter);
     // Each part loads its own cells; overlaps between parts are kept.
     for (const part of model.parts) {
       for (const cell of cellsFromAuthoredModel(model, [part.id])) this.putCell({ x: cell.x, y: cell.y, z: cell.z, color: cell.color, part: part.id });
@@ -436,7 +438,38 @@ export class VoxelEditSession {
   // --- rig metadata ----------------------------------------------------------
   partMeta(part: string): PartMeta | undefined { return this.meta.get(part); }
   get clips(): readonly AuthoredClip[] { return this.clipList; }
-  private metaJson(): string { return JSON.stringify({ order: this.partOrder, meta: [...this.meta.entries()], clips: this.clipList, glow: [...this.glowByHex.entries()], lights: this.lightList }); }
+  private metaJson(): string { return JSON.stringify({ order: this.partOrder, meta: [...this.meta.entries()], clips: this.clipList, glow: [...this.glowByHex.entries()], lights: this.lightList, emitters: this.emitterList }); }
+  // --- particle emitters ---------------------------------------------------------
+  get emitters(): readonly ParticleEmitter[] { return this.emitterList; }
+  emitter(id: string): ParticleEmitter | undefined { return this.emitterList.find((candidate) => candidate.id === id); }
+  /** Add an emitter (its id is made unique). Returns the id used. */
+  addEmitter(spec: ParticleEmitter): string {
+    let id = spec.id.trim() || "fx";
+    let n = 1;
+    while (this.emitterList.some((candidate) => candidate.id === id)) id = `${spec.id.trim() || "fx"}${++n}`;
+    this.emitterList.push({ ...(structuredClone(spec) as ParticleEmitter), id });
+    this.generation++;
+    return id;
+  }
+  updateEmitter(id: string, patch: Partial<ParticleEmitter>): void {
+    const index = this.emitterList.findIndex((candidate) => candidate.id === id);
+    if (index < 0) return;
+    const next = { ...this.emitterList[index]!, ...patch };
+    if (patch.part === undefined && "part" in patch) delete next.part;
+    // Renaming: clip events keep pointing at the emitter.
+    if (patch.id && patch.id !== id) {
+      if (this.emitterList.some((candidate) => candidate.id === patch.id)) return;
+      this.clipList = this.clipList.map((clip) => ({ ...clip, events: clip.events?.map((event) => (event.emit === id ? { ...event, emit: patch.id! } : event)) }));
+    }
+    this.emitterList[index] = next;
+    this.generation++;
+  }
+  removeEmitter(id: string): void {
+    const index = this.emitterList.findIndex((candidate) => candidate.id === id);
+    if (index < 0) return;
+    this.emitterList.splice(index, 1);
+    this.generation++;
+  }
   // --- glow & lights -----------------------------------------------------------
   /** Glow intensity of a colour (0 = lit normally). */
   glowOf(hex: string): number { return this.glowByHex.get(hex.toLowerCase()) ?? 0; }
@@ -837,13 +870,14 @@ export class VoxelEditSession {
     try { return edit(); } finally { this.endStroke(); }
   }
   private applyMetaJson(json: string): void {
-    const parsed = JSON.parse(json) as { order: string[]; meta: [string, PartMeta][]; clips: AuthoredClip[]; glow?: [string, number][]; lights?: ModelLight[] };
+    const parsed = JSON.parse(json) as { order: string[]; meta: [string, PartMeta][]; clips: AuthoredClip[]; glow?: [string, number][]; lights?: ModelLight[]; emitters?: ParticleEmitter[] };
     this.partOrder = parsed.order;
     this.meta.clear();
     for (const [id, entry] of parsed.meta) this.meta.set(id, entry);
     this.clipList = parsed.clips;
     this.glowByHex = new Map(parsed.glow ?? []);
     this.lightList = parsed.lights ?? [];
+    this.emitterList = parsed.emitters ?? [];
     this.generation++;
   }
   exportHistory(): SerializedHistory {
@@ -1160,6 +1194,7 @@ export class VoxelEditSession {
     for (const [key, hex] of Object.entries(palette)) { const glow = this.glowByHex.get(hex); if (glow) emissive[key] = glow; }
     if (Object.keys(emissive).length) model.emissive = emissive;
     if (this.lightList.length) model.lights = this.lightList.map((light) => structuredClone(light) as ModelLight);
+    if (this.emitterList.length) model.emitters = this.emitterList.map((emitter) => structuredClone(emitter) as ParticleEmitter);
     return model;
   }
   private runsOf(partId: string, keyFor: (color: string) => string, shift: Coordinate): VoxelRun[] {

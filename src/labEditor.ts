@@ -8,7 +8,8 @@ import {
 } from "./game/voxelEditing";
 import { createVoxelMesh, type VoxelCell } from "./game/voxelGeometry";
 import { glowInfoOf, glowMaterialFor, splitGlowCells, tagGlow } from "./game/lighting";
-import { FADE_MODES, STATE_TRANSITIONS, TRANSITION_DIRECTIONS, type AuthoredClip, type AuthoredVoxelModel, type ClipEase, type ClipKey, type FadeMode, type StateTransition, type TransitionDirection } from "./game/voxelModel";
+import { defaultEmitter } from "./game/voxelParticles";
+import { FADE_MODES, STATE_TRANSITIONS, TRANSITION_DIRECTIONS, type AuthoredClip, type AuthoredVoxelModel, type ClipEase, type ClipKey, type ClipEvent, type FadeMode, type ParticleEmitter, type StateTransition, type TransitionDirection } from "./game/voxelModel";
 import { applyRig, inferRig } from "./game/rigInference";
 import { REST_POSE, sampleClip, type PartPose } from "./game/voxelClips";
 import { createClipPlayer, createVoxelRig, poseRig, setRigPartState, type ClipPlayer, type VoxelRig } from "./game/voxelRig";
@@ -65,6 +66,8 @@ export interface LabEditorHost {
   /** Show/hide the editor panels and re-flow the canvas. */
   setLayout(editing: boolean, animating: boolean): void;
   onRigReplaced(rig: VoxelRig): void;
+  /** Particle preview: fire an emitter of the edited model, and route clip events (emit) while playing. */
+  particles?: { fire(emitterId: string): void; handleEvent(event: ClipEvent): void };
   onStats(text: string): void;
   setAutoRotate(on: boolean): void;
   onSaved(model: AuthoredVoxelModel, isNew: boolean): void;
@@ -151,6 +154,10 @@ export function createLabEditor(host: LabEditorHost): LabEditor {
   let player: ClipPlayer | null = null;
   let activeClipId: string | null = null;
   let scrubTime = 0;
+  /** Event marker picked in the dope sheet (its t), edited in the right panel. */
+  let selectedEventT: number | null = null;
+  /** Emitter shown in the 💥 Particles form. */
+  let selectedEmitter: string | null = null;
   let draftPose: PartPose | null = null;
   /** Drafts for the other selected parts when a gizmo moves several at once. */
   const extraDrafts = new Map<string, PartPose>();
@@ -753,6 +760,7 @@ export function createLabEditor(host: LabEditorHost): LabEditor {
           ${session!.lights.map((light, index) => `<div class="lab-panel-row lab-light-row"><input type="color" data-light-color="${index}" value="${escapeHtml(light.color ?? "#ffd9a0")}" title="Light color" /><label title="Intensity (1 = a lamp)">✦<input type="number" data-light-intensity="${index}" min="0" step="0.1" value="${light.intensity ?? 1}" /></label><label title="Range in metres: where the light fades to nothing">↔<input type="number" data-light-range="${index}" min="0.5" step="0.5" value="${light.range ?? 7}" /></label><code title="Cell position">${light.position.join(", ")}</code><span class="lab-editor-grow"></span><button data-light-here="${index}" title="Move this light to the centre of the active part (or of the model)">📍</button><button data-light-remove="${index}" title="Remove this light">✕</button></div>`).join("")}
           <div class="lab-panel-row"><button data-action="light-add" title="Add a point light at the centre of the active part (or of the whole model); adjust it in the row above">＋ Add light</button></div>
         </section>
+        ${renderEmitters()}
         ${partBox}
         ${status}${controls}`;
     } else {
@@ -789,6 +797,7 @@ export function createLabEditor(host: LabEditorHost): LabEditor {
           <div class="lab-panel-hint">${eases.size > 1 ? `Eases are mixed (${[...eases].join(", ")}) — pick one to make the motion even. ` : ""}The pose fields below show what the selected keys share; XXX marks a value that differs — type there to set it on every selected key.</div>
         </section>`;
         })() : ""}
+        ${renderEventEditor(clip)}
         ${clip ? `
         <section class="lab-panel-section"><header class="lab-panel-head"><strong>🔑 ${multiRefs && multiRefs.length > 1 ? `${multiRefs.length} keys` : "Key"}</strong><small>${multiRefs && multiRefs.length > 1 ? "shared values shown · XXX = differs · typing sets all" : `${escapeHtml(trackPart)} @ ${round(scrubTime, 2)} s${existingKey ? " · on a key" : ""}`}</small></header>
           ${gizmoBar}
@@ -823,6 +832,37 @@ export function createLabEditor(host: LabEditorHost): LabEditor {
         </section>` : `<section class="lab-panel-section"><small>Create or pick a clip. Keys store a pose per part at a time: rotation around its joint, movement in cells, scale. The dope sheet below shows every key.</small></section>`}
         ${status}${controls}`;
     }
+  }
+  /** 💥 Particles: the model's emitters and a form for the selected one. */
+  function renderEmitters(): string {
+    if (!session) return "";
+    const emitters = session.emitters;
+    const selected = selectedEmitter ? session.emitter(selectedEmitter) : undefined;
+    const palette = session.paletteInUse();
+    const num = (field: string, value: number, step: number, title: string, min?: number) => `<label title="${title}">${field.replace(/[0-9]$/, "")}<input type="number" data-emitter-field="${field}" value="${value}" step="${step}" ${min !== undefined ? `min="${min}"` : ""} /></label>`;
+    const form = selected ? `<div class="lab-emitter-form">
+        <div class="lab-panel-row"><input type="text" data-emitter-field="id" value="${escapeHtml(selected.id)}" title="Emitter id — clip events refer to it" class="lab-emitter-id" /><select data-emitter-field="mode" title="burst: fires count particles when triggered · continuous: rate particles per second, for its duration or until stopped (steam, smoke)"><option value="burst" ${selected.mode === "burst" ? "selected" : ""}>burst</option><option value="continuous" ${selected.mode === "continuous" ? "selected" : ""}>continuous</option></select><select data-emitter-field="part" title="Part the emitter follows (its position is in that part's grid)"><option value="" ${selected.part ? "" : "selected"}>— model —</option>${session.parts.map((part) => `<option value="${escapeHtml(part)}" ${selected.part === part ? "selected" : ""}>${escapeHtml(part)}</option>`).join("")}</select><span class="lab-editor-grow"></span><button data-action="emitter-test" class="primary" title="Fire it now in the viewport (a burst, or one second of a continuous emitter)">▶ Test</button></div>
+        <div class="lab-panel-row"><span class="lab-field-label" title="Colours the particles pick from — click palette chips to include them">Colours</span>${palette.map((entry) => `<button data-emitter-color="${entry.color}" class="lab-editor-chip small ${selected.colors.includes(entry.color) ? "active" : ""}" style="background:${entry.color}" title="${entry.color}${selected.colors.includes(entry.color) ? " · included" : ""}"></button>`).join("")}${selected.colors.filter((hex) => !palette.some((entry) => entry.color === hex)).map((hex) => `<button data-emitter-color="${hex}" class="lab-editor-chip small active extra" style="background:${hex}" title="${hex} · included (not in the palette)"></button>`).join("")}<button data-action="emitter-color-add" title="Include the current paint colour">＋ current</button></div>
+        <div class="lab-panel-row"><code title="Cell position (in the part's grid)">${selected.position.join(", ")}</code><button data-action="emitter-here" title="Move the emitter to the centre of the active part (or the model)">📍 here</button><span class="lab-field-label">Direction</span>${[0, 1, 2].map((i) => `<input type="number" data-emitter-field="dir${i}" value="${selected.direction[i]}" step="0.1" title="Launch direction ${"xyz"[i]} (any length; 0,1,0 = up)" />`).join("")}${num("spread", selected.spread, 5, "Cone half-angle in degrees (0 = a beam, 90 = a hemisphere, 180 = everywhere)", 0)}</div>
+        <div class="lab-panel-row">${num("size", selected.size, 0.5, "Particle edge in voxels of this model", 0.1)}${selected.mode === "burst" ? num("count", selected.count, 1, "Particles per burst", 1) : `${num("rate", selected.rate ?? 10, 1, "Particles per second while running (10 = ten a second)", 0)}${num("duration", selected.duration ?? 0, 0.5, "Seconds it runs once started or fired by an event; 0 = keeps going until a stop event (steam over a stove)", 0)}`}${num("speed0", selected.speed[0], 0.1, "Slowest launch speed, m/s", 0)}${num("speed1", selected.speed[1], 0.1, "Fastest launch speed, m/s", 0)}${num("life0", selected.life[0], 0.1, "Shortest life, seconds", 0.05)}${num("life1", selected.life[1], 0.1, "Longest life, seconds", 0.05)}</div>
+        <div class="lab-panel-row">${num("gravity", selected.gravity, 0.1, "Gravity multiplier: 1 falls like a crumb, 0 floats, negative rises (steam)")}${num("bounce", selected.bounce, 0.05, "Bounce on landing: 0 stops dead, 0.5 lively", 0)}${num("friction", selected.friction ?? 0.5, 0.05, "Horizontal speed kept per landing", 0)}${num("drag", selected.drag ?? 0, 0.1, "Air drag per second (smoke slows and hangs)", 0)}</div>
+        <div class="lab-panel-row">${(["stick", "fade", "spin"] as const).map((flag) => `<label title="${flag === "stick" ? "Rest on the surface it lands on until life ends (splashes, crumbs); off: vanish on landing" : flag === "fade" ? "Shrink away over the last part of life" : "Tumble while flying"}"><input type="checkbox" data-emitter-flag="${flag}" ${selected[flag] ? "checked" : ""} /> ${flag}</label>`).join("")}<span class="lab-editor-grow"></span><button data-action="emitter-remove" title="Delete this emitter (events pointing at it stop firing)">🗑️ Remove</button></div>
+      </div>` : "";
+    return `<section class="lab-panel-section"><header class="lab-panel-head"><strong>💥 Particles</strong><small>voxel particle emitters — juice off a cut, steam over a pot, crumbs. Clip events fire them (Animate → 🚩 event → emit)</small></header>
+          <div class="lab-panel-row">${emitters.map((emitter) => `<button data-emitter-select="${escapeHtml(emitter.id)}" class="${selectedEmitter === emitter.id ? "active" : ""}" title="${emitter.mode} · ${emitter.colors.length} colour(s)${emitter.part ? ` · on ${escapeHtml(emitter.part)}` : ""}">💥 ${escapeHtml(emitter.id)}</button>`).join("")}<button data-action="emitter-add" title="New emitter at the centre of the active part (or the model), in the current paint colour">＋ Add emitter</button></div>
+          ${form}
+        </section>`;
+  }
+  /** 🚩 Event: the marker picked in the dope sheet — name, model swap, particle emitter. */
+  function renderEventEditor(clip: AuthoredClip | null): string {
+    if (!session || !clip || selectedEventT === null) return "";
+    const event = (clip.events ?? []).find((candidate) => Math.abs(candidate.t - selectedEventT!) < 1e-6);
+    if (!event) return "";
+    const emitters = session.emitters;
+    return `<section class="lab-panel-section lab-event-editor"><header class="lab-panel-head"><strong>🚩 Event @ ${round(event.t, 3)} s</strong><small>the game reacts here; Alt+click the marker to delete</small></header>
+          <div class="lab-panel-row"><label title="What the game listens for (harvest, chop, serve…)">Name <input type="text" data-event-field="name" value="${escapeHtml(event.name)}" /></label><label title="Optional catalog model id to swap to at this moment (a whole tomato becomes halves)">Swap <input type="text" data-event-field="swapModel" value="${escapeHtml(event.swapModel ?? "")}" placeholder="model id" /></label></div>
+          <div class="lab-panel-row"><label title="Particle emitter of this model fired at this moment">💥 Emit <select data-event-field="emit"><option value="" ${event.emit ? "" : "selected"}>— none —</option>${emitters.map((emitter) => `<option value="${escapeHtml(emitter.id)}" ${event.emit === emitter.id ? "selected" : ""}>${escapeHtml(emitter.id)}</option>`).join("")}</select></label>${event.emit ? `<select data-event-field="emitAction" title="burst: fire once · start/stop: run a continuous emitter from here"><option value="burst" ${(event.emitAction ?? "burst") === "burst" ? "selected" : ""}>burst</option><option value="start" ${event.emitAction === "start" ? "selected" : ""}>start</option><option value="stop" ${event.emitAction === "stop" ? "selected" : ""}>stop</option></select>` : emitters.length ? "" : `<small>No emitters yet — add one in 🧊 Model → 💥 Particles.</small>`}<span class="lab-editor-grow"></span><button data-action="event-remove" title="Delete this event">🗑️</button></div>
+        </section>`;
   }
   function renderBottom(): void {
     if (!session || mode !== "animate") { panels.bottom.innerHTML = ""; return; }
@@ -864,7 +904,7 @@ export function createLabEditor(host: LabEditorHost): LabEditor {
       const summary = row.hiddenChildKeys.map((t) => `<button class="lab-sheet-key summary" data-jump-t="${t}" style="left:${pct(t)}" title="keys of folded children @ ${t}s — click to jump">◇</button>`).join("");
       return `<div class="lab-sheet-row ${row.part === activeTrackPart() ? "active" : ""} ${row.depth ? "" : "top"}"><div class="lab-sheet-lane" data-lane="${escapeHtml(row.part)}">${summary}${own}</div></div>`;
     }).join("");
-    const events = (clip.events ?? []).map((event) => `<button class="lab-sheet-event" data-event-t="${event.t}" style="left:${pct(event.t)}" title="event ${escapeHtml(event.name)} @ ${event.t}s${event.swapModel ? ` → ${escapeHtml(event.swapModel)}` : ""} (click: jump · Alt+click: remove)">🚩</button>`).join("");
+    const events = (clip.events ?? []).map((event) => `<button class="lab-sheet-event ${selectedEventT !== null && Math.abs(event.t - selectedEventT) < 1e-6 ? "selected" : ""}" data-event-t="${event.t}" style="left:${pct(event.t)}" title="event ${escapeHtml(event.name)} @ ${event.t}s${event.swapModel ? ` → ${escapeHtml(event.swapModel)}` : ""}${event.emit ? ` · 💥 ${escapeHtml(event.emit)}` : ""} (click: edit · Alt+click: remove)">🚩</button>`).join("");
     const groups = session.parts.filter((part) => session!.childrenOf(part).length > 0);
     panels.bottom.innerHTML = `
       <div class="lab-sheet-transport">
@@ -987,8 +1027,19 @@ export function createLabEditor(host: LabEditorHost): LabEditor {
       return;
     }
     if (button.dataset.eventT !== undefined && activeClipId) {
-      if (event.altKey) { session.removeEvent(activeClipId, Number(button.dataset.eventT)); markChanged(); }
-      else setScrub(Number(button.dataset.eventT));
+      if (event.altKey) { session.removeEvent(activeClipId, Number(button.dataset.eventT)); selectedEventT = null; markChanged(); }
+      else { selectedEventT = Number(button.dataset.eventT); setScrub(selectedEventT); }
+      return;
+    }
+    if (button.dataset.emitterSelect !== undefined) { selectedEmitter = selectedEmitter === button.dataset.emitterSelect ? null : button.dataset.emitterSelect; renderRight(); return; }
+    if (button.dataset.emitterColor !== undefined && selectedEmitter) {
+      const spec = session.emitter(selectedEmitter);
+      if (spec) {
+        const hex = button.dataset.emitterColor;
+        const colors = spec.colors.includes(hex) ? spec.colors.filter((candidate) => candidate !== hex) : [...spec.colors, hex];
+        if (colors.length) { session.beginStroke(); session.updateEmitter(spec.id, { colors }); session.endStroke(); markChanged(); } else statusText = "An emitter needs at least one colour";
+        renderRight();
+      }
       return;
     }
     switch (button.dataset.action) {
@@ -1124,13 +1175,28 @@ export function createLabEditor(host: LabEditorHost): LabEditor {
       case "key-rest": draftPose = { rotation: [0, 0, 0], position: [0, 0, 0], scale: [1, 1, 1] }; applyScrubPose(); renderRight(); break;
       case "event-add": {
         if (!activeClipId) break;
-        const name = window.prompt("Event name (e.g. harvest, chop, serve):", "action");
-        if (!name) break;
-        const swap = window.prompt("Optional: catalog model id to swap to at this event (leave empty for none):", "") ?? "";
-        session.setEvent(activeClipId, { t: round(scrubTime, 4), name: name.trim(), ...(swap.trim() ? { swapModel: swap.trim() } : {}) });
+        // The marker lands at the playhead and opens in the 🚩 Event panel — no prompts.
+        const t = round(scrubTime, 4);
+        const existing = (activeClip()?.events ?? []).find((candidate) => Math.abs(candidate.t - t) < 1e-6);
+        if (!existing) session.setEvent(activeClipId, { t, name: "action" });
+        selectedEventT = t;
+        statusText = existing ? `Event at ${t}s selected` : `Event added at ${t}s — name it, pick a swap or an emitter`;
         markChanged();
         break;
       }
+      case "event-remove": if (activeClipId && selectedEventT !== null) { session.removeEvent(activeClipId, selectedEventT); selectedEventT = null; markChanged(); } break;
+      case "emitter-add": {
+        const id = session.addEmitter(defaultEmitter("fx", lightAnchorCell(), color, activePart ?? undefined, session.pitch));
+        selectedEmitter = id;
+        statusText = `Emitter ${id} added${activePart ? ` on ${activePart}` : ""} — ▶ Test fires it`;
+        session.beginStroke(); session.endStroke(); // meta snapshot for undo
+        markChanged();
+        break;
+      }
+      case "emitter-remove": if (selectedEmitter) { session.beginStroke(); session.removeEmitter(selectedEmitter); session.endStroke(); selectedEmitter = null; statusText = "Emitter removed"; markChanged(); } break;
+      case "emitter-test": if (selectedEmitter) { needsRebuild && rebuildNow(); host.particles?.fire(selectedEmitter); statusText = `Fired ${selectedEmitter}`; renderStatus(); } break;
+      case "emitter-here": if (selectedEmitter) { session.beginStroke(); session.updateEmitter(selectedEmitter, { position: lightAnchorCell(), ...(activePart ? { part: activePart } : {}) }); session.endStroke(); markChanged(); } break;
+      case "emitter-color-add": if (selectedEmitter) { const spec = session.emitter(selectedEmitter); if (spec && !spec.colors.includes(color)) { session.beginStroke(); session.updateEmitter(spec.id, { colors: [...spec.colors, color] }); session.endStroke(); markChanged(); } } break;
     }
   }
   function onPanelDblClick(event: MouseEvent): void {
@@ -1193,6 +1259,52 @@ export function createLabEditor(host: LabEditorHost): LabEditor {
     if (!session) return;
     if (input.dataset.action === "color") { setColor(input.value); return; }
     if (input.dataset.action === "glow-intensity") { renderRight(); return; }
+    if (input.dataset.emitterField !== undefined && selectedEmitter) {
+      const spec = session.emitter(selectedEmitter);
+      if (!spec) return;
+      const field = input.dataset.emitterField;
+      const value = input.value;
+      const n = (fallback: number) => (Number.isFinite(Number(value)) && value !== "" ? Number(value) : fallback);
+      const patch: Partial<ParticleEmitter> = {};
+      if (field === "id") { const id = value.trim().replace(/[^a-z0-9_]/gi, "_"); if (id && id !== spec.id) patch.id = id; }
+      else if (field === "mode") patch.mode = value === "continuous" ? "continuous" : "burst";
+      else if (field === "part") { if (value) patch.part = value; else (patch as { part?: string }).part = undefined; }
+      else if (field.startsWith("dir")) { const direction = [...spec.direction] as [number, number, number]; direction[Number(field[3])] = n(0); patch.direction = direction; }
+      else if (field === "speed0" || field === "speed1") { const speed = [...spec.speed] as [number, number]; speed[Number(field[5])] = Math.max(0, n(1)); if (speed[0] > speed[1]) speed[field === "speed0" ? 1 : 0] = speed[field === "speed0" ? 0 : 1]; patch.speed = speed; }
+      else if (field === "life0" || field === "life1") { const life = [...spec.life] as [number, number]; life[Number(field[4])] = Math.max(0.05, n(1)); if (life[0] > life[1]) life[field === "life0" ? 1 : 0] = life[field === "life0" ? 0 : 1]; patch.life = life; }
+      else if (field === "size") patch.size = Math.max(0.1, n(1));
+      else if (field === "count") patch.count = Math.max(1, Math.round(n(10)));
+      else if (field === "rate") patch.rate = Math.max(0, n(10));
+      else if (field === "duration") patch.duration = Math.max(0, n(0));
+      else if (field === "spread") patch.spread = Math.min(180, Math.max(0, n(30)));
+      else if (field === "gravity") patch.gravity = n(1);
+      else if (field === "bounce") patch.bounce = Math.max(0, n(0));
+      else if (field === "friction") patch.friction = Math.max(0, n(0.5));
+      else if (field === "drag") patch.drag = Math.max(0, n(0));
+      session.beginStroke(); session.updateEmitter(spec.id, patch); session.endStroke();
+      if (patch.id) selectedEmitter = patch.id;
+      markChanged();
+      return;
+    }
+    if (input.dataset.emitterFlag !== undefined && selectedEmitter) {
+      const flag = input.dataset.emitterFlag as "stick" | "fade" | "spin";
+      session.beginStroke(); session.updateEmitter(selectedEmitter, { [flag]: (input as HTMLInputElement).checked }); session.endStroke(); markChanged();
+      return;
+    }
+    if (input.dataset.eventField !== undefined && activeClipId && selectedEventT !== null) {
+      const current = (activeClip()?.events ?? []).find((candidate) => Math.abs(candidate.t - selectedEventT!) < 1e-6);
+      if (!current) return;
+      const next: ClipEvent = { ...current };
+      const field = input.dataset.eventField as "name" | "swapModel" | "emit" | "emitAction";
+      const value = input.value.trim();
+      if (field === "name") next.name = value || "action";
+      else if (field === "swapModel") { if (value) next.swapModel = value; else delete next.swapModel; }
+      else if (field === "emit") { if (value) next.emit = value; else { delete next.emit; delete next.emitAction; } }
+      else if (field === "emitAction") { if (value === "start" || value === "stop") next.emitAction = value; else delete next.emitAction; }
+      session.setEvent(activeClipId, next, current.t);
+      markChanged();
+      return;
+    }
     const lightIndex = input.dataset.lightColor ?? input.dataset.lightIntensity ?? input.dataset.lightRange;
     if (lightIndex !== undefined) {
       const index = Number(lightIndex);
@@ -2397,7 +2509,7 @@ export function createLabEditor(host: LabEditorHost): LabEditor {
     partSignatures.clear();
     for (const [id, signature] of nextSignatures) partSignatures.set(id, signature);
     rig = next;
-    player = createClipPlayer(next, { onEvent: (event) => { statusText = `event "${event.name}" at ${event.t.toFixed(2)}s${event.swapModel ? ` → ${event.swapModel}` : ""}`; renderStatus(); } });
+    player = createClipPlayer(next, { onEvent: (event) => { host.particles?.handleEvent(event); statusText = `event "${event.name}" at ${event.t.toFixed(2)}s${event.swapModel ? ` → ${event.swapModel}` : ""}${event.emit ? ` 💥 ${event.emit}` : ""}`; renderStatus(); } });
     if (activeClipId && activeClip()) {
       player.play(activeClipId, { from: scrubTime });
       if (!wasPlaying || mode !== "animate") { player.pause(); applyScrubPose(); }
@@ -2537,7 +2649,7 @@ export function createLabEditor(host: LabEditorHost): LabEditor {
       rig = targetRig;
       rootY = targetRig.anchor.position.y;
       poseRig(targetRig, new Map());
-      player = createClipPlayer(targetRig, { onEvent: (event) => { statusText = `event "${event.name}" at ${event.t.toFixed(2)}s`; renderStatus(); } });
+      player = createClipPlayer(targetRig, { onEvent: (event) => { host.particles?.handleEvent(event); statusText = `event "${event.name}" at ${event.t.toFixed(2)}s`; renderStatus(); } });
       mode = "model";
       tool = "paint";
       spaceHeld = false; altHeld = false; shiftHeld = false; addPlane = null; draftPose = null; renaming = null; collapsed.clear(); selectedParts.clear(); closeContextMenu();
