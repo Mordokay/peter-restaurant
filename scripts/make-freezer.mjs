@@ -1,7 +1,7 @@
 // Authors the upright vegetable freezer straight into the catalog — no mesh, no import, no licence.
 //
 // Everything is written cell by cell at a 1 cm pitch, so the cabinet can have rounded front corners, a
-// recessed control panel with a glowing display and buttons, a vent grille, hinges, a bar handle on
+// control panel with a seven-segment readout, blinking lamps and proud buttons, a vent grille, hinges, a bar handle on
 // standoffs, shelf rails, a fan grille and frost. The door is a translucent double-glazed panel that
 // swings OUT on its hinge, the interior tube stutters on as it opens, and cold fog pours over the
 // threshold and falls to the floor.
@@ -34,12 +34,42 @@ const palette = {
   liner: "#eef4f7", liner_shade: "#dde7ec", frost: "#d5e7f2", frost_bright: "#f2fbff",
   glass: "#cfe9f5", glass_edge: "#a9cede",
   wire: "#9aa3aa", wire_dark: "#7c848b",
-  panel: "#3a4046", display: "#0d1a16", display_glow: "#7ff0c0", button: "#b9c0c6", button_hot: "#d8564a",
+  panel: "#3a4046", display: "#0b1512", display_off: "#16332a", display_glow: "#5ef5a0",
+  button: "#b9c0c6", button_cap: "#d9dfe4", button_hot: "#c04a40", button_hot_cap: "#e8695c",
+  lamp_off: "#262c32", lamp_white: "#f4f9ff", lamp_ice: "#c3e4ff", lamp_red: "#ff5646",
   glow: "#eaf6ff",
   drawer: "#b6bdc3", drawer_face: "#cbd2d8",
 };
 /** Palette keys that light up. */
-const emissive = { glow: 1.5, display_glow: 1.1 };
+const emissive = { glow: 1.5, display_glow: 1.3, lamp_white: 1.6, lamp_ice: 1.6, lamp_red: 1.6 };
+
+// The control panel across the top front, and the three indicator lenses standing proud of it.
+const PANEL_Y = H - WALL - 19;      // 165 .. 179
+const LAMP_X = [51, 60, 69];
+
+/** Seven-segment glyphs: which of a (top), b, c (right), d (bottom), e, f (left), g (middle) burn. */
+const SEGMENTS = { 0: "abcdef", 1: "bc", 2: "abdeg", 3: "abcdg", 4: "bcfg", 5: "acdfg", 6: "acdefg", 7: "abc", 8: "abcdefg", 9: "abcdfg" };
+
+/** One digit of the readout: 7 x 11 cells with two-cell strokes. Segments that are NOT lit are drawn
+ *  in a dead dark green rather than left out, so it reads as a real LED panel showing a number. */
+function segmentDigit(p, glyph, x0, y0, z, lit, dim) {
+  const on = new Set(SEGMENTS[glyph] ?? "");
+  const bar = (name, x1, y1, x2, y2) => p.box(x1, y1, z, x2, y2, z, on.has(name) ? lit : dim);
+  bar("d", x0 + 2, y0, x0 + 4, y0 + 1);
+  bar("e", x0, y0 + 2, x0 + 1, y0 + 4);
+  bar("c", x0 + 5, y0 + 2, x0 + 6, y0 + 4);
+  bar("g", x0 + 2, y0 + 5, x0 + 4, y0 + 6);
+  bar("f", x0, y0 + 7, x0 + 1, y0 + 8);
+  bar("b", x0 + 5, y0 + 7, x0 + 6, y0 + 8);
+  bar("a", x0 + 2, y0 + 9, x0 + 4, y0 + 10);
+}
+
+/** One indicator lens: three by three cells standing a centimetre proud of its bezel. */
+function lampLens(index, colour) {
+  const p = piece();
+  p.box(LAMP_X[index] + 1, PANEL_Y + 9, -1, LAMP_X[index] + 3, PANEL_Y + 11, -1, colour);
+  return p;
+}
 
 /** Deterministic 0..1 noise: frost looks scattered but is identical on every run. */
 function hash(x, y, z, salt = 0) {
@@ -146,12 +176,34 @@ function cabinet(sockets) {
   for (let x = WALL + 1; x < W - 1 - WALL; x++) for (let z = WALL + 1; z < D - 1 - WALL; z++) {
     if (hash(x, 0, z, 13) > 0.9) p.set(x, PLINTH + WALL, z, "frost");
   }
-  // Recessed control panel across the top front: a dark display with a glowing reading, and buttons.
-  const panelY = H - WALL - 19;
+  // ── the control panel ───────────────────────────────────────────────────────────────────────
+  // Recessed across the top front, and the busiest 30 cm of the model: a green LED readout of the
+  // cabinet temperature on the left, three indicator lamps and three buttons that stand proud of the
+  // face on the right. This is where the eye goes on an appliance, so it gets the cells.
+  const panelY = PANEL_Y;
   p.box(12, panelY, 0, W - 13, panelY + 14, 1, "panel");
-  p.box(16, panelY + 3, 0, 44, panelY + 11, 0, "display");
-  for (let i = 0; i < 3; i++) p.box(19 + i * 9, panelY + 5, 0, 19 + i * 9 + 5, panelY + 9, 0, "display_glow");
-  for (let i = 0; i < 3; i++) p.box(W - 34 + i * 8, panelY + 4, 0, W - 34 + i * 8 + 4, panelY + 10, 0, i === 2 ? "button_hot" : "button");
+  // The readout sits in a well one cell deep, so its own frame shades it.
+  for (let x = 13; x <= 46; x++) for (let y = panelY + 2; y <= panelY + 12; y++) { p.clear(x, y, 0); p.set(x, y, 1, "display"); }
+  const readY = panelY + 2;
+  p.box(15, readY + 5, 1, 20, readY + 6, 1, "display_glow");   // the minus sign of -18
+  segmentDigit(p, "1", 23, readY, 1, "display_glow", "display_off");
+  segmentDigit(p, "8", 32, readY, 1, "display_glow", "display_off");
+  p.box(41, readY + 8, 1, 43, readY + 10, 1, "display_glow");  // the degree ring, hollow in the middle
+  p.set(42, readY + 9, 1, "display");
+  // Three push buttons: a collar sunk into the panel, the button a centimetre out, a smaller cap
+  // beyond that. Stepped like this they catch the light and read as something you can press.
+  // A lamp sits over its button, so the panel reads as three controls rather than two rows of things.
+  for (const [i, bx] of LAMP_X.entries()) {
+    const hot = i === 2;
+    p.box(bx, panelY + 1, 0, bx + 4, panelY + 6, 0, "trim");
+    p.box(bx, panelY + 1, -1, bx + 4, panelY + 6, -1, hot ? "button_hot" : "button");
+    p.box(bx + 1, panelY + 2, -2, bx + 3, panelY + 5, -2, hot ? "button_hot_cap" : "button_cap");
+  }
+  // Bezels for the indicator lamps; the lenses themselves are separate parts, so a clip can blink them.
+  for (const lx of LAMP_X) {
+    p.box(lx, panelY + 8, 0, lx + 4, panelY + 12, 0, "trim");
+    p.box(lx + 1, panelY + 9, 0, lx + 3, panelY + 11, 0, "display");
+  }
   // Where the game stands real food: a grid per shelf, named so the packer can read the layout back.
   const grid = (id, y, depthCentre) => {
     for (let row = 0; row < SLOT_ROWS; row++) {
@@ -265,6 +317,10 @@ const parts = [
   part("shelf_c", shelf(SHELF_Y[2]), { parent: "body" }),
   part("drawer", drawer(), { parent: "body" }),
   part("light_bar", lightBar("steel_shadow"), { parent: "body", states: { on: { runs: lightBar("glow").runs() } } }),
+  // Panel lamps. Each is two cells of lens with a dark and a lit state, so the idle clip can blink them.
+  part("lamp_run", lampLens(0, "lamp_off"), { parent: "body", states: { on: { runs: lampLens(0, "lamp_white").runs() } } }),
+  part("lamp_cool", lampLens(1, "lamp_off"), { parent: "body", states: { on: { runs: lampLens(1, "lamp_ice").runs() } } }),
+  part("lamp_alarm", lampLens(2, "lamp_off"), { parent: "body", states: { on: { runs: lampLens(2, "lamp_red").runs() } } }),
   // The door swings out about its hinge stile; the glass and handle ride with it.
   part("door", doorFrame(), { parent: "body", pivot: [DOOR_X0, SHELF_Y[0], DOOR_Z1] }),
   part("door_glass", doorGlass(), { parent: "door", pivot: [DOOR_X0, SHELF_Y[0], DOOR_Z1], transform: { opacity: 0.3 } }),
@@ -273,9 +329,30 @@ const parts = [
 
 // Positive yaw about the hinge on the left swings the door AWAY from the cabinet.
 const OPEN_YAW = 112;
+/** A lamp track: `spans` are the seconds it burns, everything else is dark. State keys cut. */
+const lampTrack = (part, spans) => ({
+  part,
+  keys: [
+    { t: 0, state: spans.some(([from, to]) => from <= 0 && to > 0) ? "on" : "base", ease: "step", transition: "cut" },
+    ...spans.flatMap(([from, to]) => (from <= 0 ? [] : [{ t: from, state: "on", ease: "step", transition: "cut" }]).concat([{ t: to, state: "base", ease: "step", transition: "cut" }])),
+  ],
+});
+
 const clips = [
   {
-    id: "open", name: "Open the door", duration: 1.1,
+    // Standing by: the compressor lamp holds through its cycle, the run lamp ticks every two seconds
+    // and the red one double-blinks once a lap. `partial` keeps it to the lamps — it can blink over a
+    // door somebody left open without hauling it shut.
+    id: "idle", name: "Standing by", duration: 6, loop: true, partial: true,
+    tracks: [
+      lampTrack("lamp_cool", [[0, 3.4]]),
+      lampTrack("lamp_run", [[0, 0.4], [2, 2.4], [4, 4.4]]),
+      lampTrack("lamp_alarm", [[5.1, 5.28], [5.5, 5.68]]),
+    ],
+  },
+  {
+    // `partial` again: opening the door must not put the blinking lamps back to dark.
+    id: "open", name: "Open the door", duration: 1.1, partial: true,
     tracks: [
       { part: "door", keys: [
         { t: 0, rotation: [0, 0, 0], ease: "out" },
@@ -297,7 +374,7 @@ const clips = [
     ],
   },
   {
-    id: "close", name: "Close the door", duration: 0.85,
+    id: "close", name: "Close the door", duration: 0.85, partial: true,
     tracks: [
       { part: "door", keys: [
         { t: 0, rotation: [0, OPEN_YAW, 0], ease: "in" },

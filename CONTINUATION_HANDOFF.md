@@ -2311,3 +2311,22 @@ The first freezer was too coarse, opened inward, and had its produce painted on.
   only a generator could set them.
 - `voxelRig.ts` and the modules it imports carry `.ts` on their relative imports, so `voxelRig.test.ts` can
   drive a real rig under a NullEngine.
+
+### The freezer stands by: a readout, lamps and an idle (2026-09-11)
+
+- **A clip can be `partial`** (`AuthoredClip.partial`): it drives only the parts it names and leaves the
+  rest of the rig where it stands, instead of returning it to rest. `poseRig(..., { hold })` does the
+  skipping. This is what lets a status-light idle blink over a door somebody left open — without it, the
+  idle would haul the door shut the moment it took over.
+- **A new clip now matches the pose read off the RIG** (`rigPose`), not a sample of the outgoing clip. It
+  is the honest answer in every case: nothing playing, a partial clip playing, or a rig an editor posed by
+  hand. Without it, closing a door while a partial idle ran would have matched against the idle's empty
+  door track and started at the end of the close.
+- **The freezer's control panel was rebuilt**: a seven-segment "-18°" readout in green LEDs (unlit segments
+  drawn in dead dark green, so it reads as a real display), three indicator lamps over three buttons, each
+  button a collar sunk into the panel with the body a centimetre proud and a smaller cap beyond that.
+- **`idle` clip** (6 s, looping, partial): the compressor lamp holds through its cycle, the run lamp ticks
+  every two seconds, the red one double-blinks once a lap. `open` and `close` are partial too, so opening
+  the door no longer puts the lamps out. A model with a looping clip becomes a rig rather than an instance
+  when placed (`wantsRig`), which is the cost of a freezer that blinks — fine for one or two per kitchen.
+- The lab returns to a looping clip once a one-shot has played out, the way a placed prop does.

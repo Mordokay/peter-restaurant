@@ -397,7 +397,7 @@ export function showTransition(rig: VoxelRig, part: RigPart, sample: StateTransi
 
 /** Apply a sampled pose: parts not mentioned return to rest. "*" drives the
  * root. `stateFor` lets an editor pin a voxel state regardless of the pose. */
-export function poseRig(rig: VoxelRig, poses: Map<string, PartPose>, options: { stateFor?: (part: string) => string | undefined } = {}): void {
+export function poseRig(rig: VoxelRig, poses: Map<string, PartPose>, options: { stateFor?: (part: string) => string | undefined; hold?: boolean } = {}): void {
   const pitch = rig.model.pitch;
   const apply = (node: TransformNode, rest: Vector3, restRotation: Vector3, restScale: Vector3, pose: PartPose) => {
     node.rotation.set(restRotation.x + pose.rotation[0] * Math.PI / 180, restRotation.y + pose.rotation[1] * Math.PI / 180, restRotation.z + pose.rotation[2] * Math.PI / 180);
@@ -405,7 +405,10 @@ export function poseRig(rig: VoxelRig, poses: Map<string, PartPose>, options: { 
     node.scaling.set(restScale.x * pose.scale[0], restScale.y * pose.scale[1], restScale.z * pose.scale[2]);
   };
   for (const part of rig.parts.values()) {
-    const pose = poses.get(part.id) ?? REST_POSE;
+    // `hold`: a partial clip leaves everything it does not mention exactly where it stands.
+    const named = poses.get(part.id);
+    if (!named && options.hold) continue;
+    const pose = named ?? REST_POSE;
     apply(part.node, part.restPosition, part.restRotation, part.restScale, pose);
     const pinned = options.stateFor?.(part.id);
     if (pinned === undefined && pose.transition) showTransition(rig, part, pose.transition);
@@ -413,8 +416,28 @@ export function poseRig(rig: VoxelRig, poses: Map<string, PartPose>, options: { 
     // A clip's opacity multiplies the part's rest opacity, so glass stays glass while a clip fades it.
     setRigPartOpacity(rig, part, part.restOpacity * (pose.opacity ?? 1), pose.fade ?? "fade");
   }
-  apply(rig.root, Vector3.Zero(), Vector3.Zero(), Vector3.One(), poses.get("*") ?? REST_POSE);
+  const rootPose = poses.get("*");
+  if (rootPose || !options.hold) apply(rig.root, Vector3.Zero(), Vector3.Zero(), Vector3.One(), rootPose ?? REST_POSE);
   syncGatedLights(rig);
+}
+
+/** The pose the rig is actually standing in, read back off its nodes. This — not a sample of the
+ *  outgoing clip — is what a new clip matches against: it is right when nothing is playing, when a
+ *  partial clip is running, and when an editor posed the rig by hand. */
+export function rigPose(rig: VoxelRig): Map<string, PartPose> {
+  const pitch = rig.model.pitch;
+  const degrees = 180 / Math.PI;
+  const poses = new Map<string, PartPose>();
+  for (const part of rig.parts.values()) {
+    poses.set(part.id, {
+      rotation: [(part.node.rotation.x - part.restRotation.x) * degrees, (part.node.rotation.y - part.restRotation.y) * degrees, (part.node.rotation.z - part.restRotation.z) * degrees],
+      position: [(part.node.position.x - part.restPosition.x) / pitch, (part.node.position.y - part.restPosition.y) / pitch, (part.node.position.z - part.restPosition.z) / pitch],
+      scale: [part.node.scaling.x / (part.restScale.x || 1), part.node.scaling.y / (part.restScale.y || 1), part.node.scaling.z / (part.restScale.z || 1)],
+      state: part.state || undefined,
+    });
+  }
+  poses.set("*", { rotation: [rig.root.rotation.x * degrees, rig.root.rotation.y * degrees, rig.root.rotation.z * degrees], position: [rig.root.position.x / pitch, rig.root.position.y / pitch, rig.root.position.z / pitch], scale: [rig.root.scaling.x, rig.root.scaling.y, rig.root.scaling.z] });
+  return poses;
 }
 
 /** Switch gated lights to match the states their parts are showing. */
@@ -471,11 +494,12 @@ export function createClipPlayer(rig: VoxelRig, options: { onEvent?: (event: Cli
   let blendElapsed = 0;
   const apply = () => {
     if (!clip) return;
+    const hold = clip.partial === true;
     const poses = sampleClip(clip, time);
-    if (!offsets) { poseRig(rig, poses); return; }
+    if (!offsets) { poseRig(rig, poses, { hold }); return; }
     const weight = blendWeight(blendElapsed, blendDuration);
-    if (weight <= 1e-4) { offsets = null; poseRig(rig, poses); return; }
-    poseRig(rig, applyPoseOffsets(poses, offsets, weight));
+    if (weight <= 1e-4) { offsets = null; poseRig(rig, poses, { hold }); return; }
+    poseRig(rig, applyPoseOffsets(poses, offsets, weight), { hold });
   };
   return {
     get clip() { return clip; },
@@ -486,18 +510,21 @@ export function createClipPlayer(rig: VoxelRig, options: { onEvent?: (event: Cli
     play(clipId, playOptions = {}) {
       const found = rig.model.clips?.find((candidate) => candidate.id === clipId);
       if (!found) return false;
-      // Where we are standing right now, before anything changes.
-      const standing = clip ? sampleClip(clip, time) : null;
-      const interrupting = standing !== null && (clip!.id !== found.id || playing);
+      // Where the rig is standing right now, before anything changes.
+      const standing = rigPose(rig);
+      const interrupting = clip !== null && (clip.id !== found.id || playing);
       clip = playOptions.loop === undefined ? found : { ...found, loop: playOptions.loop };
       const matching = playOptions.match ?? (interrupting && playOptions.from === undefined);
-      time = playOptions.from ?? (matching && standing ? matchClipTime(found, standing) : 0);
+      time = playOptions.from ?? (matching ? matchClipTime(found, standing) : 0);
       offsets = null;
-      blendDuration = playOptions.blend ?? (standing ? DEFAULT_CLIP_BLEND : 0);
+      blendDuration = playOptions.blend ?? (interrupting ? DEFAULT_CLIP_BLEND : 0);
       blendElapsed = 0;
-      if (standing && blendDuration > 0) {
-        const landing = poseOffsets(standing, sampleClip(found, time));
-        if (landing.size) offsets = landing;
+      if (blendDuration > 0) {
+        const landing = sampleClip(found, time);
+        const step = poseOffsets(standing, landing);
+        // A partial clip blends only what it drives; the rest is not its business.
+        if (found.partial) for (const part of [...step.keys()]) if (!landing.has(part)) step.delete(part);
+        if (step.size) offsets = step;
       }
       playing = true;
       finished = false;

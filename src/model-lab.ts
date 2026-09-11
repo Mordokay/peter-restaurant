@@ -1060,7 +1060,9 @@ engine.runRenderLoop(() => {
   if (autoRotate) camera.alpha += dt * 0.35;
   particles.update(dt);
   if (clipPlayer && !editor.active) {
-    if (!clipPlayer.clip && !restRequested && displayedRig) { const loop = displayedRig.model.clips?.find((clip) => clip.loop); if (loop) clipPlayer.play(loop.id); }
+    // An idle loop takes back over once a one-shot has played out, the way it does for a placed prop:
+    // open the freezer in here and its panel lamps pick their blinking up again afterwards.
+    if ((!clipPlayer.clip || clipPlayer.finished) && !restRequested && displayedRig) { const loop = displayedRig.model.clips?.find((clip) => clip.loop); if (loop) clipPlayer.play(loop.id); }
     clipPlayer.update(dt);
   }
   // Pan distance per pixel shrinks with the orbit radius, so a close-up pans

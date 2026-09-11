@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { NullEngine, Scene } from "@babylonjs/core";
-import { createClipPlayer, createVoxelRig } from "./voxelRig.ts";
+import { createClipPlayer, createVoxelRig, rigPose } from "./voxelRig.ts";
 import type { AuthoredVoxelModel } from "./voxelModel.ts";
 
 /** A cabinet with one hinged door, opened and closed by two clips. */
@@ -11,10 +11,13 @@ const cabinet: AuthoredVoxelModel = {
   parts: [
     { id: "body", pivot: [0, 0, 0], cells: [{ x: 0, y: 0, z: 0, runs: [{ key: "a", length: 4 }] }] },
     { id: "door", parent: "body", pivot: [0, 0, 4], cells: [{ x: 0, y: 1, z: 4, runs: [{ key: "a", length: 4 }] }] },
+    { id: "lamp", parent: "body", pivot: [2, 3, 0], cells: [{ x: 2, y: 3, z: 0, runs: [{ key: "a", length: 1 }] }], states: { on: { cells: [{ x: 2, y: 3, z: 0, runs: [{ key: "a", length: 1 }] }] } } },
   ],
   clips: [
     { id: "open", duration: 1, tracks: [{ part: "door", keys: [{ t: 0, rotation: [0, 0, 0] }, { t: 1, rotation: [0, 90, 0], ease: "linear" }] }] },
     { id: "close", duration: 1, tracks: [{ part: "door", keys: [{ t: 0, rotation: [0, 90, 0] }, { t: 1, rotation: [0, 0, 0], ease: "linear" }] }] },
+    // A status-light idle: it drives the lamp and nothing else.
+    { id: "idle", duration: 2, loop: true, partial: true, tracks: [{ part: "lamp", keys: [{ t: 0, state: "on", ease: "step", transition: "cut" }, { t: 1, state: "base", ease: "step", transition: "cut" }] }] },
   ],
 };
 
@@ -76,5 +79,41 @@ test("playing a clip with nothing running starts at the beginning", () => {
     assert.ok(Math.abs(yawDegrees(rig) - 90) < 1e-6);
     player.seek(0.5);
     assert.ok(Math.abs(yawDegrees(rig) - 45) < 2);
+  });
+});
+
+test("a partial clip blinks over a door it does not drive", () => {
+  withRig((rig) => {
+    const player = createClipPlayer(rig);
+    player.play("open");
+    player.update(1);
+    assert.ok(Math.abs(yawDegrees(rig) - 90) < 1e-6, "the door finished wide open");
+
+    player.play("idle");
+    assert.equal(rig.parts.get("lamp")!.state, "on");
+    assert.ok(Math.abs(yawDegrees(rig) - 90) < 1e-6, "and the idle leaves it there instead of hauling it shut");
+    player.update(1.1);
+    assert.equal(rig.parts.get("lamp")!.state, "base", "the lamp still blinks");
+    assert.ok(Math.abs(yawDegrees(rig) - 90) < 1e-6, "a whole lap later the door has not moved");
+
+    // Closing from there still joins the pose the rig is actually standing in, not the idle's.
+    player.play("close");
+    assert.ok(Math.abs(yawDegrees(rig) - 90) < 1e-6, "no jump");
+    assert.ok(player.time < 0.05, "a wide-open door joins the close at its start");
+    player.update(1);
+    assert.ok(Math.abs(yawDegrees(rig)) < 1e-6, "and shuts");
+  });
+});
+
+test("the pose read back off a rig is the one that was applied to it", () => {
+  withRig((rig) => {
+    const player = createClipPlayer(rig);
+    player.play("open");
+    player.update(0.5);
+    const read = rigPose(rig);
+    assert.ok(Math.abs(read.get("door")!.rotation[1] - yawDegrees(rig)) < 1e-9);
+    assert.deepEqual(read.get("body")!.rotation.map((v) => Math.round(v)), [0, 0, 0], "an unanimated part reads as rest");
+    assert.deepEqual(read.get("body")!.scale, [1, 1, 1]);
+    assert.ok(read.has("*"), "the animated root is in there too");
   });
 });

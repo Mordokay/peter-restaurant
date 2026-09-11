@@ -156,6 +156,9 @@ export interface AuthoredClip {
   /** Seconds. */
   duration: number;
   loop?: boolean;
+  /** Drive only the parts this clip names and leave the rest of the rig where it stands, instead of
+   *  returning it to rest. A status-light idle can then blink over a door somebody left open. */
+  partial?: boolean;
   tracks: readonly ClipTrack[];
   events?: readonly ClipEvent[];
 }
