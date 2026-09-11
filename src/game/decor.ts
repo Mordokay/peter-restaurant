@@ -110,7 +110,8 @@ export function createDecorScene(scene: Scene, catalog: AuthoredVoxelCatalog, la
       if (!propVisible(entry.prop, layout)) options.colliders.remove(entry.prop.id);
       else options.colliders.set(entry.prop.id, entry.rig ? collidersOfMeshes(entry.meshes()) : mesh ? modelColliders(model, mesh.getWorldMatrix()) : []);
     }
-    if (options.particles && model.emitters?.length) {
+    // The decorate ghost is a preview (it even waits at y -100 before the first pointer move): no particles.
+    if (options.particles && model.emitters?.length && !entry.prop.id.startsWith("__")) {
       entry.emitters?.dispose();
       const mesh = entry.rig ? null : renderer.meshOf(entry.prop.id);
       // A prop's own particles never land on the prop itself (steam must not settle on the pot rim).

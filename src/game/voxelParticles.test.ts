@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { Vector3 } from "@babylonjs/core";
-import { defaultEmitter, spawnVelocity } from "./voxelParticles.ts";
+import { Matrix, NullEngine, Scene, Vector3 } from "@babylonjs/core";
+import { createParticleWorld, defaultEmitter, spawnVelocity } from "./voxelParticles.ts";
+import type { AuthoredVoxelModel } from "./voxelModel.ts";
 
 test("spawn velocities stay inside the emitter cone at the requested speed", () => {
   let seed = 7;
@@ -24,4 +25,48 @@ test("a default emitter is a sticky splashing burst on the given part", () => {
   assert.equal(emitter.part, "blade");
   assert.deepEqual(emitter.colors, ["#c0392b"]);
   assert.ok(emitter.stick && emitter.fade && emitter.gravity === 1);
+});
+
+test("emitter handles: burst fires once, continuous runs for its duration, stopAll silences it", () => {
+  const engine = new NullEngine();
+  const scene = new Scene(engine);
+  const world = createParticleWorld(scene, { capacity: 200, groundY: -100 });
+  const model: AuthoredVoxelModel = {
+    id: "pot", pitch: 0.01, palette: { c0: "#ffffff" }, parts: [{ id: "p0", pivot: [0, 0, 0], runs: [] }],
+    emitters: [
+      { ...defaultEmitter("splash", [0, 0, 0], "#c0392b"), mode: "burst", count: 5, life: [9, 9], gravity: 0 },
+      { ...defaultEmitter("steam", [0, 0, 0], "#eeeeee"), mode: "continuous", rate: 10, duration: 2, life: [9, 9], gravity: 0 },
+    ],
+  };
+  const handle = world.attach({ model, world: () => Matrix.Identity() });
+  assert.equal(world.stats().alive, 0, "a duration-bound emitter does not auto-start");
+
+  handle.fire("splash");
+  assert.equal(world.stats().alive, 5, "a burst fires its count");
+
+  // "start" on a burst emitter must fire it once, never run it forever.
+  handle.handleEvent({ t: 0, name: "x", emit: "splash", emitAction: "start" });
+  assert.equal(world.stats().alive, 10, "start on a burst emitter fires it once…");
+  world.update(1);
+  assert.equal(world.stats().alive, 10, "…and leaves nothing running");
+
+  handle.start("steam");
+  world.update(1);
+  assert.equal(world.stats().alive, 20, "ten a second for one second");
+  world.update(1);
+  assert.equal(world.stats().alive, 30, "the second second completes its two-second duration");
+  world.update(1);
+  assert.equal(world.stats().alive, 30, "the duration expired, so nothing more is emitted");
+
+  handle.start("steam");
+  world.update(0.5);
+  assert.equal(world.stats().alive, 35, "restarted");
+  handle.stopAll();
+  world.update(1);
+  assert.equal(world.stats().alive, 35, "stopAll silences a running emitter");
+
+  handle.dispose();
+  world.dispose();
+  scene.dispose();
+  engine.dispose();
 });

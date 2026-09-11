@@ -274,7 +274,7 @@ function showRig(model: AuthoredVoxelModel): VoxelRig {
     const rest = document.createElement("button");
     rest.textContent = "⏹";
     rest.title = "Rest pose";
-    rest.addEventListener("click", () => { if (!editor.active) { restRequested = true; clipPlayer?.stop(); } });
+    rest.addEventListener("click", () => { if (!editor.active) { restRequested = true; clipPlayer?.stop(); emitterHandle?.stopAll(); } });
     clipBar.append(rest);
   }
   restRequested = false;
@@ -349,7 +349,7 @@ const editor = createLabEditor({
     // The view's player must drive the new rig, and resume the looping clip once editing ends.
     clipPlayer = createClipPlayer(rig, { onEvent: (event) => { emitterHandle?.handleEvent(event); stats.textContent = `event "${event.name}" at ${event.t.toFixed(2)}s${event.swapModel ? ` → ${event.swapModel}` : ""}`; } });
   },
-  particles: { fire: (id) => { emitterHandle?.fire(id); }, handleEvent: (event) => { emitterHandle?.handleEvent(event); } },
+  particles: { fire: (id) => { emitterHandle?.fire(id); }, handleEvent: (event) => { emitterHandle?.handleEvent(event); }, stopAll: () => emitterHandle?.stopAll() },
   onStats(text) { stats.textContent = text; },
   setAutoRotate(on) { autoRotate = on; spinButton.classList.toggle("active", on); },
   onSaved(model, isNew) {

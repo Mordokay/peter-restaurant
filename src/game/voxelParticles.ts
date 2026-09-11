@@ -57,6 +57,8 @@ export interface EmitterHandle {
   fire(emitterId: string): boolean;
   start(emitterId: string): void;
   stop(emitterId: string): void;
+  /** Stop every running continuous emitter (playback stopped, prop removed, editor closed). */
+  stopAll(): void;
   /** Clip events carrying `emit` fire/start/stop the named emitter. */
   handleEvent(event: ClipEvent): void;
   running(emitterId: string): boolean;
@@ -161,8 +163,14 @@ export function createParticleWorld(scene: Scene, options: { capacity?: number; 
   const attach = (host: EmitterHost, attachOptions: { autoStart?: boolean } = {}): EmitterHandle => {
     const state: HandleState = { host, running: new Map(), accumulators: new Map(), alive: true };
     const specOf = (id: string) => host.model.emitters?.find((candidate) => candidate.id === id);
-    /** Run a continuous emitter for its duration (or until stopped when it has none). */
-    const start = (id: string): void => { const spec = specOf(id); if (spec) state.running.set(id, spec.duration && spec.duration > 0 ? spec.duration : Infinity); };
+    /** Run a continuous emitter for its duration (or until stopped when it has none).
+     *  A burst emitter has nothing to run, so "start" on one simply fires it once. */
+    const start = (id: string): void => {
+      const spec = specOf(id);
+      if (!spec) return;
+      if (spec.mode !== "continuous") { fireSpec(state, spec, spec.count); return; }
+      state.running.set(id, spec.duration && spec.duration > 0 ? spec.duration : Infinity);
+    };
     // Continuous emitters with no set duration run for as long as the model is placed (steam over a stove).
     if (attachOptions.autoStart ?? true) for (const spec of host.model.emitters ?? []) if (spec.mode === "continuous" && !(spec.duration && spec.duration > 0)) start(spec.id);
     handles.add(state);
@@ -176,6 +184,7 @@ export function createParticleWorld(scene: Scene, options: { capacity?: number; 
       },
       start,
       stop(id) { state.running.delete(id); },
+      stopAll() { state.running.clear(); state.accumulators.clear(); },
       handleEvent(event) {
         if (!event.emit) return;
         const action = event.emitAction ?? "burst";
@@ -183,7 +192,7 @@ export function createParticleWorld(scene: Scene, options: { capacity?: number; 
         if (!spec) return;
         if (action === "stop") state.running.delete(event.emit);
         else if (action === "start" || spec.mode === "continuous") start(event.emit);
-        else fireSpec(state, spec, spec.count);
+        else fireSpec(state, spec, spec.count); // a plain burst
       },
       running: (id) => state.running.has(id),
       dispose() { state.alive = false; handles.delete(state); },

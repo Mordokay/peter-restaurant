@@ -2206,3 +2206,15 @@ Three systems the user asked for before level design starts.
 - `emitter-add` in the lab took its undo snapshot *after* adding, so Ctrl+Z could not remove a new emitter. The `beginStroke()` now precedes `addEmitter` like every other meta edit; `src/game/emitterEditing.test.ts` covers add/undo/redo, unique ids, rename following clip events, and the saved model.
 - The catalog index now records `emitters: <count>` next to `glow`/`lights` (`src/assets/catalog/index.ts` `entryFor`, `scripts/catalog-io.mjs` `indexEntry`), so models carrying particles are visible to the browser and to filters. Existing index entries pick it up on the next model write or `rebuildIndex`.
 - Confirmed by round trip: `model.emitters` and clip events' `emit` / `emitAction` survive the VXM binary format, so particle authoring saves with the model.
+
+### Particle audit round 2 (2026-09-11)
+
+Three defects found by a read-through of the emitter lifecycle, all fixed:
+
+- **A continuous emitter started by a clip event kept running after playback stopped.** `player.pause()`/`stop()` know nothing about particles, so steam poured on over a frozen clip (and every lap of a looping clip re-armed it). The editor's `update` now watches the playing→stopped edge and calls `host.particles.stopAll()`, which covers every pause path (⏸, Home/End, arrow jumps, leaving Animate) instead of patching a dozen call sites; the viewer's ⏹ rest button does the same. New `EmitterHandle.stopAll()`.
+- **`emitAction: "start"` on a *burst* emitter ran it forever** at `rate = count` per second. `start()` now fires a burst emitter once and only runs continuous ones.
+- **The decorate placement ghost sprayed particles**, including while parked at y −100 before the first pointer move. `syncPhysics` skips emitters for `__`-prefixed ids.
+
+Also confirmed by the audit: scrubbing the dope sheet does **not** fire clip events, so event-driven bursts are only previewed during playback (▶ Test fires one on demand, and duration-less continuous emitters auto-start on attach so they are always visible). Characters are excluded from the collider field by the `isPerson` name test, so particles pass through people. The structure-tagged occluder path is reachable: 21 catalog models carry the tag (fences, stone_wall_section, gate_wood, wall shelves).
+
+Tests: `src/game/voxelParticles.test.ts` drives a real `createParticleWorld` on a Babylon `NullEngine` — burst fires once, start-on-burst does not run, a continuous emitter emits rate × duration and then stops, `stopAll` silences it. 100 passing.

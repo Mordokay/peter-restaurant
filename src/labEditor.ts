@@ -66,8 +66,8 @@ export interface LabEditorHost {
   /** Show/hide the editor panels and re-flow the canvas. */
   setLayout(editing: boolean, animating: boolean): void;
   onRigReplaced(rig: VoxelRig): void;
-  /** Particle preview: fire an emitter of the edited model, and route clip events (emit) while playing. */
-  particles?: { fire(emitterId: string): void; handleEvent(event: ClipEvent): void };
+  /** Particle preview: fire an emitter of the edited model, route clip events (emit) while playing, and silence them when playback stops. */
+  particles?: { fire(emitterId: string): void; handleEvent(event: ClipEvent): void; stopAll(): void };
   onStats(text: string): void;
   setAutoRotate(on: boolean): void;
   onSaved(model: AuthoredVoxelModel, isNew: boolean): void;
@@ -154,6 +154,8 @@ export function createLabEditor(host: LabEditorHost): LabEditor {
   let player: ClipPlayer | null = null;
   let activeClipId: string | null = null;
   let scrubTime = 0;
+  /** Playback state last frame: a running clip that stops must take its emitters with it. */
+  let wasPlaying = false;
   /** Event marker picked in the dope sheet (its t), edited in the right panel. */
   let selectedEventT: number | null = null;
   /** Emitter shown in the 💥 Particles form. */
@@ -2093,6 +2095,7 @@ export function createLabEditor(host: LabEditorHost): LabEditor {
   }
   function togglePlay(): void {
     if (!player || !activeClipId) return;
+    // Pausing also silences continuous emitters a "start" event set running, or steam keeps pouring while the clip is frozen.
     if (player.playing) { player.pause(); scrubTime = player.time; }
     else {
       draftPose = null;
@@ -2758,6 +2761,11 @@ export function createLabEditor(host: LabEditorHost): LabEditor {
     },
     update(dt) {
       if (needsRebuild && session && rig) { needsRebuild = false; rebuild(); }
+      // Playback just stopped (pause, Home/End, a key jump, leaving Animate): silence any
+      // continuous emitter a "start" event set running, or steam pours on over a frozen clip.
+      const playing = Boolean(player?.playing) && mode === "animate";
+      if (wasPlaying && !playing) host.particles?.stopAll();
+      wasPlaying = playing;
       if (player?.playing && mode === "animate") {
         player.update(dt);
         scrubTime = player.time;
