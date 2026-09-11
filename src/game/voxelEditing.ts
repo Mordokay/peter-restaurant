@@ -59,6 +59,8 @@ export interface PartMeta {
   sockets: Record<string, readonly [number, number, number]>;
   /** Stored, non-destructive rest transform (degrees / cells / factors). */
   transform: { rotation: [number, number, number]; position: [number, number, number]; scale: [number, number, number] };
+  /** 0..1. Below 1 the part is translucent standing still — a glass door, a jar, a window pane. */
+  opacity: number;
   /** Named voxel snapshots besides "base". Their cells live under the layer id `part@state`. */
   states: string[];
 }
@@ -147,7 +149,7 @@ export class VoxelEditSession {
     this.originalPalette = model.palette;
     this.partOrder = model.parts.map((part) => part.id);
     for (const part of model.parts) {
-      this.meta.set(part.id, { pivot: [...part.pivot] as [number, number, number], parent: part.parent, sockets: { ...(part.sockets ?? {}) }, transform: fromRest(part.transform), states: Object.keys(part.states ?? {}) });
+      this.meta.set(part.id, { pivot: [...part.pivot] as [number, number, number], parent: part.parent, sockets: { ...(part.sockets ?? {}) }, transform: fromRest(part.transform), opacity: part.transform?.opacity ?? 1, states: Object.keys(part.states ?? {}) });
     }
     this.clipList = (model.clips ?? []).map((clip) => structuredClone(clip) as AuthoredClip);
     for (const [key, intensity] of Object.entries(model.emissive ?? {})) { const hex = model.palette[key]; if (hex && intensity > 0) this.glowByHex.set(hex.toLowerCase(), intensity); }
@@ -534,7 +536,7 @@ export class VoxelEditSession {
     return this.autoStroke(() => {
       const anchor = parent ? this.meta.get(parent) : undefined;
       this.partOrder.push(id);
-      this.meta.set(id, { pivot: anchor ? [...anchor.pivot] as [number, number, number] : [0, 0, 0], parent: parent && this.meta.has(parent) ? parent : undefined, sockets: {}, transform: IDENTITY_TRANSFORM(), states: [] });
+      this.meta.set(id, { pivot: anchor ? [...anchor.pivot] as [number, number, number] : [0, 0, 0], parent: parent && this.meta.has(parent) ? parent : undefined, sockets: {}, transform: IDENTITY_TRANSFORM(), opacity: 1, states: [] });
       this.generation++;
       return true;
     });
@@ -552,6 +554,15 @@ export class VoxelEditSession {
       this.generation++;
     });
   }
+  /** How see-through a part is at rest (1 = solid). */
+  partOpacity(part: string): number { return this.meta.get(part)?.opacity ?? 1; }
+  setPartOpacity(part: string, opacity: number): void {
+    const entry = this.meta.get(part);
+    if (!entry) return;
+    entry.opacity = Math.min(1, Math.max(0.05, Math.round(opacity * 100) / 100));
+    this.generation++;
+  }
+
   /** Write the stored transform into the voxels (re-gridding) and reset it. */
   bakePartTransform(part: string): number {
     const entry = this.meta.get(part);
@@ -638,7 +649,7 @@ export class VoxelEditSession {
       const center: [number, number, number] = [Math.round(pivots.reduce((sum, p) => sum + p[0], 0) / n), Math.round(pivots.reduce((sum, p) => sum + p[1], 0) / n), Math.round(pivots.reduce((sum, p) => sum + p[2], 0) / n)];
       const firstIndex = Math.min(...tops.map((id) => this.partOrder.indexOf(id)));
       this.partOrder.splice(firstIndex, 0, groupId);
-      this.meta.set(groupId, { pivot: center, parent, sockets: {}, transform: IDENTITY_TRANSFORM(), states: [] });
+      this.meta.set(groupId, { pivot: center, parent, sockets: {}, transform: IDENTITY_TRANSFORM(), opacity: 1, states: [] });
       for (const id of tops) this.meta.get(id)!.parent = groupId;
       this.generation++;
       return true;
@@ -1180,6 +1191,7 @@ export class VoxelEditSession {
       if (meta?.parent && this.meta.has(meta.parent)) part.parent = meta.parent;
       if (meta && Object.keys(meta.sockets).length) part.sockets = { ...meta.sockets };
       if (meta && !isIdentity(meta.transform)) part.transform = toRest(meta.transform);
+      if (meta && meta.opacity < 1) part.transform = { ...(part.transform ?? {}), opacity: meta.opacity };
       if (meta && meta.states.length) {
         const states: Record<string, { runs: VoxelRun[] }> = {};
         for (const state of meta.states) states[state] = { runs: options.cellsFor && !options.cellsFor(partId) ? [] : this.runsOf(layerId(partId, state), keyFor, { x: 0, y: 0, z: 0 }) };

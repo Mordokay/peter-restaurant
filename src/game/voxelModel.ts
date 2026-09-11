@@ -100,8 +100,11 @@ export interface ParticleEmitter {
   id: string;
   /** Part whose node the emitter follows (position in that part's cell grid); absent = the model grid. */
   part?: string;
-  /** Cell position. */
+  /** Cell position: the emitter's origin, or the centre of its volume. */
   position: [number, number, number];
+  /** Emit from a box around `position` rather than a point, in cells (width, height, depth).
+   *  Cold air filling a freezer, dust in a shaft of light, midges over a pond. */
+  volume?: [number, number, number];
   /** Hex colours particles pick from. */
   colors: string[];
   /** Particle edge in cells (1 = one voxel of this model). */

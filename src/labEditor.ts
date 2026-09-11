@@ -748,6 +748,7 @@ export function createLabEditor(host: LabEditorHost): LabEditor {
           <div class="lab-panel-row"><span class="lab-field-label">Scale ×</span>${[0, 1, 2].map((i) => `<input type="number" data-transform="scale" data-index="${i}" value="${meta.transform.scale[i]}" step="0.1" min="0.01" title="${"xyz"[i]} factor about the joint" />`).join("")}<button data-tf-scale="2" title="Double all">×2</button><button data-tf-scale="0.5" title="Halve all">÷2</button></div>
           <div class="lab-panel-row"><button data-action="tf-reset" ${isIdentityTransform(meta.transform) ? "disabled" : ""} title="Back to no rotation, no offset, scale 1">↺ Reset</button><button data-action="tf-bake" ${isIdentityTransform(meta.transform) ? "disabled" : ""} title="Write the transform into the voxels (re-grids them; whole-cell moves and 90° turns are exact) and reset it">⤓ Bake into voxels</button><span class="lab-editor-grow"></span><span class="lab-field-label">Mirror</span><button data-tf-mirror="0" title="Mirror the voxels across X (baked, exact)">X</button><button data-tf-mirror="1" title="Mirror the voxels across Y (baked, exact)">Y</button><button data-tf-mirror="2" title="Mirror the voxels across Z (baked, exact)">Z</button></div>
           ${Object.keys(meta.sockets).length ? `<div class="lab-panel-row"><span class="lab-field-label">Sockets</span>${Object.entries(meta.sockets).map(([name, cell]) => `<button data-socket-remove="${escapeHtml(name)}" title="Remove socket ${escapeHtml(name)} at (${cell.join(", ")})">🔗 ${escapeHtml(name)} ✕</button>`).join("")}</div>` : ""}
+          <div class="lab-panel-row"><span class="lab-field-label" title="How see-through this part is standing still. Glass doors, jars and window panes live here; a clip's own opacity multiplies it">👓 See-through</span><input type="range" data-action="part-opacity" min="0.05" max="1" step="0.05" value="${session!.partOpacity(activePart!)}" title="1 = solid, 0.3 = glass" /><code>${Math.round(session!.partOpacity(activePart!) * 100)}%</code></div>
           <div class="lab-panel-row"><button data-action="part-delete" title="Delete this part and its voxels; children re-attach to its parent (Del)">🗑️ Delete part</button></div>
         </section>` : `<section class="lab-panel-section"><small>Select a layer on the left to see its joint, transforms and sockets.</small></section>`;
       panels.right.innerHTML = `${historyRow}
@@ -1241,6 +1242,12 @@ export function createLabEditor(host: LabEditorHost): LabEditor {
     const input = event.target as HTMLInputElement;
     if (!session) return;
     if (input.dataset.action === "color") { color = input.value; (input.parentElement as HTMLElement).style.background = color; return; }
+    if (input.dataset.action === "part-opacity" && activePart) {
+      session.setPartOpacity(activePart, Number(input.value) || 1);
+      needsRebuild = true;
+      scheduleHistoryPersist();
+      return;
+    }
     if (input.dataset.action === "glow-intensity" && selectedPaletteColor) { session.beginStroke(); session.setGlow(selectedPaletteColor, Number(input.value) || 1); session.endStroke(); input.title = `Glow strength ×${session.glowOf(selectedPaletteColor)}`; needsRebuild = true; scheduleHistoryPersist(); return; }
     if ((input.dataset.pose || input.dataset.opacity) && input.dataset.multi) return; // committed on change, see onPanelChange
     if (input.dataset.opacity) {
@@ -1262,6 +1269,12 @@ export function createLabEditor(host: LabEditorHost): LabEditor {
     if (!session) return;
     if (input.dataset.action === "color") { setColor(input.value); return; }
     if (input.dataset.action === "glow-intensity") { renderRight(); return; }
+    if (input.dataset.action === "part-opacity" && activePart) {
+      session.beginStroke(); session.setPartOpacity(activePart, Number(input.value) || 1); session.endStroke();
+      statusText = `${activePart} is ${Math.round(session.partOpacity(activePart) * 100)}% solid`;
+      markChanged();
+      return;
+    }
     if (input.dataset.emitterField !== undefined && selectedEmitter) {
       const spec = session.emitter(selectedEmitter);
       if (!spec) return;

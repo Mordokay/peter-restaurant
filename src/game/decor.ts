@@ -4,6 +4,7 @@ import { createClipPlayer, createVoxelRig, type ClipPlayer, type VoxelRig } from
 import { modelLightPositions, type LightPool } from "./lighting";
 import { createWorldRenderer, type WorldInstance, type WorldRenderer } from "./worldRenderer";
 import { collidersOfMeshes, GRAVITY, modelColliders, type ColliderField } from "./gravity";
+import { createStorageDisplay, type StorageDisplay } from "./storageDisplay";
 import type { EmitterHandle, ParticleWorld } from "./voxelParticles";
 import { cellsFromAuthoredModel } from "./voxelModel";
 import { propRotation, propScale, propVisible, type DecorLayout, type DecorProp } from "./decorLayout";
@@ -38,6 +39,8 @@ export interface PlacedProp {
   pinned: boolean;
   /** Particle emitters of the model, following this placement. */
   emitters?: EmitterHandle;
+  /** Goods standing in the model's sockets, when the prop carries stock. */
+  storage?: StorageDisplay;
   /** Meshes drawing this prop right now: the rig's part meshes or the single instance. */
   meshes(): AbstractMesh[];
 }
@@ -111,6 +114,7 @@ export function createDecorScene(scene: Scene, catalog: AuthoredVoxelCatalog, la
       else options.colliders.set(entry.prop.id, entry.rig ? collidersOfMeshes(entry.meshes()) : mesh ? modelColliders(model, mesh.getWorldMatrix()) : []);
     }
     // The decorate ghost is a preview (it even waits at y -100 before the first pointer move): no particles.
+    syncStorage(entry, model);
     if (options.particles && model.emitters?.length && !entry.prop.id.startsWith("__")) {
       entry.emitters?.dispose();
       const mesh = entry.rig ? null : renderer.meshOf(entry.prop.id);
@@ -120,7 +124,21 @@ export function createDecorScene(scene: Scene, catalog: AuthoredVoxelCatalog, la
       else entry.emitters = undefined;
     }
   };
-  const dropPhysics = (entry: PlacedProp | undefined): void => { if (!entry) return; options.colliders?.remove(entry.prop.id); entry.emitters?.dispose(); entry.emitters = undefined; };
+  const dropPhysics = (entry: PlacedProp | undefined): void => {
+    if (!entry) return;
+    options.colliders?.remove(entry.prop.id);
+    entry.emitters?.dispose(); entry.emitters = undefined;
+    entry.storage?.dispose(); entry.storage = undefined;
+  };
+  /** Stand the prop's goods in its sockets, so a stocked container shows what it holds. */
+  const syncStorage = (entry: PlacedProp, model: AuthoredVoxelModel): void => {
+    entry.storage?.dispose();
+    entry.storage = undefined;
+    if (!entry.prop.stock?.length) return;
+    if (!model.parts.some((part) => Object.keys(part.sockets ?? {}).length)) return;
+    entry.storage = createStorageDisplay({ scene, model, node: entry.root, catalog, shadows: options.shadows });
+    entry.storage.show(entry.prop.stock);
+  };
   const renderer = createWorldRenderer(scene, { name: "decor", shadows: options.shadows, lightPool: options.lightPool, receiveShadows: true, cacheRev: options.cacheRev });
 
   /** A prop needs a rig while it animates, reacts, is pinned, or is the editor's ghost. */

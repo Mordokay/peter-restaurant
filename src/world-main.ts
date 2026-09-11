@@ -268,5 +268,6 @@ engine.runRenderLoop(() => {
 window.addEventListener("resize", () => engine.resize());
 
 Object.assign(window as unknown as Record<string, unknown>, {
-  __world: { scene, camera, player, level, cutaway, decor, particles, colliders, dayNight, build, layout: levelLayout, turn: turnCamera, setProgress: (next: LevelProgress) => { progress = next; applyProgress(); } },
+  __world: { scene, camera, player, level, cutaway, decor, particles, colliders, dayNight, build, layout: levelLayout, turn: turnCamera,
+    catalog, ensureModels, decorLayout, setProgress: (next: LevelProgress) => { progress = next; applyProgress(); } },
 });

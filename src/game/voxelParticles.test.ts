@@ -70,3 +70,37 @@ test("emitter handles: burst fires once, continuous runs for its duration, stopA
   scene.dispose();
   engine.dispose();
 });
+
+test("an emitter with a volume seeds anywhere inside that box, not at a point", () => {
+  const engine = new NullEngine();
+  const scene = new Scene(engine);
+  const world = createParticleWorld(scene, { capacity: 400, groundY: -100 });
+  const model: AuthoredVoxelModel = {
+    id: "cabinet", pitch: 0.01, palette: { c0: "#ffffff" }, parts: [{ id: "p0", pivot: [0, 0, 0], runs: [] }],
+    emitters: [{
+      ...defaultEmitter("fog", [0, 0, 0], "#eaf6fd"),
+      volume: [80, 120, 60], mode: "burst", count: 200, gravity: 0, speed: [0, 0], life: [9, 9], alpha: 0.2,
+    }],
+  };
+  const handle = world.attach({ model, world: () => Matrix.Identity() });
+  handle.fire("fog");
+  world.update(0.001);
+
+  // Read the cubes back: they should be spread across the box, not stacked on one spot.
+  const mesh = scene.meshes.find((candidate) => /glass/.test(candidate.name))!;
+  const positions = mesh.getVerticesData("position")!;
+  const centres: number[][] = [];
+  for (let p = 0; p < positions.length / 3; p += 24) {
+    let cx = 0, cy = 0, cz = 0;
+    for (let v = 0; v < 24; v++) { cx += positions[(p + v) * 3]!; cy += positions[(p + v) * 3 + 1]!; cz += positions[(p + v) * 3 + 2]!; }
+    if (Math.abs(cx) + Math.abs(cy) + Math.abs(cz) > 1e-6) centres.push([cx / 24, cy / 24, cz / 24]);
+  }
+  assert.ok(centres.length > 100, `expected a boxful of particles, got ${centres.length}`);
+  const spread = (axis: number) => Math.max(...centres.map((c) => c[axis]!)) - Math.min(...centres.map((c) => c[axis]!));
+  assert.ok(spread(0) > 0.5, `should fill the 0.8 m width, spread ${spread(0).toFixed(2)}`);
+  assert.ok(spread(1) > 0.8, `should fill the 1.2 m height, spread ${spread(1).toFixed(2)}`);
+  assert.ok(spread(2) > 0.35, `should fill the 0.6 m depth, spread ${spread(2).toFixed(2)}`);
+  assert.ok(spread(0) < 0.9 && spread(1) < 1.3, "and stay inside the box");
+
+  handle.dispose(); world.dispose(); scene.dispose(); engine.dispose();
+});

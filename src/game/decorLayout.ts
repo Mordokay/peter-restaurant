@@ -24,6 +24,9 @@ export interface DecorProp {
   group?: string;
   /** Hidden props are not shown (in the game either) until shown again. */
   hidden?: boolean;
+  /** What a container is holding. Goods stand in the model's sockets, so a stocked freezer shows
+   *  the real catalog food it contains (see src/game/storageDisplay.ts). */
+  stock?: { model: string; count?: number; only?: string | string[]; prefer?: string | string[]; footprint?: [number, number] }[];
 }
 
 /** A named set of props that can be hidden and shown together ("autumn table", "wall tools"). */
@@ -68,6 +71,10 @@ export function validateDecorLayout(layout: DecorLayout, catalog: AuthoredVoxelC
     if (prop.rotation !== undefined && (!Array.isArray(prop.rotation) || prop.rotation.length !== 3 || prop.rotation.some((v) => !Number.isFinite(v)))) errors.push(`prop ${prop.id} rotation needs 3 numbers`);
     if (prop.clip && catalog.models[prop.model] && !catalog.models[prop.model]!.clips?.some((clip) => clip.id === prop.clip)) errors.push(`prop ${prop.id} loops unknown clip ${prop.clip}`);
     if (prop.interactClip && catalog.models[prop.model] && !catalog.models[prop.model]!.clips?.some((clip) => clip.id === prop.interactClip)) errors.push(`prop ${prop.id} reacts with unknown clip ${prop.interactClip}`);
+    for (const entry of prop.stock ?? []) {
+      if (!catalog.models[entry.model]) errors.push(`prop ${prop.id} is stocked with unknown model ${entry.model}`);
+      if (entry.count !== undefined && (!Number.isFinite(entry.count) || entry.count < 0)) errors.push(`prop ${prop.id} has a bad stock count for ${entry.model}`);
+    }
   }
   return errors;
 }

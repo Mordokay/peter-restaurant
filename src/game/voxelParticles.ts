@@ -121,7 +121,7 @@ export function createParticleWorld(scene: Scene, options: { capacity?: number; 
   const live: Live[] = [];
   const handles = new Set<HandleState>();
 
-  const spawn = (spec: ParticleEmitter, origin: Vector3, direction: Vector3, pitch: number, count: number, exclude?: string): number => {
+  const spawn = (spec: ParticleEmitter, origin: Vector3, direction: Vector3, pitch: number, count: number, exclude?: string, frame?: Matrix): number => {
     let made = 0;
     const alpha = Math.min(1, Math.max(0, spec.alpha ?? 1));
     const pool = poolFor(alpha);
@@ -133,10 +133,20 @@ export function createParticleWorld(scene: Scene, options: { capacity?: number; 
       particle.color = new Color4(c.r, c.g, c.b, alpha);
       const size = Math.max(0.002, spec.size * pitch);
       const velocity = spawnVelocity(direction, spec.spread, lerpRange(spec.speed, random()), random);
-      const jitter = size * 0.6;
+      // An emitter with a volume seeds anywhere inside that box, turned to match the model it sits on,
+      // so cold air can fill a whole cabinet rather than pour from one point.
+      let offsetX = 0, offsetY = 0, offsetZ = 0;
+      if (spec.volume) {
+        const local = new Vector3((random() - 0.5) * spec.volume[0] * pitch, (random() - 0.5) * spec.volume[1] * pitch, (random() - 0.5) * spec.volume[2] * pitch);
+        const world = frame ? Vector3.TransformNormal(local, frame) : local;
+        offsetX = world.x; offsetY = world.y; offsetZ = world.z;
+      } else {
+        const jitter = size * 0.6;
+        offsetX = (random() - 0.5) * jitter; offsetY = (random() - 0.5) * jitter; offsetZ = (random() - 0.5) * jitter;
+      }
       const body: Live = {
         particle, size, spec, exclude, pool,
-        x: origin.x + (random() - 0.5) * jitter, y: origin.y + (random() - 0.5) * jitter, z: origin.z + (random() - 0.5) * jitter,
+        x: origin.x + offsetX, y: origin.y + offsetY, z: origin.z + offsetZ,
         vx: velocity.x, vy: velocity.y, vz: velocity.z,
         life: lerpRange(spec.life, random()), maxLife: 0, resting: false,
         spin: spec.spin ? new Vector3((random() - 0.5) * 12, (random() - 0.5) * 12, (random() - 0.5) * 12) : Vector3.Zero(),
@@ -165,7 +175,7 @@ export function createParticleWorld(scene: Scene, options: { capacity?: number; 
 
   /** running: emitter id → seconds left (Infinity = until stopped). */
   interface HandleState { host: EmitterHost; running: Map<string, number>; accumulators: Map<string, number>; alive: boolean }
-  const emitterFrame = (state: HandleState, spec: ParticleEmitter): { origin: Vector3; direction: Vector3 } => {
+  const emitterFrame = (state: HandleState, spec: ParticleEmitter): { origin: Vector3; direction: Vector3; matrix: Matrix } => {
     const { model } = state.host;
     const part = spec.part ? model.parts.find((candidate) => candidate.id === spec.part) : undefined;
     const partMatrix = spec.part ? state.host.partWorld?.(spec.part) ?? null : null;
@@ -180,11 +190,11 @@ export function createParticleWorld(scene: Scene, options: { capacity?: number; 
     }
     const origin = Vector3.TransformCoordinates(local, matrix);
     const direction = Vector3.TransformNormal(new Vector3(spec.direction[0], spec.direction[1], spec.direction[2]), matrix);
-    return { origin, direction };
+    return { origin, direction, matrix };
   };
   const fireSpec = (state: HandleState, spec: ParticleEmitter, count: number): number => {
-    const { origin, direction } = emitterFrame(state, spec);
-    return spawn(spec, origin, direction, state.host.model.pitch, count, state.host.excludeCollider);
+    const { origin, direction, matrix } = emitterFrame(state, spec);
+    return spawn(spec, origin, direction, state.host.model.pitch, count, state.host.excludeCollider, matrix);
   };
   const attach = (host: EmitterHost, attachOptions: { autoStart?: boolean } = {}): EmitterHandle => {
     const state: HandleState = { host, running: new Map(), accumulators: new Map(), alive: true };
