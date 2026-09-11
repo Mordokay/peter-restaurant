@@ -171,3 +171,109 @@ export function withoutKey(clip: AuthoredClip, part: string, t: number): Authore
     .filter((track) => track.keys.length > 0);
   return { ...clip, tracks };
 }
+
+// ---------------------------------------------------------- transitions --
+// Interrupting one clip with another. Cutting to the first frame of the new
+// clip snaps the rig — close a half-open door and it jumps wide before it
+// swings. Games solve this two ways, and both are worth having:
+//
+//   * POSE MATCHING — start the new clip at the time whose pose is closest to
+//     the one we are standing in. A door caught 40% of the way open starts
+//     40% of the way through the close and takes the remaining 60% of the
+//     time, which is also what a real door does. (Unreal calls this pose
+//     matching; the sync markers that keep a walk from snapping mid-stride
+//     are the same idea applied to a loop.)
+//   * INERTIALIZATION — whatever difference is left after the match is
+//     captured as a pose offset and decays to zero over a short blend, so the
+//     switch has no visible step even when no time in the clip matches well.
+//     Cheaper than a cross-fade: the outgoing clip is never sampled again.
+//
+// Matching alone leaves a step whenever the clips are not mirror images;
+// blending alone preserves the jump as a fast slide. Together they read as
+// one continuous movement.
+
+/** A cell of travel is worth two degrees of turn, a whole unit of scale ninety. */
+const POSITION_WEIGHT = 2;
+const SCALE_WEIGHT = 90;
+
+export interface PoseOffset { rotation: Triple; position: Triple; scale: Triple }
+
+/** How far apart two poses of one part are, in rough "degrees of difference". */
+export function poseDistance(a: PartPose | undefined, b: PartPose | undefined): number {
+  const x = a ?? REST_POSE, y = b ?? REST_POSE;
+  let sum = 0;
+  for (let i = 0; i < 3; i++) {
+    sum += Math.abs(x.rotation[i]! - y.rotation[i]!);
+    sum += Math.abs(x.position[i]! - y.position[i]!) * POSITION_WEIGHT;
+    sum += Math.abs(x.scale[i]! - y.scale[i]!) * SCALE_WEIGHT;
+  }
+  return sum;
+}
+
+/** The time in `clip` whose pose sits closest to `pose`, over the parts the clip drives. */
+export function matchClipTime(clip: AuthoredClip, pose: Map<string, PartPose>, options: { samples?: number } = {}): number {
+  if (clip.duration <= 0 || clip.tracks.length === 0) return 0;
+  const cost = (t: number): number => {
+    let sum = 0;
+    for (const [part, candidate] of sampleClip(clip, t)) sum += poseDistance(pose.get(part), candidate);
+    return sum;
+  };
+  // A coarse sweep finds the right part of the timeline; the clip may dip and
+  // rise again (a door that overshoots), so the whole thing has to be walked.
+  const steps = Math.min(240, Math.max(12, Math.round(options.samples ?? clip.duration * 60)));
+  let best = 0, bestCost = cost(0);
+  for (let i = 1; i <= steps; i++) {
+    const t = (clip.duration * i) / steps;
+    const c = cost(t);
+    if (c < bestCost) { bestCost = c; best = t; }
+  }
+  // Then refine between the neighbouring samples, where the cost is a simple
+  // valley, so the start time is not quantized to the sweep's grid.
+  let lo = Math.max(0, best - clip.duration / steps), hi = Math.min(clip.duration, best + clip.duration / steps);
+  for (let i = 0; i < 24 && hi - lo > 1e-4; i++) {
+    const a = lo + (hi - lo) / 3, b = hi - (hi - lo) / 3;
+    if (cost(a) <= cost(b)) hi = b; else lo = a;
+  }
+  const refined = (lo + hi) / 2;
+  return cost(refined) <= bestCost ? refined : best;
+}
+
+/** The difference `from` - `to`, per part: the step a plain cut would show. */
+export function poseOffsets(from: Map<string, PartPose>, to: Map<string, PartPose>): Map<string, PoseOffset> {
+  const offsets = new Map<string, PoseOffset>();
+  for (const part of new Set([...from.keys(), ...to.keys()])) {
+    const a = from.get(part) ?? REST_POSE, b = to.get(part) ?? REST_POSE;
+    const offset: PoseOffset = {
+      rotation: [a.rotation[0] - b.rotation[0], a.rotation[1] - b.rotation[1], a.rotation[2] - b.rotation[2]],
+      position: [a.position[0] - b.position[0], a.position[1] - b.position[1], a.position[2] - b.position[2]],
+      scale: [a.scale[0] - b.scale[0], a.scale[1] - b.scale[1], a.scale[2] - b.scale[2]],
+    };
+    const moved = offset.rotation.some((v) => Math.abs(v) > 1e-6) || offset.position.some((v) => Math.abs(v) > 1e-6) || offset.scale.some((v) => Math.abs(v) > 1e-6);
+    if (moved) offsets.set(part, offset);
+  }
+  return offsets;
+}
+
+/** Add a decaying share of the offsets back onto a sampled pose. A part the new
+ *  clip does not drive is still returned, so it eases back to rest rather than snapping. */
+export function applyPoseOffsets(poses: Map<string, PartPose>, offsets: Map<string, PoseOffset>, weight: number): Map<string, PartPose> {
+  if (weight <= 0 || offsets.size === 0) return poses;
+  const out = new Map(poses);
+  for (const [part, offset] of offsets) {
+    const pose = out.get(part) ?? REST_POSE;
+    out.set(part, {
+      ...pose,
+      rotation: [pose.rotation[0] + offset.rotation[0] * weight, pose.rotation[1] + offset.rotation[1] * weight, pose.rotation[2] + offset.rotation[2] * weight],
+      position: [pose.position[0] + offset.position[0] * weight, pose.position[1] + offset.position[1] * weight, pose.position[2] + offset.position[2] * weight],
+      scale: [pose.scale[0] + offset.scale[0] * weight, pose.scale[1] + offset.scale[1] * weight, pose.scale[2] + offset.scale[2] * weight],
+    });
+  }
+  return out;
+}
+
+/** Offset weight over a blend: 1 at the switch, easing to 0 with no kick at the end. */
+export function blendWeight(elapsed: number, duration: number): number {
+  if (duration <= 0) return 0;
+  const x = Math.min(1, Math.max(0, elapsed / duration));
+  return (1 - x) ** 3;
+}

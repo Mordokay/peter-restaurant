@@ -1,4 +1,4 @@
-import type { VoxelCell } from "./voxelGeometry";
+import type { VoxelCell } from "./voxelGeometry.ts";
 
 export type VoxelCoordinate = readonly [x: number, y: number, z: number, color: string];
 export type VoxelRun = readonly [y: number, z: number, xStart: number, xEnd: number, color: string];

@@ -2287,3 +2287,27 @@ The first freezer was too coarse, opened inward, and had its produce painted on.
 - **Freezer timing.** The fog starts as the door cracks open (t = 0.12 of `open`) and stops only when the door is shut (t = 0.85 of `close`, its last frame). The light likewise goes out on the final frame rather than as the door begins to move.
 - **A light switch cuts, it does not dissolve.** State keys now carry `transition: "cut"`. Without it a state key blends over the whole run-up from the previous key, so the part sat mid-transition and the gated light went dark the instant the door began to close.
 - **Pooled decor lights honour `whenState`.** `decor.ts` skips a gated light whose part is not showing its state, and re-registers when a clip switches it, so a freezer in the world is dark until its door opens. Only the lab's rig lights respected the gate before.
+
+### No opening burst, and clips that join instead of jumping (2026-09-11)
+
+- **A continuous emitter a clip drives no longer auto-starts.** `attach` collects every emitter named by a
+  clip event with `start`/`stop` and leaves those alone; only emitters nothing drives pour on their own
+  (steam over a stove). A shut freezer is now perfectly still — before, its fog ran from the moment the prop
+  was placed.
+- **Starting one emits nothing on the spot.** The accumulator resets on `start`, so the population climbs at
+  `rate` and levels off at `rate x life`. The freezer's doorway spill became a continuous emitter over the
+  second the door swings rather than a 70-particle burst.
+- **Interrupting a clip picks up from the pose we are standing in** (`voxelClips.ts`, `createClipPlayer`).
+  Two standard techniques, and we do both, because each alone falls short:
+  - `matchClipTime` scans the new clip for the time whose pose is closest to the current one (**pose
+    matching**). A door 40% open joins the close 40% in and takes the remaining 60% of the time. Measured in
+    the browser: interrupted at 45°, the door shuts in 200 ms; from fully open, 800 ms.
+  - `poseOffsets` / `applyPoseOffsets` / `blendWeight` capture whatever step is left and decay it to zero
+    over 0.14 s (**inertialization** — cheaper than a cross-fade, since the old clip is never sampled again).
+    A part the new clip does not drive is carried too, so it eases back to rest instead of snapping.
+  `play` takes `match` and `blend`; matching is on by default when another clip is running and no explicit
+  `from` was given, so every model gets this without authoring anything.
+- **The lab's emitter panel now edits shape, life curves and volume** — the fields existed in the data but
+  only a generator could set them.
+- `voxelRig.ts` and the modules it imports carry `.ts` on their relative imports, so `voxelRig.test.ts` can
+  drive a real rig under a NullEngine.

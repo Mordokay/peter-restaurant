@@ -245,10 +245,17 @@ export function createParticleWorld(scene: Scene, options: {
       const spec = specOf(id);
       if (!spec) return;
       if (spec.mode !== "continuous") { fireSpec(state, spec, spec.count); return; }
+      // A fresh run starts from nothing: no leftover fraction, no catch-up burst.
+      // The population then climbs at `rate` until births and deaths balance at rate x life.
+      state.accumulators.set(id, 0);
       state.running.set(id, spec.duration && spec.duration > 0 ? spec.duration : Infinity);
     };
-    // Continuous emitters with no set duration run for as long as the model is placed (steam over a stove).
-    if (attachOptions.autoStart ?? true) for (const spec of host.model.emitters ?? []) if (spec.mode === "continuous" && !(spec.duration && spec.duration > 0)) start(spec.id);
+    // Continuous emitters with no set duration run for as long as the model is placed (steam over a
+    // stove) — unless a clip drives them, in which case they are the clip's to start and stop, and a
+    // shut freezer stays still until its door opens.
+    const clipDriven = new Set<string>();
+    for (const clip of host.model.clips ?? []) for (const event of clip.events ?? []) if (event.emit && (event.emitAction ?? "burst") !== "burst") clipDriven.add(event.emit);
+    if (attachOptions.autoStart ?? true) for (const spec of host.model.emitters ?? []) if (spec.mode === "continuous" && !(spec.duration && spec.duration > 0) && !clipDriven.has(spec.id)) start(spec.id);
     handles.add(state);
     return {
       fire(id) {

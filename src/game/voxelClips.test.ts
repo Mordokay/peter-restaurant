@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { clipTime, ease, eventsBetween, sampleClip, withKey, withoutKey } from "./voxelClips.ts";
+import { applyPoseOffsets, blendWeight, clipTime, ease, eventsBetween, matchClipTime, poseDistance, poseOffsets, sampleClip, withKey, withoutKey } from "./voxelClips.ts";
 import type { AuthoredClip } from "./voxelModel.ts";
 
 const sway: AuthoredClip = {
@@ -81,4 +81,48 @@ test("opacity is a key channel with rest 1, eased like the others", () => {
   assert.equal(puff(1.5).opacity, 0, "holds the last key");
   assert.equal(puff(0.5).fade, "dither");
   assert.equal(sampleClip(clip, 0.5).get("other")?.opacity, 1, "tracks without opacity keys stay solid");
+});
+
+const openDoor: AuthoredClip = {
+  id: "open", duration: 1.1,
+  tracks: [{ part: "door", keys: [{ t: 0, rotation: [0, 0, 0], ease: "out" }, { t: 1.1, rotation: [0, 112, 0], ease: "out" }] }],
+};
+const closeDoor: AuthoredClip = {
+  id: "close", duration: 0.85,
+  tracks: [{ part: "door", keys: [{ t: 0, rotation: [0, 112, 0], ease: "in" }, { t: 0.85, rotation: [0, 0, 0], ease: "out" }] }],
+};
+
+test("matching finds the moment in a clip that stands closest to a pose", () => {
+  const standing = sampleClip(openDoor, 0.4); // part-way open
+  const yaw = standing.get("door")!.rotation[1];
+  const matched = matchClipTime(closeDoor, standing);
+  assert.ok(matched > 0 && matched < closeDoor.duration, `matched ${matched} should be inside the close`);
+  const landing = sampleClip(closeDoor, matched).get("door")!.rotation[1];
+  assert.ok(Math.abs(landing - yaw) < 0.5, `close at ${matched}s stands at ${landing}°, not the ${yaw}° we are in`);
+  // A door barely ajar is nearly shut, so the close it joins is nearly over.
+  assert.ok(matchClipTime(closeDoor, sampleClip(openDoor, 0.02)) > matched, "less to close means starting later");
+  assert.equal(matchClipTime(closeDoor, sampleClip(openDoor, openDoor.duration)), 0, "fully open joins the close at its start");
+});
+
+test("an unmatched difference is captured as an offset that decays to nothing", () => {
+  const standing = sampleClip(openDoor, 0.4);
+  const offsets = poseOffsets(standing, sampleClip(closeDoor, 0));
+  assert.ok(Math.abs(offsets.get("door")!.rotation[1]) > 1, "cutting to the open close leaves a real step");
+  const full = applyPoseOffsets(sampleClip(closeDoor, 0), offsets, 1).get("door")!;
+  assert.ok(Math.abs(full.rotation[1] - standing.get("door")!.rotation[1]) < 1e-9, "at full weight the pose is exactly where we stood");
+  const none = applyPoseOffsets(sampleClip(closeDoor, 0), offsets, 0).get("door")!;
+  assert.equal(none.rotation[1], 112, "at zero weight the clip is left alone");
+  assert.equal(poseOffsets(standing, standing).size, 0, "no step, no offset");
+  assert.equal(blendWeight(0, 0.2), 1);
+  assert.equal(blendWeight(0.2, 0.2), 0);
+  assert.ok(blendWeight(0.1, 0.2) < 0.5, "the ease is front-loaded, so the step is mostly gone by halfway");
+  assert.ok(blendWeight(0.19, 0.2) < 0.001, "and it lands on zero rather than stopping short");
+});
+
+test("a part the new clip ignores still eases back instead of snapping", () => {
+  const waving: AuthoredClip = { id: "wave", duration: 1, tracks: [{ part: "arm", keys: [{ t: 0, rotation: [0, 0, 0] }, { t: 1, rotation: [30, 0, 0] }] }] };
+  const offsets = poseOffsets(sampleClip(waving, 1), sampleClip(closeDoor, 0));
+  const blended = applyPoseOffsets(sampleClip(closeDoor, 0), offsets, 0.5);
+  assert.ok(blended.has("arm"), "the arm is still posed by the blend");
+  assert.equal(blended.get("arm")!.rotation[0], 15);
 });

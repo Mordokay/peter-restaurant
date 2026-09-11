@@ -1087,7 +1087,7 @@ const resizeAndRender = () => { engine.resize(); scene.render(); };
 window.addEventListener("resize", resizeAndRender);
 new ResizeObserver(resizeAndRender).observe(canvas);
 // Dev aid for driven browser sessions (captures, editor smoke tests).
-(window as unknown as { __lab: unknown }).__lab = { camera, scene };
+(window as unknown as { __lab: unknown }).__lab = { camera, scene, particles, play: (id: string) => clipPlayer?.play(id) ?? false, player: () => (clipPlayer ? { clip: clipPlayer.clip?.id ?? null, time: clipPlayer.time, playing: clipPlayer.playing, blending: clipPlayer.blending } : null), rig: () => displayedRig };
 renderList();
 loadEntry(entries.find((entry) => entry.id === selected)!);
 if (requestedView.get("edit") === "1") openEditor();

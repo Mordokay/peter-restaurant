@@ -457,7 +457,8 @@ export class VoxelEditSession {
     const index = this.emitterList.findIndex((candidate) => candidate.id === id);
     if (index < 0) return;
     const next = { ...this.emitterList[index]!, ...patch };
-    if (patch.part === undefined && "part" in patch) delete next.part;
+    // An explicit `undefined` clears an optional field: no part, no emission volume, no life curve.
+    for (const key of Object.keys(patch) as (keyof ParticleEmitter)[]) if (patch[key] === undefined) delete (next as Record<string, unknown>)[key];
     // Renaming: clip events keep pointing at the emitter.
     if (patch.id && patch.id !== id) {
       if (this.emitterList.some((candidate) => candidate.id === patch.id)) return;

@@ -114,7 +114,9 @@ test("particles can grow, shrink and fade across their life, and use a shape of 
     emitters: [{
       ...defaultEmitter("steam", [0, 0, 0], "#eeeeee"),
       shape: "flake", size: 10, mode: "burst", count: 1, gravity: 0, speed: [0, 0], life: [1, 1],
-      alpha: 0.8, scaleOverLife: [0.5, 2], alphaOverLife: [1, 0],
+      // No tumbling: the spans below are measured in world space, and a spinning flake
+      // would swing its own width about while we are trying to read its size.
+      alpha: 0.8, spin: false, scaleOverLife: [0.5, 2], alphaOverLife: [1, 0],
     }],
   };
   const handle = world.attach({ model, world: () => Matrix.Identity() });
@@ -147,4 +149,42 @@ test("particles can grow, shrink and fade across their life, and use a shape of 
   assert.ok(world.stats().pools >= 2, "the plain cube pool is still there alongside it");
 
   handle.dispose(); world.dispose(); scene.dispose(); engine.dispose();
+});
+
+test("a clip-driven emitter waits for its clip, then builds up from nothing", () => {
+  const engine = new NullEngine();
+  const scene = new Scene(engine);
+  const world = createParticleWorld(scene, { capacity: 400, groundY: -100 });
+  const model: AuthoredVoxelModel = {
+    id: "freezer", pitch: 0.01, palette: { c0: "#ffffff" }, parts: [{ id: "p0", pivot: [0, 0, 0], runs: [] }],
+    emitters: [
+      { ...defaultEmitter("cold", [0, 0, 0], "#eaf6fd"), mode: "continuous", rate: 20, duration: 0, life: [1, 1], gravity: 0 },
+      { ...defaultEmitter("steam", [0, 0, 0], "#eeeeee"), mode: "continuous", rate: 10, duration: 0, life: [9, 9], gravity: 0 },
+    ],
+    clips: [{ id: "open", duration: 1, tracks: [], events: [{ t: 0.1, name: "fog", emit: "cold", emitAction: "start" }, { t: 0.9, name: "shut", emit: "cold", emitAction: "stop" }] }],
+  };
+  const handle = world.attach({ model, world: () => Matrix.Identity() });
+  world.update(0.5);
+  assert.equal(world.stats().alive, 5, "steam pours on its own; the fog a clip drives waits to be started");
+  handle.stop("steam"); // its five cubes live nine seconds, so from here every change is the fog
+
+  handle.handleEvent({ t: 0.1, name: "fog", emit: "cold", emitAction: "start" });
+  assert.equal(world.stats().alive - 5, 0, "starting emits nothing on the spot — no opening burst");
+  // From there the population climbs at the rate, and levels off at rate x life.
+  world.update(0.25);
+  assert.equal(world.stats().alive - 5, 5, "a quarter of a second in, five of the twenty");
+  world.update(0.25);
+  assert.equal(world.stats().alive - 5, 10, "half a second in, ten");
+  for (let i = 0; i < 40; i++) world.update(0.05);
+  const settled = world.stats().alive - 5;
+  assert.ok(Math.abs(settled - 20) <= 1, `settles at rate x life = 20 particles, got ${settled}`);
+
+  handle.handleEvent({ t: 0.9, name: "shut", emit: "cold", emitAction: "stop" });
+  for (let i = 0; i < 25; i++) world.update(0.05);
+  assert.equal(world.stats().alive, 5, "the fog dies off and only the steam is left");
+
+  handle.dispose();
+  world.dispose();
+  scene.dispose();
+  engine.dispose();
 });

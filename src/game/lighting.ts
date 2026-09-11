@@ -10,8 +10,8 @@
 // every frame, moves them to the light positions nearest the camera target. The rest of the
 // room is carried by glow, the sun and the hemispheric fill.
 import { Color3, GlowLayer, Matrix, Mesh, PointLight, Scene, StandardMaterial, Vector3, type Camera } from "@babylonjs/core";
-import type { AuthoredVoxelModel, ModelLight } from "./voxelModel";
-import type { VoxelCell } from "./voxelGeometry";
+import type { AuthoredVoxelModel, ModelLight } from "./voxelModel.ts";
+import type { VoxelCell } from "./voxelGeometry.ts";
 
 export interface GlowInfo { r: number; g: number; b: number; intensity: number }
 

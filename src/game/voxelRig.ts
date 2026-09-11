@@ -1,9 +1,9 @@
 import { Color3, Mesh, PointLight, Scene, ShadowGenerator, TransformNode, Vector3, VertexBuffer } from "@babylonjs/core";
-import { createBlendVoxelMesh, createVoxelMaterial, createVoxelMesh, type VoxelCell } from "./voxelGeometry";
-import { emissiveByHex, glowInfoOf, glowMaterialFor, splitGlowCells, tagGlow } from "./lighting";
+import { createBlendVoxelMesh, createVoxelMaterial, createVoxelMesh, type VoxelCell } from "./voxelGeometry.ts";
+import { emissiveByHex, glowInfoOf, glowMaterialFor, splitGlowCells, tagGlow } from "./lighting.ts";
 import type { StandardMaterial } from "@babylonjs/core";
-import { cellsOfPartState, partStateNames, type AuthoredClip, type AuthoredVoxelModel, type ClipEvent } from "./voxelModel";
-import { ease, eventsBetween, REST_POSE, sampleClip, type PartPose, type StateTransitionSample } from "./voxelClips";
+import { cellsOfPartState, partStateNames, type AuthoredClip, type AuthoredVoxelModel, type ClipEvent } from "./voxelModel.ts";
+import { applyPoseOffsets, blendWeight, ease, eventsBetween, matchClipTime, poseOffsets, REST_POSE, sampleClip, type PartPose, type PoseOffset, type StateTransitionSample } from "./voxelClips.ts";
 
 // Rigged voxel model at runtime: one rigid mesh per part, each hanging from a
 // TransformNode placed at the part's pivot (its joint) and parented to its
@@ -444,7 +444,12 @@ export interface ClipPlayer {
   readonly time: number;
   readonly playing: boolean;
   readonly finished: boolean;
-  play(clipId: string, options?: { loop?: boolean; from?: number }): boolean;
+  /** True while a switch from another clip is still easing out. */
+  readonly blending: boolean;
+  /** `match`: start at the time in the new clip closest to the pose we are in
+   *  (default: on when another clip is playing and no `from` is given).
+   *  `blend`: seconds to ease out whatever difference the match left. */
+  play(clipId: string, options?: { loop?: boolean; from?: number; match?: boolean; blend?: number }): boolean;
   /** Scrub to a time without advancing (editor timeline). */
   seek(t: number): void;
   pause(): void;
@@ -452,22 +457,48 @@ export interface ClipPlayer {
   update(dt: number): void;
 }
 
+/** Seconds to ease out the leftover difference when one clip interrupts another. */
+export const DEFAULT_CLIP_BLEND = 0.14;
+
 export function createClipPlayer(rig: VoxelRig, options: { onEvent?: (event: ClipEvent, clip: AuthoredClip) => void } = {}): ClipPlayer {
   let clip: AuthoredClip | null = null;
   let time = 0;
   let playing = false;
   let finished = false;
-  const apply = () => { if (clip) poseRig(rig, sampleClip(clip, time)); };
+  // The step the switch would have shown, decaying to nothing over `blendDuration`.
+  let offsets: Map<string, PoseOffset> | null = null;
+  let blendDuration = 0;
+  let blendElapsed = 0;
+  const apply = () => {
+    if (!clip) return;
+    const poses = sampleClip(clip, time);
+    if (!offsets) { poseRig(rig, poses); return; }
+    const weight = blendWeight(blendElapsed, blendDuration);
+    if (weight <= 1e-4) { offsets = null; poseRig(rig, poses); return; }
+    poseRig(rig, applyPoseOffsets(poses, offsets, weight));
+  };
   return {
     get clip() { return clip; },
     get time() { return time; },
     get playing() { return playing; },
     get finished() { return finished; },
+    get blending() { return offsets !== null; },
     play(clipId, playOptions = {}) {
       const found = rig.model.clips?.find((candidate) => candidate.id === clipId);
       if (!found) return false;
+      // Where we are standing right now, before anything changes.
+      const standing = clip ? sampleClip(clip, time) : null;
+      const interrupting = standing !== null && (clip!.id !== found.id || playing);
       clip = playOptions.loop === undefined ? found : { ...found, loop: playOptions.loop };
-      time = playOptions.from ?? 0;
+      const matching = playOptions.match ?? (interrupting && playOptions.from === undefined);
+      time = playOptions.from ?? (matching && standing ? matchClipTime(found, standing) : 0);
+      offsets = null;
+      blendDuration = playOptions.blend ?? (standing ? DEFAULT_CLIP_BLEND : 0);
+      blendElapsed = 0;
+      if (standing && blendDuration > 0) {
+        const landing = poseOffsets(standing, sampleClip(found, time));
+        if (landing.size) offsets = landing;
+      }
       playing = true;
       finished = false;
       apply();
@@ -477,6 +508,7 @@ export function createClipPlayer(rig: VoxelRig, options: { onEvent?: (event: Cli
     seek(t) {
       if (!clip) return;
       time = clip.loop ? t : Math.min(clip.duration, Math.max(0, t));
+      offsets = null;
       apply();
     },
     pause() { playing = false; },
@@ -484,12 +516,14 @@ export function createClipPlayer(rig: VoxelRig, options: { onEvent?: (event: Cli
       playing = false;
       finished = false;
       clip = null;
+      offsets = null;
       poseRig(rig, new Map());
     },
     update(dt) {
       if (!clip || !playing || dt <= 0) return;
       const previous = time;
       time += dt;
+      if (offsets) blendElapsed += dt;
       for (const event of eventsBetween(clip, previous, time)) options.onEvent?.(event, clip);
       if (!clip.loop && time >= clip.duration) {
         time = clip.duration;

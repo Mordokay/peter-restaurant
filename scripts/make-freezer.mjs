@@ -291,7 +291,7 @@ const clips = [
       ] },
     ],
     events: [
-      { t: 0.1, name: "freezer_open", emit: "vapour_spill", emitAction: "burst" },
+      { t: 0.1, name: "freezer_open", emit: "vapour_spill", emitAction: "start" },
       { t: 0.12, name: "freezer_fog", emit: "cold_air", emitAction: "start" },
       { t: 1.05, name: "freezer_open_done" },
     ],
@@ -352,7 +352,9 @@ const model = {
       volume: [W - 2 * WALL - 10, DOOR_Y1 - PLINTH - 20, 10],
       colors: ["#eef8fd", "#d8ecf8", "#bfdff3"], size: 5, alpha: 0.18,
       shape: "flake",
-      mode: "burst", count: 70, direction: [0, -0.6, -1], spread: 150,
+      // Continuous, not a burst: it builds from nothing at its own rate over the second the door is
+      // swinging, so the doorway breathes instead of coughing seventy flakes in one frame.
+      mode: "continuous", rate: 34, duration: 0.9, count: 34, direction: [0, -0.6, -1], spread: 150,
       speed: [0.1, 0.35], life: [2.2, 4.2],
       scaleOverLife: [0.6, 2.0], alphaOverLife: [1, 0],
       gravity: 0.18, drag: 1.1, bounce: 0, friction: 0.85, spin: true,
