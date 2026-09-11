@@ -30,7 +30,8 @@ import { createParticleWorld } from "./game/voxelParticles";
 import type { ParticleEmitter } from "./game/voxelModel";
 import { createOccluderFader, createWall } from "./game/walls";
 import { createVoxelMesh } from "./game/voxelGeometry";
-import { restaurantRecipes, tomatoPlotUpgradeTiers, tutorialSteps } from "./game/restaurant";
+import { dayStructure, restaurantRecipes, tomatoPlotUpgradeTiers, tutorialSteps } from "./game/restaurant";
+import { createDayNight, hourForShift } from "./game/dayNight";
 import {
   addTicket, averageWaitSeconds, bankDayEarnings, chooseMenuSlot, closeDay, createShift, endDinner,
   expirePlatedFood, maxPlannedServings, migrateShiftSave, buildShiftSave, nextDay, openForDinner,
@@ -50,7 +51,7 @@ app.innerHTML = `
   <section class="slice-hud">
     <div class="slice-brand"><span class="slice-brand__leaf">◆</span><strong>FARM TO TABLE</strong></div>
     <a class="slice-lab-link" href="/model-lab.html">MODEL LAB</a>
-    <div class="slice-wallet"><b id="slice-day">DAY 1</b><b id="slice-coins">✦ 24</b><b>◆ 0</b></div>
+    <div class="slice-wallet"><b id="slice-day">DAY 1</b><b id="slice-time" title="Time of day — prep is the morning, dinner runs from late afternoon into the night">☀ 07:00</b><b id="slice-coins">✦ 24</b><b>◆ 0</b></div>
     <div class="slice-phase" id="slice-phase"><i class="slice-phase__lamp" id="slice-phase-lamp"></i><span id="slice-phase-name">PREP</span><b id="slice-phase-clock">4:00</b></div>
     <div class="slice-objective" id="slice-objective" aria-label="First shift progress"></div>
     <div class="slice-action" id="slice-action">↯</div>
@@ -238,8 +239,12 @@ await ensureModels(["tomato", "cabbage", "wheat_scan", "tomato_sprout_scan", "to
 const foodModels: AuthoredVoxelCatalog = foodModelsCatalog;
 // Hand-placed decor (vases, tools, props) from src/assets/scene/decor.json.
 // Lamps: glowing voxels bloom; a pool of six real point lights follows the camera between placed lamps.
-attachGlow(scene, { intensity: 0.8 });
+const glowLayer = attachGlow(scene, { intensity: 0.8 });
 const lightPool = createLightPool(scene, { max: 6 });
+// Time of day: the sun, sky, ambient, glow and lamp strength follow the shift (see dayNight.ts).
+const dayNight = createDayNight(scene, { sun: shadowLight, ambient, glow: glowLayer, lightPool }, { hour: 7 });
+const timeEl = document.querySelector<HTMLElement>("#slice-time")!;
+let phaseElapsed = 0;
 // Static props are world-renderer instances; their meshed sources come from the IndexedDB cache when the model revision matches.
 const cacheRev = (modelId: string): number | undefined => catalogIndex[modelId]?.rev;
 await warmSourceCache([...new Set(decorLayout.props.map((prop) => prop.model))].map((modelId) => sourceCacheKey(modelId, cacheRev(modelId), 0.02)));
@@ -1111,7 +1116,7 @@ decorateLaunch.title = "Decorate mode: place, move and turn catalog objects in t
 decorateLaunch.addEventListener("click", () => decorate.toggle());
 app.append(decorateLaunch);
 // Dev aid for driven browser sessions (decorate-mode checks), like the lab's __lab.
-(window as unknown as { __game: unknown }).__game = { scene, camera, decor, decorate, layout: decorLayout, particles, colliders, walls, fader: () => wallFader };
+(window as unknown as { __game: unknown }).__game = { scene, camera, decor, decorate, layout: decorLayout, particles, colliders, walls, fader: () => wallFader, dayNight };
 
 let cameraTargetAlpha = camera.alpha;
 let cameraTargetRadius = camera.radius;
@@ -1158,6 +1163,9 @@ if (Number.isFinite(captureRadius)) {
   camera.radius = captureRadius;
   cameraTargetRadius = captureRadius;
 }
+// ?hour=21 holds the clock for lighting captures.
+const captureHour = captureNumber("hour");
+if (Number.isFinite(captureHour)) dayNight.freeze(captureHour);
 if (Number.isFinite(capturePlayerX)) player.root.position.x = capturePlayerX;
 if (Number.isFinite(capturePlayerZ)) player.root.position.z = capturePlayerZ;
 
@@ -1584,6 +1592,11 @@ function updateWorld(dt: number): void {
   const previousPhase = shift.phase;
   shift = tickShift(shift, dt);
   if (shift.phase !== previousPhase) telemetry.record(shift.day, "phase", { from: previousPhase, to: shift.phase });
+  phaseElapsed = shift.phase === previousPhase ? phaseElapsed + dt : 0;
+  {
+    const total = shift.phase === "prep" ? dayStructure.prepSeconds : shift.phase === "dinner" ? dayStructure.dinnerSeconds : 0;
+    dayNight.setTarget(hourForShift(shift.phase, total ? 1 - shift.phaseSecondsRemaining / total : 0, phaseElapsed));
+  }
   if (shift.phase === "choose_menu" && previousPhase === "prep") enterMenuPhase();
   if (shift.phase === "close" && previousPhase !== "close") enterClose();
   telemetry.tick(dt);
@@ -1699,6 +1712,8 @@ engine.runRenderLoop(() => {
   for (let step = 0; step < simSpeed; step++) updateWorld(dt);
   decor.update(dt);
   decorate.update(dt);
+  dayNight.update(dt);
+  { const label = `${dayNight.hour >= 6.5 && dayNight.hour < 20 ? "☀" : "🌙"} ${dayNight.label()}`; if (timeEl.textContent !== label) timeEl.textContent = label; }
   if (!decorate.active) wallFader.update(dt);
   decorateLaunch.classList.toggle("active", decorate.active);
   if (!noRender) scene.render();

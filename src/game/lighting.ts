@@ -78,6 +78,8 @@ export interface LightPool {
   unregister(id: string): void;
   /** Number of registered lights and how many are currently real. */
   stats(): { registered: number; active: number };
+  /** Scale every pooled light's intensity (day/night: lamps barely matter at noon). */
+  setIntensityScale(scale: number): void;
   dispose(): void;
 }
 
@@ -93,6 +95,7 @@ export function createLightPool(scene: Scene, options: { max?: number; camera?: 
     pool.push(light);
   }
   let active = 0;
+  let intensityScale = 1;
   const assign = () => {
     const camera = options.camera?.() ?? scene.activeCamera;
     if (!camera) return;
@@ -105,7 +108,7 @@ export function createLightPool(scene: Scene, options: { max?: number; camera?: 
       light.position.copyFrom(hit.entry.position);
       const colour = Color3.FromHexString(hit.entry.spec.color ?? "#ffd9a0");
       light.diffuse.copyFrom(colour); light.specular.copyFrom(colour).scaleInPlace(0.3);
-      light.intensity = hit.entry.spec.intensity ?? 1;
+      light.intensity = (hit.entry.spec.intensity ?? 1) * intensityScale;
       light.range = hit.entry.spec.range ?? 7;
       if (!light.isEnabled()) light.setEnabled(true);
     });
@@ -115,6 +118,7 @@ export function createLightPool(scene: Scene, options: { max?: number; camera?: 
     register(id, position, spec) { entries.set(id, { position: position.clone(), spec }); },
     unregister(id) { entries.delete(id); },
     stats: () => ({ registered: entries.size, active }),
+    setIntensityScale(scale) { intensityScale = Math.max(0, scale); },
     dispose() { scene.onBeforeRenderObservable.remove(observer); for (const light of pool) light.dispose(); entries.clear(); },
   };
 }

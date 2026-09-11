@@ -1186,15 +1186,16 @@ export function createLabEditor(host: LabEditorHost): LabEditor {
       }
       case "event-remove": if (activeClipId && selectedEventT !== null) { session.removeEvent(activeClipId, selectedEventT); selectedEventT = null; markChanged(); } break;
       case "emitter-add": {
+        session.beginStroke(); // snapshot first, or undo cannot take the emitter back out
         const id = session.addEmitter(defaultEmitter("fx", lightAnchorCell(), color, activePart ?? undefined, session.pitch));
+        session.endStroke();
         selectedEmitter = id;
         statusText = `Emitter ${id} added${activePart ? ` on ${activePart}` : ""} — ▶ Test fires it`;
-        session.beginStroke(); session.endStroke(); // meta snapshot for undo
         markChanged();
         break;
       }
       case "emitter-remove": if (selectedEmitter) { session.beginStroke(); session.removeEmitter(selectedEmitter); session.endStroke(); selectedEmitter = null; statusText = "Emitter removed"; markChanged(); } break;
-      case "emitter-test": if (selectedEmitter) { needsRebuild && rebuildNow(); host.particles?.fire(selectedEmitter); statusText = `Fired ${selectedEmitter}`; renderStatus(); } break;
+      case "emitter-test": if (selectedEmitter) { if (needsRebuild) rebuildNow(); host.particles?.fire(selectedEmitter); statusText = `Fired ${selectedEmitter}`; renderStatus(); } break;
       case "emitter-here": if (selectedEmitter) { session.beginStroke(); session.updateEmitter(selectedEmitter, { position: lightAnchorCell(), ...(activePart ? { part: activePart } : {}) }); session.endStroke(); markChanged(); } break;
       case "emitter-color-add": if (selectedEmitter) { const spec = session.emitter(selectedEmitter); if (spec && !spec.colors.includes(color)) { session.beginStroke(); session.updateEmitter(spec.id, { colors: [...spec.colors, color] }); session.endStroke(); markChanged(); } } break;
     }

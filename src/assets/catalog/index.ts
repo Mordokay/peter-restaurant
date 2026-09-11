@@ -29,6 +29,8 @@ export interface CatalogIndexEntry {
   glow?: boolean;
   /** Number of point lights the model carries. */
   lights?: number;
+  /** Number of particle emitters the model carries. */
+  emitters?: number;
 }
 
 type IndexFile = { version: number; models: Record<string, CatalogIndexEntry> };
@@ -124,6 +126,7 @@ export function entryFor(model: AuthoredVoxelModel, previous?: CatalogIndexEntry
   if (model.clips?.length) entry.clips = model.clips.map((clip) => clip.id);
   if (model.emissive && Object.keys(model.emissive).length) entry.glow = true;
   if (model.lights?.length) entry.lights = model.lights.length;
+  if (model.emitters?.length) entry.emitters = model.emitters.length;
   if (previous?.thumb) entry.thumb = previous.thumb;
   if (previous?.rev) entry.rev = previous.rev;
   return entry;

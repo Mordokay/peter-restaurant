@@ -67,6 +67,7 @@ export function indexEntry(model, previous = {}) {
   if (clips.length) entry.clips = clips;
   if (model.emissive && Object.keys(model.emissive).length) entry.glow = true;
   if (model.lights && model.lights.length) entry.lights = model.lights.length;
+  if (model.emitters && model.emitters.length) entry.emitters = model.emitters.length;
   if (previous.thumb) entry.thumb = previous.thumb;  // seconds since epoch of the last render (cache-buster)
   if (previous.rev) entry.rev = previous.rev;  // seconds since epoch of the last model write (cache-buster)
   return entry;
