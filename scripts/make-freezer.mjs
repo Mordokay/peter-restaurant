@@ -282,16 +282,17 @@ const clips = [
         { t: 0.14, rotation: [0, 9, 0], ease: "out" },
         { t: 1.1, rotation: [0, OPEN_YAW, 0], ease: "out" },
       ] },
-      // A cold tube stutters before it settles.
+      // A cold tube stutters before it settles. "cut" matters: a light switches, it does not dissolve,
+      // and a blend would leave the part mid-transition for the whole run-up to the next key.
       { part: "light_bar", keys: [
-        { t: 0, state: "base", ease: "step" }, { t: 0.15, state: "on", ease: "step" },
-        { t: 0.21, state: "base", ease: "step" }, { t: 0.27, state: "on", ease: "step" },
-        { t: 0.35, state: "base", ease: "step" }, { t: 0.41, state: "on", ease: "step" },
+        { t: 0, state: "base", ease: "step", transition: "cut" }, { t: 0.15, state: "on", ease: "step", transition: "cut" },
+        { t: 0.21, state: "base", ease: "step", transition: "cut" }, { t: 0.27, state: "on", ease: "step", transition: "cut" },
+        { t: 0.35, state: "base", ease: "step", transition: "cut" }, { t: 0.41, state: "on", ease: "step", transition: "cut" },
       ] },
     ],
     events: [
-      { t: 0.14, name: "freezer_open", emit: "vapour_spill", emitAction: "burst" },
-      { t: 0.3, name: "freezer_fog", emit: "cold_air", emitAction: "start" },
+      { t: 0.1, name: "freezer_open", emit: "vapour_spill", emitAction: "burst" },
+      { t: 0.12, name: "freezer_fog", emit: "cold_air", emitAction: "start" },
       { t: 1.05, name: "freezer_open_done" },
     ],
   },
@@ -303,11 +304,12 @@ const clips = [
         { t: 0.7, rotation: [0, 5, 0], ease: "in" },
         { t: 0.85, rotation: [0, 0, 0], ease: "out" },
       ] },
-      { part: "light_bar", keys: [{ t: 0, state: "on", ease: "step" }, { t: 0.72, state: "base", ease: "step" }] },
+      // The light stays on the whole way: it goes out as the door meets the seal, not before.
+      { part: "light_bar", keys: [{ t: 0, state: "on", ease: "step", transition: "cut" }, { t: 0.85, state: "base", ease: "step", transition: "cut" }] },
     ],
     events: [
-      { t: 0.02, name: "freezer_closing", emit: "cold_air", emitAction: "stop" },
-      { t: 0.72, name: "freezer_closed" },
+      // And the cold air keeps spilling until the door is actually shut.
+      { t: 0.85, name: "freezer_closed", emit: "cold_air", emitAction: "stop" },
     ],
   },
 ];
@@ -335,20 +337,25 @@ const model = {
       id: "cold_air", part: "body",
       position: [Math.round(W / 2), Math.round((PLINTH + H) / 2) - 8, Math.round(D / 2)],
       volume: [W - 2 * WALL - 6, H - PLINTH - 2 * WALL - 26, D - 2 * WALL - 8],
-      colors: ["#eaf6fd", "#d3e9f7", "#b9dcf2", "#a8d3ee"], size: 4, alpha: 0.14,
+      colors: ["#eaf6fd", "#d3e9f7", "#b9dcf2", "#a8d3ee"], size: 4, alpha: 0.16,
+      shape: "flake",
       mode: "continuous", rate: 26, duration: 0, count: 26, direction: [0, -0.2, 0], spread: 180,
       speed: [0.04, 0.16], life: [2.6, 5.0],
-      gravity: 0.05, drag: 0.9, bounce: 0, friction: 0.9, fade: true, spin: true,
+      // It comes in small and sharp, swells as it warms, and thins away to nothing.
+      scaleOverLife: [0.45, 1.7], alphaOverLife: [1, 0],
+      gravity: 0.05, drag: 0.9, bounce: 0, friction: 0.9, spin: true,
     },
     {
       // The breath that rolls over the threshold when the door swings, filling the doorway itself.
       id: "vapour_spill", part: "body",
       position: [Math.round(W / 2), Math.round((PLINTH + DOOR_Y1) / 2), -6],
       volume: [W - 2 * WALL - 10, DOOR_Y1 - PLINTH - 20, 10],
-      colors: ["#eef8fd", "#d8ecf8", "#bfdff3"], size: 5, alpha: 0.16,
+      colors: ["#eef8fd", "#d8ecf8", "#bfdff3"], size: 5, alpha: 0.18,
+      shape: "flake",
       mode: "burst", count: 70, direction: [0, -0.6, -1], spread: 150,
       speed: [0.1, 0.35], life: [2.2, 4.2],
-      gravity: 0.18, drag: 1.1, bounce: 0, friction: 0.85, fade: true, spin: true,
+      scaleOverLife: [0.6, 2.0], alphaOverLife: [1, 0],
+      gravity: 0.18, drag: 1.1, bounce: 0, friction: 0.85, spin: true,
     },
   ],
 };

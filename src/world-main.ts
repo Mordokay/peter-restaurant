@@ -18,6 +18,8 @@ import { createCutaway } from "./game/cutaway";
 import { fullProgress, roomAt, validateLevelLayout, type LevelProgress } from "./game/levelLayout";
 import { attachGlow, createLightPool } from "./game/lighting";
 import { createParticleWorld } from "./game/voxelParticles";
+import { cellsFromAuthoredModel } from "./game/voxelModel";
+import { createVoxelMesh } from "./game/voxelGeometry";
 import { collidersOfMeshes, createColliderField } from "./game/gravity";
 import { createDayNight } from "./game/dayNight";
 import { createBuildMode } from "./buildMode";
@@ -73,7 +75,11 @@ const hourParam = params.get("hour");
 if (hourParam !== null && hourParam !== "" && Number.isFinite(Number(hourParam))) dayNight.freeze(Number(hourParam));
 
 const colliders = createColliderField({ groundY: 0 });
-const particles = createParticleWorld(scene, { colliders, shadows, capacity: 3000 });
+const particles = createParticleWorld(scene, { colliders, shadows, capacity: 3000 , shapes: (id) => {
+  // A particle can be any voxel model you authored in the lab: `shape: "model:<id>"`.
+  const source = catalog.models[id];
+  return source ? createVoxelMesh(`particle ${id}`, cellsFromAuthoredModel(source), source.pitch, scene) : null;
+} });
 
 // The player is a marker, not a character: the cutaway needs to know which room you are standing in.
 const player = new TransformNode("player", scene);

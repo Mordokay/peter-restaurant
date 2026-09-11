@@ -2279,3 +2279,11 @@ The first freezer was too coarse, opened inward, and had its produce painted on.
   **This is meant to be reused for pantry shelving and for items on tables**, not just the freezer.
 - **Part opacity is now in the lab editor**: select a part and drag 👓 See-through. It writes `transform.opacity`, which is what makes the freezer's door glass translucent at rest.
 - Verified in the world scene: 35 items stocked, 35 on show, bottles on shelves, mushrooms in the drawer, a pumpkin taking more than one place; door swinging out; light and fog on the open clip.
+
+### Designing particles, and freezer timing (2026-09-11)
+
+- **A particle can have a shape of its own.** `ParticleEmitter.shape`: built-ins `cube`, `flake` (a flat plate — snow, dust, ice), `shard` (a thin sliver), `drop`, or `model:<catalog id>` to use a voxel model authored in the lab. The particle world keeps one pool per (shape, translucency) and normalises a custom mesh into a unit cube, so `size` still reads as metres. Scenes pass a `shapes` resolver that meshes a catalog model on demand (`world-main.ts`, `model-lab.ts`).
+- **Size and transparency across a life.** `scaleOverLife: [birth, death]` multiplies `size` — `[0.45, 1.7]` swells like vapour, `[1, 0]` shrinks away. `alphaOverLife: [birth, death]` multiplies `alpha` and takes over from `fade`; anything with it is drawn in the translucent pool even if it starts solid. The freezer's cold air now comes in small and sharp, swells as it warms and thins to nothing.
+- **Freezer timing.** The fog starts as the door cracks open (t = 0.12 of `open`) and stops only when the door is shut (t = 0.85 of `close`, its last frame). The light likewise goes out on the final frame rather than as the door begins to move.
+- **A light switch cuts, it does not dissolve.** State keys now carry `transition: "cut"`. Without it a state key blends over the whole run-up from the previous key, so the part sat mid-transition and the gated light went dark the instant the door began to close.
+- **Pooled decor lights honour `whenState`.** `decor.ts` skips a gated light whose part is not showing its state, and re-registers when a clip switches it, so a freezer in the world is dark until its door opens. Only the lab's rig lights respected the gate before.

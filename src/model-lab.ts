@@ -7,7 +7,7 @@ import {
 import { catalog as catalogData, catalogIndex, ensureModels, entryFor, forgetModel, isLoaded, labelOf, registerModel, thumbnailUrl } from "./assets/catalog/index";
 import { createCatalogBrowser } from "./catalogBrowser";
 import { cellsFromAuthoredModel, type AuthoredVoxelCatalog, type AuthoredVoxelModel } from "./game/voxelModel";
-import { visibleVoxelFaceCount } from "./game/voxelGeometry";
+import { createVoxelMesh, visibleVoxelFaceCount } from "./game/voxelGeometry";
 
 import { animateCabbageRig, createCabbageRig, type CabbageRig } from "./game/cabbage";
 import { animateTomatoStages, createTomatoStageRig, requestTomatoStage, type TomatoStageRig } from "./game/tomatoStages";
@@ -73,7 +73,11 @@ const shadows = new ShadowGenerator(2048, key);
 attachGlow(scene, { intensity: 0.8 });
 // Particle preview: cubes land on the ground plane and on the displayed model itself.
 const colliders = createColliderField({ groundY: 0 });
-const particles = createParticleWorld(scene, { colliders, shadows, capacity: 4000 });
+const particles = createParticleWorld(scene, { colliders, shadows, capacity: 4000 , shapes: (id) => {
+  // A particle can be any voxel model you authored in the lab: `shape: "model:<id>"`.
+  const source = catalogData.models[id];
+  return source ? createVoxelMesh(`particle ${id}`, cellsFromAuthoredModel(source), source.pitch, scene) : null;
+} });
 let emitterHandle: EmitterHandle | null = null;
 function attachParticles(rig: VoxelRig | null): void {
   emitterHandle?.dispose();

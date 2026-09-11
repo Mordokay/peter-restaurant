@@ -137,6 +137,15 @@ export interface ParticleEmitter {
   drag?: number;
   /** 0..1. Below 1 the particles are drawn translucent — vapour, steam, spray. */
   alpha?: number;
+  /** What one particle looks like: a built-in shape ("cube", "flake", "shard", "drop"), or
+   *  `model:<catalog id>` to use a voxel model authored in the lab. Default "cube". */
+  shape?: string;
+  /** Size across a particle's life, as multipliers of `size`: [at birth, at death]. [0.4, 1.8] swells
+   *  like steam, [1, 0] shrinks away to nothing. Default [1, 1]. */
+  scaleOverLife?: readonly [number, number];
+  /** Transparency across a particle's life, as multipliers of `alpha`: [at birth, at death]. [1, 0]
+   *  fades out, [0, 1] fades in. Takes over from `fade` when set. */
+  alphaOverLife?: readonly [number, number];
 }
 
 export interface AuthoredClip {

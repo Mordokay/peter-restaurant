@@ -104,3 +104,47 @@ test("an emitter with a volume seeds anywhere inside that box, not at a point", 
 
   handle.dispose(); world.dispose(); scene.dispose(); engine.dispose();
 });
+
+test("particles can grow, shrink and fade across their life, and use a shape of their own", () => {
+  const engine = new NullEngine();
+  const scene = new Scene(engine);
+  const world = createParticleWorld(scene, { capacity: 200, groundY: -100 });
+  const model: AuthoredVoxelModel = {
+    id: "kettle", pitch: 0.01, palette: { c0: "#ffffff" }, parts: [{ id: "p0", pivot: [0, 0, 0], runs: [] }],
+    emitters: [{
+      ...defaultEmitter("steam", [0, 0, 0], "#eeeeee"),
+      shape: "flake", size: 10, mode: "burst", count: 1, gravity: 0, speed: [0, 0], life: [1, 1],
+      alpha: 0.8, scaleOverLife: [0.5, 2], alphaOverLife: [1, 0],
+    }],
+  };
+  const handle = world.attach({ model, world: () => Matrix.Identity() });
+  handle.fire("steam");
+
+  const pool = scene.meshes.find((mesh) => /flake/.test(mesh.name))!;
+  assert.ok(pool, "a flake emitter gets its own pool, since shapes cannot share a mesh");
+  const spanOf = () => {
+    const positions = pool.getVerticesData("position")!;
+    let minY = Infinity, maxY = -Infinity, minX = Infinity, maxX = -Infinity;
+    for (let v = 0; v < 24; v++) {
+      const x = positions[v * 3]!, y = positions[v * 3 + 1]!;
+      if (y < minY) minY = y; if (y > maxY) maxY = y;
+      if (x < minX) minX = x; if (x > maxX) maxX = x;
+    }
+    return { width: maxX - minX, height: maxY - minY };
+  };
+  const alphaOf = () => pool.getVerticesData("color")![3]!;
+
+  world.update(0.001);
+  const born = spanOf(), bornAlpha = alphaOf();
+  world.update(0.5);
+  const middle = spanOf(), middleAlpha = alphaOf();
+  world.update(0.4);
+  const old = spanOf();
+
+  assert.ok(middle.width > born.width && old.width > middle.width, `it should swell: ${born.width.toFixed(3)} → ${old.width.toFixed(3)}`);
+  assert.ok(middleAlpha < bornAlpha, `and thin out: ${bornAlpha.toFixed(2)} → ${middleAlpha.toFixed(2)}`);
+  assert.ok(born.height < born.width * 0.5, "a flake is flat, not a cube");
+  assert.ok(world.stats().pools >= 2, "the plain cube pool is still there alongside it");
+
+  handle.dispose(); world.dispose(); scene.dispose(); engine.dispose();
+});

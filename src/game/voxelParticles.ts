@@ -33,6 +33,8 @@ const lerpRange = (range: readonly [number, number], t: number) => range[0] + (r
 interface Live extends FallingBody {
   particle: SolidParticle;
   pool: { free: SolidParticle[]; alive: number };
+  /** Base transparency, so the life curve can be applied against it each frame. */
+  alpha: number;
   life: number;
   maxLife: number;
   size: number;
@@ -73,20 +75,50 @@ export interface ParticleWorld {
   attach(host: EmitterHost, options?: { autoStart?: boolean }): EmitterHandle;
   attachRig(rig: VoxelRig, options?: { autoStart?: boolean; excludeCollider?: string }): EmitterHandle;
   update(dt: number): void;
-  stats(): { alive: number; capacity: number; handles: number };
+  stats(): { alive: number; capacity: number; handles: number; pools: number };
   readonly mesh: Mesh;
   dispose(): void;
 }
 
-export function createParticleWorld(scene: Scene, options: { capacity?: number; colliders?: ColliderField | null; groundY?: number; shadows?: ShadowGenerator; random?: () => number } = {}): ParticleWorld {
+export function createParticleWorld(scene: Scene, options: {
+  capacity?: number;
+  colliders?: ColliderField | null;
+  groundY?: number;
+  shadows?: ShadowGenerator;
+  random?: () => number;
+  /** Geometry for `shape: "model:<id>"`: hand back a mesh for that catalog model and the world
+   *  normalises it. Lets a snowflake authored in the lab be the particle. */
+  shapes?: (id: string) => Mesh | null;
+} = {}): ParticleWorld {
   const capacity = options.capacity ?? 3000;
   const random = options.random ?? Math.random;
   /** Opaque cubes and translucent ones cannot share a mesh, so there are two pools. The translucent
    *  one blends per particle through its vertex alpha, which lets each emitter pick its own. */
   interface Pool { sps: SolidParticleSystem; mesh: Mesh; free: SolidParticle[]; alive: number }
-  const makePool = (name: string, translucent: boolean, size: number): Pool => {
+  /** One particle's geometry, normalised into a unit cube so `size` means the same for every shape. */
+  const buildShape = (shape: string): Mesh => {
+    if (shape.startsWith("model:")) {
+      const custom = options.shapes?.(shape.slice(6));
+      if (custom) {
+        // Fit it into a unit cube and bake that in, so `size` still reads as metres.
+        custom.computeWorldMatrix(true);
+        const extent = custom.getBoundingInfo().boundingBox.extendSize;
+        const longest = Math.max(extent.x, extent.y, extent.z, 1e-4) * 2;
+        custom.scaling.setAll(1 / longest);
+        custom.bakeCurrentTransformIntoVertices();
+        return custom;
+      }
+    }
+    switch (shape) {
+      case "flake": return MeshBuilder.CreateBox("particle flake", { width: 1, height: 0.22, depth: 1 }, scene);
+      case "shard": return MeshBuilder.CreateBox("particle shard", { width: 0.34, height: 1, depth: 0.34 }, scene);
+      case "drop": return MeshBuilder.CreateBox("particle drop", { width: 0.6, height: 1, depth: 0.6 }, scene);
+      default: return MeshBuilder.CreateBox("particle cube", { size: 1 }, scene);
+    }
+  };
+  const makePool = (name: string, translucent: boolean, size: number, shapeName: string): Pool => {
     const sps = new SolidParticleSystem(name, scene, { updatable: true, isPickable: false });
-    const shape = MeshBuilder.CreateBox(`${name} shape`, { size: 1 }, scene);
+    const shape = buildShape(shapeName);
     sps.addShape(shape, size);
     shape.dispose();
     const mesh = sps.buildMesh();
@@ -111,26 +143,34 @@ export function createParticleWorld(scene: Scene, options: { capacity?: number; 
     sps.setParticles();
     return { sps, mesh, free, alive: 0 };
   };
-  const opaquePool = makePool("voxel particles", false, capacity);
-  let glassPool: Pool | null = null;
-  const poolFor = (alpha: number): Pool => {
-    if (alpha >= 0.999) return opaquePool;
-    if (!glassPool) glassPool = makePool("voxel particles glass", true, Math.max(200, Math.round(capacity / 2)));
-    return glassPool;
+  // A pool per (shape, translucency): they cannot share a mesh, and most worlds use only one or two.
+  const pools = new Map<string, Pool>();
+  const poolFor = (shapeName: string, translucent: boolean): Pool => {
+    const key = `${shapeName}|${translucent ? "glass" : "solid"}`;
+    let pool = pools.get(key);
+    if (!pool) {
+      const first = pools.size === 0;
+      pool = makePool(`voxel particles ${key}`, translucent, first ? capacity : Math.max(200, Math.round(capacity / 2)), shapeName);
+      pools.set(key, pool);
+    }
+    return pool;
   };
+  // The plain cube pool always exists, so `mesh` and the stats have something to point at.
+  const opaquePool = poolFor("cube", false);
   const live: Live[] = [];
   const handles = new Set<HandleState>();
 
   const spawn = (spec: ParticleEmitter, origin: Vector3, direction: Vector3, pitch: number, count: number, exclude?: string, frame?: Matrix): number => {
     let made = 0;
     const alpha = Math.min(1, Math.max(0, spec.alpha ?? 1));
-    const pool = poolFor(alpha);
+    // Anything that changes transparency has to be drawn translucent, even if it starts solid.
+    const pool = poolFor(spec.shape ?? "cube", Boolean(spec.alphaOverLife) || alpha < 0.999);
     for (let i = 0; i < count; i++) {
       const particle = pool.free.pop();
       if (!particle) break;
       const hex = spec.colors[Math.floor(random() * spec.colors.length)] ?? "#ffffff";
       const c = Color3.FromHexString(hex);
-      particle.color = new Color4(c.r, c.g, c.b, alpha);
+      particle.color = new Color4(c.r, c.g, c.b, alpha * (spec.alphaOverLife?.[0] ?? 1));
       const size = Math.max(0.002, spec.size * pitch);
       const velocity = spawnVelocity(direction, spec.spread, lerpRange(spec.speed, random()), random);
       // An emitter with a volume seeds anywhere inside that box, turned to match the model it sits on,
@@ -145,7 +185,7 @@ export function createParticleWorld(scene: Scene, options: { capacity?: number; 
         offsetX = (random() - 0.5) * jitter; offsetY = (random() - 0.5) * jitter; offsetZ = (random() - 0.5) * jitter;
       }
       const body: Live = {
-        particle, size, spec, exclude, pool,
+        particle, size, spec, exclude, pool, alpha,
         x: origin.x + offsetX, y: origin.y + offsetY, z: origin.z + offsetZ,
         vx: velocity.x, vy: velocity.y, vz: velocity.z,
         life: lerpRange(spec.life, random()), maxLife: 0, resting: false,
@@ -277,16 +317,23 @@ export function createParticleWorld(scene: Scene, options: { capacity?: number; 
           if (!body.resting && body.spec.spin) { body.particle.rotation.x += body.spin.x * dt; body.particle.rotation.y += body.spin.y * dt; body.particle.rotation.z += body.spin.z * dt; }
         }
         body.particle.position.set(body.x, body.y, body.z);
-        // Fade: shrink over the last 40% of life so a puddle dries and smoke thins.
-        const t = body.life / body.maxLife;
-        const scale = body.spec.fade && t < 0.4 ? body.size * Math.max(0.05, t / 0.4) : body.size;
-        body.particle.scaling.setAll(scale);
+        // `age` runs from 0 at birth to 1 at death, which is what the life curves are written against.
+        const remaining = body.life / body.maxLife;
+        const age = 1 - remaining;
+        const grow = body.spec.scaleOverLife;
+        const scale = grow
+          ? body.size * (grow[0] + (grow[1] - grow[0]) * age)
+          : body.spec.fade && remaining < 0.4 ? body.size * Math.max(0.05, remaining / 0.4) : body.size;
+        body.particle.scaling.setAll(Math.max(0.0005, scale));
+        const alphaCurve = body.spec.alphaOverLife;
+        if (alphaCurve && body.particle.color) {
+          body.particle.color.a = Math.max(0, body.alpha * (alphaCurve[0] + (alphaCurve[1] - alphaCurve[0]) * age));
+        }
       }
-      opaquePool.sps.setParticles();
-      glassPool?.sps.setParticles();
+      for (const pool of pools.values()) pool.sps.setParticles();
     },
-    stats: () => ({ alive: live.length, capacity, handles: handles.size }),
-    dispose() { handles.clear(); live.length = 0; opaquePool.sps.dispose(); glassPool?.sps.dispose(); },
+    stats: () => ({ alive: live.length, capacity, handles: handles.size, pools: pools.size }),
+    dispose() { handles.clear(); live.length = 0; for (const pool of pools.values()) pool.sps.dispose(); pools.clear(); },
   };
 }
 

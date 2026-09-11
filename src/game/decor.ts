@@ -41,6 +41,8 @@ export interface PlacedProp {
   emitters?: EmitterHandle;
   /** Goods standing in the model's sockets, when the prop carries stock. */
   storage?: StorageDisplay;
+  /** Last seen states of the parts that gate this prop's lights, so a switch re-registers them. */
+  lightGate?: string;
   /** Meshes drawing this prop right now: the rig's part meshes or the single instance. */
   meshes(): AbstractMesh[];
 }
@@ -152,7 +154,14 @@ export function createDecorScene(scene: Scene, catalog: AuthoredVoxelCatalog, la
     entry.lightIds = [];
     if (!entry.rig?.model.lights?.length || !entry.root.isEnabled()) return;
     entry.root.computeWorldMatrix(true);
-    modelLightPositions(entry.rig.model, entry.root.getWorldMatrix()).forEach((light, index) => { const id = `${entry.prop.id}#${index}`; pool.register(id, light.position, light.spec); entry.lightIds!.push(id); });
+    modelLightPositions(entry.rig.model, entry.root.getWorldMatrix()).forEach((light, index) => {
+      // A gated light only burns while its part shows the named state — the freezer lamp and its door.
+      const gate = light.spec.whenState;
+      if (gate && entry.rig?.parts.get(gate.part)?.state !== gate.state) return;
+      const id = `${entry.prop.id}#${index}`;
+      pool.register(id, light.position, light.spec);
+      entry.lightIds!.push(id);
+    });
   };
   const dropLights = (entry: PlacedProp | undefined): void => { if (!entry) return; for (const id of entry.lightIds ?? []) options.lightPool?.unregister(id); entry.lightIds = []; };
 
@@ -286,6 +295,11 @@ export function createDecorScene(scene: Scene, catalog: AuthoredVoxelCatalog, la
       for (const entry of placed.values()) {
         if (!entry.player) continue;
         entry.player.update(dt);
+        // A clip that switches a gated part's state turns its light on or off with it.
+        if (entry.rig?.model.lights?.some((light) => light.whenState)) {
+          const signature = entry.rig.model.lights.map((light) => (light.whenState ? entry.rig!.parts.get(light.whenState.part)?.state ?? "" : "")).join("|");
+          if (signature !== entry.lightGate) { entry.lightGate = signature; syncLights(entry); }
+        }
         if (entry.reacting && entry.player.finished) {
           entry.reacting = false;
           if (entry.idleClip) entry.player.play(entry.idleClip, { loop: true });
