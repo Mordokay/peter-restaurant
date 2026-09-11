@@ -2248,3 +2248,16 @@ The layout reference is the **end state** — what a dedicated player owns after
 - **WASD** in `world.html` now uses the game scene's rule — flatten `camera.getForwardRay()`, `right = Cross(Up, forward)` — so W is always up the screen. Arrow keys work too.
 - **Erasing hit the wrong thing** because `projectOntoWall` measured the perpendicular distance to a wall's *infinite line*: standing in the middle of the kitchen was "0.0 m from" the office wall twenty metres away, so a click erased that instead of the floor. It now measures to the segment. Erase also orders its targets — opening, then wall, then room — and a room needs a second, deliberate click.
 - **Doors and windows are becoming objects.** `Opening` now carries a stable `id` and an optional `model` (a catalog leaf and frame). Build mode assigns ids. Still to do: render the leaf, and let decorate mode select an opening and swap its model.
+
+### The freezer: a prop written straight into the catalog (2026-09-11)
+
+`scripts/make-freezer.mjs` authors `freezer_upright` with no mesh, no import and no licence — the test of whether I can build assets with the engine we already have. 12 parts, 2 clips, ~109k cells, 0.88 × 1.88 × 0.74 m, and it exercises nearly every feature at once:
+
+- **Hinged door** (`door` part, pivot on its hinge stile) with the glass and handle parented to it, swinging 108° over 1.1 s.
+- **Genuinely translucent glass**: a new `PartRestTransform.opacity` makes a part translucent standing still, not only inside a clip. A clip's own opacity now *multiplies* the rest value, so fading glass still starts from glass. (The rest pose pins opacity to 1, which is what silently wiped the first attempt.)
+- **Interior light that follows the door**: `ModelLight.whenState` gates a point light on a part's voxel state, and `syncGatedLights` switches it whenever states change. The tube's `on` state is emissive, so the GlowLayer blooms it; the open clip stutters it on (on/off/on/off/on over 0.4 s) like a cold fluorescent.
+- **Cold vapour**: `ParticleEmitter.alpha` plus a second, translucent SolidParticleSystem pool in `voxelParticles.ts` (vertex alpha, so each emitter picks its own). A burst as the door cracks open and a continuous spill while it stands open, both with *positive* gravity and heavy drag, because cold air sinks and rolls out rather than rising like steam.
+- **Contents that can reflect stock**: broccoli, carrots, and crates of peas and berries are separate parts, each with an `empty` state, so the game can show what the freezer actually holds.
+- Models are centred on x/z and stood on y = 0 by `centreModel`, so they drop into the world by their base like every other prop.
+
+Thumbnail rendered through the lab. Next for this prop: wire the open/close clips to decorate mode's interaction, and drive the produce states from stock.

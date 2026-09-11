@@ -35,6 +35,9 @@ export interface PartRestTransform {
   rotation?: readonly [number, number, number];
   position?: readonly [number, number, number];
   scale?: readonly [number, number, number];
+  /** 0..1. A glass door is translucent standing still, not only while a clip plays. A clip's own
+   *  opacity multiplies this, so fading a glass door to nothing still starts from glass. */
+  opacity?: number;
 }
 
 export type ClipEase = "linear" | "in" | "out" | "inOut" | "back" | "step";
@@ -129,6 +132,8 @@ export interface ParticleEmitter {
   spin?: boolean;
   /** Velocity damping per second (smoke slows down). */
   drag?: number;
+  /** 0..1. Below 1 the particles are drawn translucent — vapour, steam, spray. */
+  alpha?: number;
 }
 
 export interface AuthoredClip {
@@ -145,6 +150,8 @@ export interface AuthoredClip {
 
 /** A point light carried by a model, positioned in cell units of the model grid. */
 export interface ModelLight {
+  /** Only lit while this part shows this voxel state — a freezer lamp that comes on with the door. */
+  whenState?: { part: string; state: string };
   position: readonly [number, number, number];
   /** Hex colour; default a warm white. */
   color?: string;

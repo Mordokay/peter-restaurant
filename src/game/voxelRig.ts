@@ -27,6 +27,8 @@ export interface RigPart {
   fadeMaterial: StandardMaterial | null;
   /** Current opacity applied (1 = the shared opaque material). */
   opacity: number;
+  /** Opacity with no clip playing, from the part's rest transform. */
+  restOpacity: number;
   /** Dither meshes per state: voxels drop out in a fixed order as opacity falls. */
   dither: Map<string, { cells: (VoxelCell & { order: number })[]; mesh: Mesh | null; shown: number }>;
   ditherActive: boolean;
@@ -105,6 +107,7 @@ export function createVoxelRig(model: AuthoredVoxelModel, scene: Scene, options:
       const restPosition = (parentRig ? pivot.subtract(parentRig.pivot) : pivot.clone()).add(offset);
       const restRotation = new Vector3(...(stored.rotation ?? [0, 0, 0])).scale(Math.PI / 180);
       const restScale = new Vector3(...(stored.scale ?? [1, 1, 1]));
+      const restOpacity = Math.min(1, Math.max(0, stored.opacity ?? 1));
       node.position.copyFrom(restPosition);
       node.rotation.copyFrom(restRotation);
       node.scaling.copyFrom(restScale);
@@ -138,7 +141,7 @@ export function createVoxelRig(model: AuthoredVoxelModel, scene: Scene, options:
         for (const mesh of built) { mesh.setEnabled(state === "base"); own.push(mesh); meshes.push(mesh); }
         stateMeshes.set(state, built);
       }
-      parts.set(part.id, { id: part.id, node, mesh: stateMeshes.get("base")?.[0] ?? null, meshes: own, stateMeshes, state: "base", transitions: new Map(), fadeMaterial: null, opacity: 1, dither: new Map(), ditherActive: false, pivot, restPosition, restRotation, restScale });
+      parts.set(part.id, { id: part.id, node, mesh: stateMeshes.get("base")?.[0] ?? null, meshes: own, stateMeshes, state: "base", transitions: new Map(), fadeMaterial: null, opacity: 1, restOpacity, dither: new Map(), ditherActive: false, pivot, restPosition, restRotation, restScale });
       pending.splice(i, 1);
       i--;
     }
@@ -148,6 +151,9 @@ export function createVoxelRig(model: AuthoredVoxelModel, scene: Scene, options:
       pending.forEach((part, index) => { pending[index] = { ...part, parent: undefined }; });
     }
   }
+
+  // A glass door is translucent standing still, so rest opacity applies before any clip runs.
+  for (const part of parts.values()) if (part.restOpacity < 1) setRigPartOpacity({ model, anchor, root, parts, meshes, material } as VoxelRig, part, part.restOpacity);
 
   // Real point lights for a single rig on show (the lab); worlds use a light pool instead.
   const lights: PointLight[] = [];
@@ -160,10 +166,12 @@ export function createVoxelRig(model: AuthoredVoxelModel, scene: Scene, options:
       light.intensity = spec.intensity ?? 1;
       light.range = spec.range ?? 7;
       light.falloffType = PointLight.FALLOFF_DEFAULT; // linear fade to `range`: a soft pool, not an inverse-square blowout
+      // A gated light only burns while its part shows the named state (the freezer lamp and its door).
+      if (spec.whenState) light.metadata = { gate: spec.whenState };
       lights.push(light);
     }
   }
-  return {
+  const rig: VoxelRig = {
     model, anchor, root, parts, meshes, material, stateCells, lights,
     dispose(disposeOptions = {}) {
       for (const mesh of meshes) { options.shadows?.removeShadowCaster(mesh); mesh.dispose(false, false); }
@@ -174,6 +182,8 @@ export function createVoxelRig(model: AuthoredVoxelModel, scene: Scene, options:
       if (!disposeOptions.keepMaterial) material.dispose();
     },
   };
+  syncGatedLights(rig);
+  return rig;
 }
 
 /** Show one voxel state of a part (unknown names fall back to "base"). */
@@ -400,9 +410,21 @@ export function poseRig(rig: VoxelRig, poses: Map<string, PartPose>, options: { 
     const pinned = options.stateFor?.(part.id);
     if (pinned === undefined && pose.transition) showTransition(rig, part, pose.transition);
     else setRigPartState(part, pinned ?? pose.state ?? "base");
-    setRigPartOpacity(rig, part, pose.opacity ?? 1, pose.fade ?? "fade");
+    // A clip's opacity multiplies the part's rest opacity, so glass stays glass while a clip fades it.
+    setRigPartOpacity(rig, part, part.restOpacity * (pose.opacity ?? 1), pose.fade ?? "fade");
   }
   apply(rig.root, Vector3.Zero(), Vector3.Zero(), Vector3.One(), poses.get("*") ?? REST_POSE);
+  syncGatedLights(rig);
+}
+
+/** Switch gated lights to match the states their parts are showing. */
+export function syncGatedLights(rig: VoxelRig): void {
+  for (const light of rig.lights) {
+    const gate = (light.metadata as { gate?: { part: string; state: string } } | null)?.gate;
+    if (!gate) continue;
+    const wanted = rig.parts.get(gate.part)?.state === gate.state;
+    if (light.isEnabled() !== wanted) light.setEnabled(wanted);
+  }
 }
 
 /** A TransformNode sitting on a part's socket cell; attach tools and props to it. */

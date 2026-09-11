@@ -32,6 +32,7 @@ const lerpRange = (range: readonly [number, number], t: number) => range[0] + (r
 
 interface Live extends FallingBody {
   particle: SolidParticle;
+  pool: { free: SolidParticle[]; alive: number };
   life: number;
   maxLife: number;
   size: number;
@@ -80,38 +81,61 @@ export interface ParticleWorld {
 export function createParticleWorld(scene: Scene, options: { capacity?: number; colliders?: ColliderField | null; groundY?: number; shadows?: ShadowGenerator; random?: () => number } = {}): ParticleWorld {
   const capacity = options.capacity ?? 3000;
   const random = options.random ?? Math.random;
-  const sps = new SolidParticleSystem("voxel particles", scene, { updatable: true, isPickable: false });
-  const shape = MeshBuilder.CreateBox("voxel particle shape", { size: 1 }, scene);
-  sps.addShape(shape, capacity);
-  shape.dispose();
-  const mesh = sps.buildMesh();
-  mesh.material = createVoxelMaterial("voxel particle material", scene);
-  mesh.useVertexColors = true;
-  mesh.isPickable = false;
-  mesh.alwaysSelectAsActiveMesh = true; // cubes fly everywhere; skip per-frame bounds
-  mesh.receiveShadows = true;
-  options.shadows?.addShadowCaster(mesh, false);
-  sps.computeParticleColor = true;
-  sps.computeParticleTexture = false;
-  const free: SolidParticle[] = [];
-  for (let i = sps.nbParticles - 1; i >= 0; i--) { const p = sps.particles[i]!; p.isVisible = false; p.scaling.setAll(0); free.push(p); }
-  sps.setParticles();
+  /** Opaque cubes and translucent ones cannot share a mesh, so there are two pools. The translucent
+   *  one blends per particle through its vertex alpha, which lets each emitter pick its own. */
+  interface Pool { sps: SolidParticleSystem; mesh: Mesh; free: SolidParticle[]; alive: number }
+  const makePool = (name: string, translucent: boolean, size: number): Pool => {
+    const sps = new SolidParticleSystem(name, scene, { updatable: true, isPickable: false });
+    const shape = MeshBuilder.CreateBox(`${name} shape`, { size: 1 }, scene);
+    sps.addShape(shape, size);
+    shape.dispose();
+    const mesh = sps.buildMesh();
+    const material = createVoxelMaterial(`${name} material`, scene);
+    mesh.material = material;
+    mesh.useVertexColors = true;
+    mesh.isPickable = false;
+    mesh.alwaysSelectAsActiveMesh = true; // cubes fly everywhere; skip per-frame bounds
+    mesh.receiveShadows = !translucent;
+    if (translucent) {
+      // Vertex alpha, so one pool serves vapour at 0.3 and spray at 0.6 alike.
+      mesh.hasVertexAlpha = true;
+      material.backFaceCulling = false;
+      material.separateCullingPass = true;
+    } else {
+      options.shadows?.addShadowCaster(mesh, false);
+    }
+    sps.computeParticleColor = true;
+    sps.computeParticleTexture = false;
+    const free: SolidParticle[] = [];
+    for (let i = sps.nbParticles - 1; i >= 0; i--) { const p = sps.particles[i]!; p.isVisible = false; p.scaling.setAll(0); free.push(p); }
+    sps.setParticles();
+    return { sps, mesh, free, alive: 0 };
+  };
+  const opaquePool = makePool("voxel particles", false, capacity);
+  let glassPool: Pool | null = null;
+  const poolFor = (alpha: number): Pool => {
+    if (alpha >= 0.999) return opaquePool;
+    if (!glassPool) glassPool = makePool("voxel particles glass", true, Math.max(200, Math.round(capacity / 2)));
+    return glassPool;
+  };
   const live: Live[] = [];
   const handles = new Set<HandleState>();
 
   const spawn = (spec: ParticleEmitter, origin: Vector3, direction: Vector3, pitch: number, count: number, exclude?: string): number => {
     let made = 0;
+    const alpha = Math.min(1, Math.max(0, spec.alpha ?? 1));
+    const pool = poolFor(alpha);
     for (let i = 0; i < count; i++) {
-      const particle = free.pop();
+      const particle = pool.free.pop();
       if (!particle) break;
       const hex = spec.colors[Math.floor(random() * spec.colors.length)] ?? "#ffffff";
       const c = Color3.FromHexString(hex);
-      particle.color = new Color4(c.r, c.g, c.b, 1);
+      particle.color = new Color4(c.r, c.g, c.b, alpha);
       const size = Math.max(0.002, spec.size * pitch);
       const velocity = spawnVelocity(direction, spec.spread, lerpRange(spec.speed, random()), random);
       const jitter = size * 0.6;
       const body: Live = {
-        particle, size, spec, exclude,
+        particle, size, spec, exclude, pool,
         x: origin.x + (random() - 0.5) * jitter, y: origin.y + (random() - 0.5) * jitter, z: origin.z + (random() - 0.5) * jitter,
         vx: velocity.x, vy: velocity.y, vz: velocity.z,
         life: lerpRange(spec.life, random()), maxLife: 0, resting: false,
@@ -123,6 +147,7 @@ export function createParticleWorld(scene: Scene, options: { capacity?: number; 
       particle.rotationQuaternion = null;
       particle.rotation.set(0, 0, 0);
       particle.isVisible = true;
+      pool.alive++;
       live.push(body);
       made++;
     }
@@ -132,7 +157,8 @@ export function createParticleWorld(scene: Scene, options: { capacity?: number; 
     const body = live[index]!;
     body.particle.isVisible = false;
     body.particle.scaling.setAll(0);
-    free.push(body.particle);
+    body.pool.free.push(body.particle);
+    body.pool.alive--;
     live[index] = live[live.length - 1]!;
     live.pop();
   };
@@ -200,7 +226,7 @@ export function createParticleWorld(scene: Scene, options: { capacity?: number; 
   };
 
   return {
-    mesh,
+    mesh: opaquePool.mesh,
     emitAt(spec, position, direction, pitch, exclude) { return spawn(spec, position, direction, pitch, spec.count, exclude); },
     attach,
     attachRig(rig, attachOptions) {
@@ -246,10 +272,11 @@ export function createParticleWorld(scene: Scene, options: { capacity?: number; 
         const scale = body.spec.fade && t < 0.4 ? body.size * Math.max(0.05, t / 0.4) : body.size;
         body.particle.scaling.setAll(scale);
       }
-      sps.setParticles();
+      opaquePool.sps.setParticles();
+      glassPool?.sps.setParticles();
     },
     stats: () => ({ alive: live.length, capacity, handles: handles.size }),
-    dispose() { handles.clear(); live.length = 0; sps.dispose(); },
+    dispose() { handles.clear(); live.length = 0; opaquePool.sps.dispose(); glassPool?.sps.dispose(); },
   };
 }
 
