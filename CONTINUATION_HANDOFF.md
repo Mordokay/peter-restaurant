@@ -2362,3 +2362,9 @@ multiplies it. Measured in the lab under the ☀️ Day preset, the readout's gr
 — the background wall, nothing on the model was green at all — and is now (101,255,172), the authored
 `#5ef5a0`. It holds that strength at 14 m (95,247,161) where before it decayed to a single pixel. Every
 glowing thing in the catalog is brighter for it: lamps, displays, the lava log, the light bar.
+
+An unlit segment is a *darker shade of the lit field*, faintly emissive and in the same part as the field —
+not an ordinary voxel. Left ordinary it is lit by the scene, goes black at night and reads as a hole punched
+through the display. And with the voxel's own colour finally rendering, the bloom is a halo rather than the
+light itself, so `display_glow` came down from 1.4 to 0.7 and the lamps from 2.4 to 1.6: the segments keep
+their green core instead of saturating to white up close.

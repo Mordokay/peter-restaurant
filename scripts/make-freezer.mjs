@@ -34,7 +34,7 @@ const palette = {
   liner: "#eef4f7", liner_shade: "#dde7ec", frost: "#d5e7f2", frost_bright: "#f2fbff",
   glass: "#cfe9f5", glass_edge: "#a9cede",
   wire: "#9aa3aa", wire_dark: "#7c848b",
-  panel: "#3a4046", display: "#0b1512", display_back: "#1a4a39", display_off: "#123a2c", display_glow: "#5ef5a0",
+  panel: "#3a4046", display: "#0b1512", display_back: "#1a4a39", display_off: "#123528", display_glow: "#5ef5a0",
   button: "#b9c0c6", button_cap: "#d9dfe4", button_hot: "#c04a40", button_hot_cap: "#e8695c",
   lamp_off: "#262c32", lamp_white: "#f4f9ff", lamp_ice: "#c3e4ff", lamp_red: "#ff5646",
   glow: "#eaf6ff",
@@ -49,7 +49,12 @@ const palette = {
 // The bloom mask is one colour PER MESH, so a dim backlight and bright digits cannot share a part —
 // put them together and the whole window blooms at the digits' strength and the number disappears into
 // a slab of light. The lit field is therefore its own part, blooming softly on its own terms.
-const emissive = { glow: 1.5, display_glow: 1.4, display_back: 0.3, lamp_white: 2.4, lamp_ice: 2.4, lamp_red: 2.4 };
+// An unlit segment is a DARKER SHADE OF THE LIT FIELD, never a hole: it belongs to the backlight's part
+// and glows faintly with it. Left as an ordinary voxel it renders black at night and the number reads as
+// blocks punched out of the display.
+// Now that the voxel's own colour renders, the bloom is a halo rather than the light itself, so it can
+// come right down: at 1.1 the segments saturated to white and the readout lost its green up close.
+const emissive = { glow: 1.5, display_glow: 0.7, display_back: 0.3, display_off: 0.22, lamp_white: 1.6, lamp_ice: 1.6, lamp_red: 1.6 };
 
 
 // The control panel across the top front, and the three indicator lenses standing proud of it.
@@ -62,6 +67,9 @@ const READ_X0 = 13, READ_X1 = 46, READ_Y0 = PANEL_Y + 2, READ_Y1 = PANEL_Y + 12;
 function displayField() {
   const p = piece();
   p.box(READ_X0, READ_Y0, 1, READ_X1, READ_Y1, 1, "display_back");
+  // The segments that are not burning, ghosted into the field at the same depth.
+  segmentDigit(p, "1", 23, READ_Y0, 1, "display_off", "dim");
+  segmentDigit(p, "8", 32, READ_Y0, 1, "display_off", "dim");
   return p;
 }
 
@@ -70,9 +78,9 @@ const SEGMENTS = { 0: "abcdef", 1: "bc", 2: "abdeg", 3: "abcdg", 4: "bcfg", 5: "
 
 /** One digit of the readout: 7 x 11 cells with two-cell strokes. Segments that are NOT lit are drawn
  *  in a dead dark green rather than left out, so it reads as a real LED panel showing a number. */
-function segmentDigit(p, glyph, x0, y0, z, lit, dim) {
+function segmentDigit(p, glyph, x0, y0, z, colour, which = "lit") {
   const on = new Set(SEGMENTS[glyph] ?? "");
-  const bar = (name, x1, y1, x2, y2) => p.box(x1, y1, z, x2, y2, z, on.has(name) ? lit : dim);
+  const bar = (name, x1, y1, x2, y2) => { if (on.has(name) === (which === "lit")) p.box(x1, y1, z, x2, y2, z, colour); };
   bar("d", x0 + 2, y0, x0 + 4, y0 + 1);
   bar("e", x0, y0 + 2, x0 + 1, y0 + 4);
   bar("c", x0 + 5, y0 + 2, x0 + 6, y0 + 4);
@@ -205,8 +213,8 @@ function cabinet(sockets) {
   for (let x = READ_X0; x <= READ_X1; x++) for (let y = READ_Y0; y <= READ_Y1; y++) { p.clear(x, y, 0); p.clear(x, y, 1); }
   const readY = READ_Y0;
   p.box(15, readY + 5, 0, 20, readY + 6, 0, "display_glow");   // the minus sign of -18
-  segmentDigit(p, "1", 23, readY, 0, "display_glow", "display_off");
-  segmentDigit(p, "8", 32, readY, 0, "display_glow", "display_off");
+  segmentDigit(p, "1", 23, readY, 0, "display_glow");
+  segmentDigit(p, "8", 32, readY, 0, "display_glow");
   p.box(41, readY + 8, 0, 43, readY + 10, 0, "display_glow");  // the degree ring, hollow so the field shows through
   // Three push buttons: a collar sunk into the panel, the button a centimetre out, a smaller cap
   // beyond that. Stepped like this they catch the light and read as something you can press.
