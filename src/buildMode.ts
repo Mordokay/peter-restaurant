@@ -11,9 +11,10 @@
 import "./buildMode.css";
 import { Color3, Mesh, MeshBuilder, Scene, StandardMaterial, type ArcRotateCamera } from "@babylonjs/core";
 import {
-  DEFAULT_WALL_HEIGHT, wallLength,
-  type Area, type LevelLayout, type OpeningKind, type Rect, type Room,
+  DEFAULT_WALL_HEIGHT, wallLength, wallTypeOf,
+  type Area, type LevelLayout, type Opening, type OpeningKind, type Rect, type Room, type Wall,
 } from "./game/levelLayout";
+import { ROOM_FLOOR_Y } from "./game/levelBuilder";
 import {
   addArea, addOpening, addRoom, edgeAt, itemAt, nextId, overlapsRoom, paintWall, rectFromDrag,
   removeArea, removeOpeningAt, removeRoom, setEdgeOpen, updateArea, updateRoom, wallKey, wallNear,
@@ -121,13 +122,36 @@ export function createBuildMode(host: BuildModeHost): BuildMode {
     render();
   }
 
-  function showPreview(rect: Rect | null, ok: boolean): void {
+  /** The ghost. A floor pad lies flat; a wall or a doorway is shown at full height, so you can see
+   *  exactly what a click is about to take rather than guessing from a stripe on the ground. */
+  function showPreview(rect: Rect | null, ok: boolean, volume: { base: number; height: number } | null = null): void {
     if (!rect) { preview?.setEnabled(false); return; }
     if (!preview) { preview = MeshBuilder.CreateBox("build preview", { size: 1 }, scene); preview.isPickable = false; }
     preview.material = ok ? previewMaterial : badMaterial;
-    preview.scaling.set(Math.max(0.05, rect[2]), 0.12, Math.max(0.05, rect[3]));
-    preview.position.set(rect[0] + rect[2] / 2, 0.2, rect[1] + rect[3] / 2);
+    const height = volume ? Math.max(0.05, volume.height) : 0.12;
+    const base = volume ? volume.base : 0.14;
+    preview.scaling.set(Math.max(0.05, rect[2]), height, Math.max(0.05, rect[3]));
+    preview.position.set(rect[0] + rect[2] / 2, base + height / 2, rect[1] + rect[3] / 2);
     preview.setEnabled(true);
+  }
+
+  /** How tall a wall stands, so its ghost matches it. */
+  function heightOf(wall: Wall): number {
+    const room = wall.room ? layout.rooms.find((candidate) => candidate.id === wall.room) : undefined;
+    return wall.height ?? room?.wallHeight ?? wallTypeOf(layout, wall.type).height ?? DEFAULT_WALL_HEIGHT;
+  }
+  /** Footprint of a stretch of wall, thick enough to see from any angle. */
+  function wallFootprint(wall: Wall, from: number, span: number): Rect {
+    const horizontal = Math.abs(wall.from[1] - wall.to[1]) < 1e-6;
+    const thickness = Math.max(0.3, wallTypeOf(layout, wall.type).thickness);
+    const cx = wall.from[0] + (horizontal ? from + span / 2 : 0);
+    const cz = wall.from[1] + (horizontal ? 0 : from + span / 2);
+    return horizontal ? [cx - span / 2, cz - thickness / 2, span, thickness] : [cx - thickness / 2, cz - span / 2, thickness, span];
+  }
+  /** Where an opening sits in its wall, vertically. */
+  function openingVolume(opening: Opening): { base: number; height: number } {
+    const sill = opening.sill ?? (opening.kind === "window" ? 1 : 0);
+    return { base: ROOM_FLOOR_Y + sill, height: opening.height ?? (opening.kind === "window" ? 1.2 : 2.1) };
   }
 
   function onPointerDown(event: PointerEvent): void {
@@ -152,12 +176,9 @@ export function createBuildMode(host: BuildModeHost): BuildMode {
       const near = wallNear(layout, point.x, point.z, 0.9);
       if (near) {
         const opening = near.wall.openings?.find((candidate) => Math.abs(candidate.at - near.at) <= candidate.width / 2 + 0.3);
-        const horizontal = Math.abs(near.wall.from[1] - near.wall.to[1]) < 1e-6;
-        const span = opening ? opening.width : wallLength(near.wall);
-        const at = opening ? opening.at : wallLength(near.wall) / 2;
-        const cx = near.wall.from[0] + (horizontal ? at : 0);
-        const cz = near.wall.from[1] + (horizontal ? 0 : at);
-        showPreview(horizontal ? [cx - span / 2, cz - 0.3, span, 0.6] : [cx - 0.3, cz - span / 2, 0.6, span], false);
+        // An opening ghosts as the hole it is; a wall ghosts as the whole wall, top to bottom.
+        if (opening) showPreview(wallFootprint(near.wall, opening.at - opening.width / 2, opening.width), false, openingVolume(opening));
+        else showPreview(wallFootprint(near.wall, 0, wallLength(near.wall)), false, { base: ROOM_FLOOR_Y, height: heightOf(near.wall) });
         return;
       }
       const hit = itemAt(layout, point.x, point.z);
@@ -167,12 +188,14 @@ export function createBuildMode(host: BuildModeHost): BuildMode {
     if (tool === "door" || tool === "window" || tool === "paintWall") {
       const near = wallNear(layout, point.x, point.z, 1);
       if (!near) { showPreview(null, true); return; }
-      const width = tool === "paintWall" ? wallLength(near.wall) : tool === "door" ? 1.2 : 1;
-      const horizontal = Math.abs(near.wall.from[1] - near.wall.to[1]) < 1e-6;
-      const at = tool === "paintWall" ? wallLength(near.wall) / 2 : near.at;
-      const cx = near.wall.from[0] + (horizontal ? at : 0);
-      const cz = near.wall.from[1] + (horizontal ? 0 : at);
-      showPreview(horizontal ? [cx - width / 2, cz - 0.25, width, 0.5] : [cx - 0.25, cz - width / 2, 0.5, width], true);
+      if (tool === "paintWall") {
+        showPreview(wallFootprint(near.wall, 0, wallLength(near.wall)), true, { base: ROOM_FLOOR_Y, height: heightOf(near.wall) });
+        return;
+      }
+      const kind: OpeningKind = tool === "door" ? "door" : "window";
+      const width = kind === "door" ? 1.2 : 1;
+      const at = Math.min(wallLength(near.wall) - width / 2, Math.max(width / 2, near.at));
+      showPreview(wallFootprint(near.wall, at - width / 2, width), true, openingVolume({ at, width, kind }));
       return;
     }
     showPreview(null, true);
@@ -362,6 +385,7 @@ export function createBuildMode(host: BuildModeHost): BuildMode {
     if (typing) return;
     const byKey = TOOLS.find((entry) => entry.key === event.key);
     if (byKey) { tool = byKey.id; status = byKey.hint; render(); return; }
+    // B is handled by the host, which owns the mode; handling it here too would toggle twice.
     if (event.key === "Escape") { if (drag) { drag = null; showPreview(null, true); } else toggle(); return; }
     if ((event.key === "Delete" || event.key === "Backspace") && selected) {
       const item = selectedItem();

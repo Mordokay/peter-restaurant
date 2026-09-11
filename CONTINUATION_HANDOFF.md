@@ -2261,3 +2261,9 @@ The layout reference is the **end state** — what a dedicated player owns after
 - Models are centred on x/z and stood on y = 0 by `centreModel`, so they drop into the world by their base like every other prop.
 
 Thumbnail rendered through the lab. Next for this prop: wire the open/close clips to decorate mode's interaction, and drive the produce states from stock.
+
+### Build mode: volumetric ghosts and the camera (2026-09-11)
+
+- **The ghost is now a volume, not a stripe.** Hovering a wall with Erase or Paint wall shows the whole wall, full length and full height (`wallFootprint` + `heightOf`); hovering a doorway or window shows just that hole at its real sill and head height (`openingVolume`). Room and ground drags still ghost as a flat pad, which is what they are.
+- **Build mode keeps the camera.** Q and E turn, the wheel zooms, F frames, and W A S D slide the view across the site instead of walking the marker — you often want to paint a wall from two sides. Leaving build mode hands the camera back to the player.
+- **B toggles build mode from one place.** Both the host and the editor were handling it, so the mode toggled twice and never closed; the editor now only listens for Escape.

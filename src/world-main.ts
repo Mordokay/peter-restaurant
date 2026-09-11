@@ -150,11 +150,11 @@ window.addEventListener("keydown", (event) => {
   if (typing) return;
   const key = event.key.toLowerCase();
   keys.add(key);
-  if (build.active) return; // build mode owns the keyboard while it is open
+  // Build mode keeps the camera: you often want to paint a wall from two sides.
   if (key === "q") turnCamera(-1);
   if (key === "e") turnCamera(1);
   if (key === "f") frameSite();
-  if (key === "b" && !event.repeat) { build.toggle(); keys.clear(); syncBuildButton(); }
+  if (key === "b" && !event.repeat) { build.toggle(); keys.clear(); requestAnimationFrame(syncBuildButton); }
 });
 window.addEventListener("keyup", (event) => keys.delete(event.key.toLowerCase()));
 window.addEventListener("blur", () => keys.clear());
@@ -190,7 +190,7 @@ document.querySelector(".world-controls")!.addEventListener("click", (event) => 
       button.classList.toggle("on", cutawayOn);
       if (!cutawayOn) for (const built of level.walls.values()) { built.mesh.visibility = 1; built.mesh.isVisible = true; }
       break;
-    case "build": build.toggle(); syncBuildButton(); break;
+    case "build": build.toggle(); requestAnimationFrame(syncBuildButton); break;
     case "night": dayNight.setHour(dayNight.hour > 12 && dayNight.hour < 22 ? 9 : 19.5); break;
     case "frame": frameSite(); framed = true; break;
   }
@@ -198,11 +198,12 @@ document.querySelector(".world-controls")!.addEventListener("click", (event) => 
 
 function syncBuildButton(): void {
   document.querySelector<HTMLElement>("#world-build")?.classList.toggle("on", build.active);
+  // Leaving build mode hands the camera back to the player.
+  if (!build.active) framed = false;
 }
 
 const speed = 4.5;
 function walk(dt: number): void {
-  if (build.active) return; // drawing, not walking
   // Movement follows the view, exactly as in the game scene: W is always up the screen.
   let horizontal = 0, vertical = 0;
   if (keys.has("w") || keys.has("arrowup")) vertical += 1;
@@ -215,6 +216,12 @@ function walk(dt: number): void {
   forward.normalize();
   const right = Vector3.Cross(Vector3.Up(), forward).normalize();
   const move = forward.scale(vertical).add(right.scale(horizontal)).normalize().scaleInPlace(speed * dt * (keys.has("shift") ? 2.4 : 1));
+  if (build.active) {
+    // While building, the same keys slide the view across the site instead of walking the marker.
+    camera.target.addInPlace(move.scale(2.2));
+    framed = true;
+    return;
+  }
   player.position.addInPlace(move);
   player.rotation.y = Math.atan2(move.x, move.z);
   // Step up onto a floor slab, or back down to the ground.
@@ -246,7 +253,7 @@ engine.runRenderLoop(() => {
   walk(dt);
   camera.alpha += (targetAlpha - camera.alpha) * Math.min(1, dt * 8);
   camera.radius += (targetRadius - camera.radius) * Math.min(1, dt * 8);
-  if (!framed) {
+  if (!framed && !build.active) {
     const wanted = player.position.add(new Vector3(0, 0.8, 0));
     camera.target.addInPlace(wanted.subtract(camera.target).scale(Math.min(1, dt * 8)));
   }
