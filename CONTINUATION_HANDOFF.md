@@ -2330,3 +2330,21 @@ The first freezer was too coarse, opened inward, and had its produce painted on.
   the door no longer puts the lamps out. A model with a looping clip becomes a rig rather than an instance
   when placed (`wantsRig`), which is the cost of a freezer that blinks — fine for one or two per kitchen.
 - The lab returns to a looping clip once a one-shot has played out, the way a placed prop does.
+
+### Time of day in the lab, and what a readout is worth at 26 metres (2026-09-11)
+
+- **The lab has the game's sky.** Four presets beside the clip buttons: 💡 Studio (the lab's own flat
+  inspection light, still the default), ☀️ Day (12:00), 🌇 Evening (19:30), 🌙 Night (23:00). The three
+  hours run through `createDayNight` on the game's own curves — same sun, ambient, sky and glow intensity —
+  so anything that lights up can be judged here instead of guessed at. Switching between hours sweeps.
+- **Measured: the freezer's readout dies between 6 and 14 metres.** In the lab at a 907 px viewport, the
+  greenest pixel of the display reads (127,255,220) at 1 m, (61,124,107) at 6 m, (30,67,58) at 10 m and
+  (14,35,31) at 14 m — one pixel. At the world camera's resting 26 m the freezer is 102 px tall, the whole
+  display 18 px wide and one segment stroke **1.1 px**; the panel averages RGB (22,25,31) whether the
+  display is there or not. The number is a close-up detail and nothing will change that: the player reads
+  it in the lab, in build and decorate mode, and when they zoom in (the world camera goes to 6 m, the game
+  camera to 5 m).
+- **Backlighting the window needed its own part.** `customEmissiveColorSelector` gives the GlowLayer ONE
+  colour per mesh, so a dim field and bright digits in the same part bloom identically and the number
+  vanishes into a slab of light. `display_field` is therefore a part of its own, blooming softly at 0.3
+  while the segments burn at 1.4 in front of it.

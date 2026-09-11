@@ -177,6 +177,7 @@ html, body, #model-lab { width: 100%; height: 100%; margin: 0; overflow: hidden;
 .lab-editor-chip.add { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: 2px dashed #ffffff55 !important; border-radius: 7px; color: #dce8df; background: #18221f; font-size: 15px; font-weight: 900; cursor: pointer; }
 .lab-editor-chip.add input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
 .lab-palette-editor { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.lab-light { display: inline-flex; gap: 4px; padding-right: 4px; border-right: 1px solid #ffffff1c; }
 .lab-speed { display: inline-flex; align-items: center; gap: 6px; padding: 0 8px; color: #d9e4dc; font-size: 11px; }
 .lab-speed input[type="range"] { width: 90px; accent-color: #72bd63; }
 .lab-speed output { min-width: 42px; font-variant-numeric: tabular-nums; }

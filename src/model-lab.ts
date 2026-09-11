@@ -15,6 +15,7 @@ import { TOMATO_STAGE_SECONDS } from "./game/stageTransition";
 import { createLabEditor } from "./labEditor";
 import { createHeadCamera } from "./labCamera";
 import { createClipPlayer, createVoxelRig, type ClipPlayer, type VoxelRig } from "./game/voxelRig";
+import { createDayNight, type DayNight } from "./game/dayNight";
 import { attachGlow } from "./game/lighting";
 import { createParticleWorld, type EmitterHandle } from "./game/voxelParticles";
 import { collidersOfMeshes, createColliderField } from "./game/gravity";
@@ -22,7 +23,7 @@ import { collidersOfMeshes, createColliderField } from "./game/gravity";
 const host = document.querySelector<HTMLElement>("#model-lab")!;
 host.innerHTML = `<div class="lab" id="lab-root">
   <aside class="lab-sidebar" id="lab-sidebar"><div class="lab-resize-handle" id="lab-resize" title="Drag to resize this panel"></div><div class="lab-objects" id="lab-objects"><a class="lab-back" href="/">← Back to game</a><h1>Model Lab</h1><p>Every registered production asset appears here. Inspect silhouettes at any angle before approving them.</p><div class="lab-browser" id="lab-browser"></div><div class="lab-objects-actions"><button id="lab-import" title="Import a .glb/.gltf/.obj: it is voxelized, its parts kept and auto-rigged, and it lands in this list ready to edit and animate">📥 Import 3D object…</button><input type="file" id="lab-import-file" accept=".glb,.gltf,.obj" hidden /><button id="lab-thumbs" title="Render the missing thumbnails (pictures in the browser and the decorate library). Shift+click re-renders every thumbnail.">📸</button></div><div class="lab-panel-hint">Click a tile to open it · right-click for rename, duplicate, merge, remove · drag a tile onto another (or onto the 3D view) to bring its parts in · drag onto a folder in the 📁 rail to move it · ★ favourites · arrows move around the grid.</div></div><div class="lab-left-panel" id="lab-left" hidden></div></aside>
-  <section class="lab-view"><canvas id="lab-canvas"></canvas><div class="lab-toolbar"><span id="lab-modes" class="lab-modes"></span><span id="lab-clips" class="lab-clips"></span><button id="lab-edit" title="Edit this voxel model: brushes, bucket, eyedropper, chunk delete, parts, rig, animation, save to the catalog">Edit</button><button id="lab-reset" title="Back to the framed view (also resets the field of view)">Reset view</button><button id="lab-fly" title="Fly mode (C): W A S D move, Q E down/up, hold the right mouse button to look. Off: the same works while holding the right button.">🎥 Fly <kbd>C</kbd></button><label class="lab-speed" title="Keyboard fly speed (W A S D / Q E)"><span>🎮</span><input type="range" id="lab-fly-speed" min="0" max="100" step="1" /><output id="lab-fly-speed-value"></output></label><button id="lab-spin">Auto rotate</button></div><div class="lab-help" id="lab-help"></div><div class="lab-stats" id="lab-stats"></div></section>
+  <section class="lab-view"><canvas id="lab-canvas"></canvas><div class="lab-toolbar"><span id="lab-modes" class="lab-modes"></span><span id="lab-clips" class="lab-clips"></span><button id="lab-edit" title="Edit this voxel model: brushes, bucket, eyedropper, chunk delete, parts, rig, animation, save to the catalog">Edit</button><span id="lab-light" class="lab-light"></span><button id="lab-reset" title="Back to the framed view (also resets the field of view)">Reset view</button><button id="lab-fly" title="Fly mode (C): W A S D move, Q E down/up, hold the right mouse button to look. Off: the same works while holding the right button.">🎥 Fly <kbd>C</kbd></button><label class="lab-speed" title="Keyboard fly speed (W A S D / Q E)"><span>🎮</span><input type="range" id="lab-fly-speed" min="0" max="100" step="1" /><output id="lab-fly-speed-value"></output></label><button id="lab-spin">Auto rotate</button></div><div class="lab-help" id="lab-help"></div><div class="lab-stats" id="lab-stats"></div></section>
   <aside class="lab-right-panel" id="lab-right" hidden></aside>
   <footer class="lab-bottom-panel" id="lab-bottom" hidden></footer>
   <div class="lab-resize-right" id="lab-resize-right" title="Drag to resize the properties panel"></div>
@@ -70,7 +71,54 @@ const fill = new HemisphericLight("lab fill", new Vector3(0, 1, 0), scene);
 fill.intensity = 1.15;
 fill.groundColor = Color3.FromHexString("#506159");
 const shadows = new ShadowGenerator(2048, key);
-attachGlow(scene, { intensity: 0.8 });
+const glowLayer = attachGlow(scene, { intensity: 0.8 });
+
+// ── the light of day ──────────────────────────────────────────────────────────
+// The lab's own light is flat and bright, which is what you want for reading a
+// silhouette — and hopeless for judging anything that glows: a lit display or a
+// blinking lamp says nothing against a white-lit panel. These put the model under
+// the game's own sky at an hour of your choosing, using the very same curves the
+// world runs on, so what you see here is what the game will show.
+const LIGHT_PRESETS = [
+  { id: "studio", label: "💡", name: "Studio", title: "Studio: the lab's flat, neutral inspection light. Best for reading shape and colour" },
+  { id: "day", label: "☀️", name: "Day", hour: 12, title: "Midday — high hard sun, and anything that glows barely registers" },
+  { id: "evening", label: "🌇", name: "Evening", hour: 19.5, title: "Sunset — low warm sun, lit voxels starting to tell" },
+  { id: "night", label: "🌙", name: "Night", hour: 23, title: "Night — the model lit by its own glow and its own lamps" },
+] as const;
+const lightBar = document.querySelector<HTMLElement>("#lab-light")!;
+// What the lab looks like with no time of day: restored whenever Studio comes back.
+const studioLook = {
+  sky: scene.clearColor.clone(), direction: key.direction.clone(), sunColor: key.diffuse.clone(), sunIntensity: key.intensity,
+  ambientColor: fill.diffuse.clone(), ground: fill.groundColor.clone(), ambientIntensity: fill.intensity, glow: glowLayer.intensity,
+};
+let dayNight: DayNight | null = null;
+let lightPreset: string = "studio";
+const applyLightPreset = (id: string): void => {
+  const preset = LIGHT_PRESETS.find((candidate) => candidate.id === id) ?? LIGHT_PRESETS[0];
+  lightPreset = preset.id;
+  if (!("hour" in preset)) {
+    dayNight = null;
+    scene.clearColor = studioLook.sky.clone();
+    key.direction.copyFrom(studioLook.direction);
+    key.diffuse = studioLook.sunColor.clone();
+    key.intensity = studioLook.sunIntensity;
+    fill.diffuse = studioLook.ambientColor.clone();
+    fill.groundColor = studioLook.ground.clone();
+    fill.intensity = studioLook.ambientIntensity;
+    glowLayer.intensity = studioLook.glow;
+  } else if (dayNight) {
+    dayNight.setTarget(preset.hour);            // already in the day: sweep across to the new hour
+  } else {
+    dayNight = createDayNight(scene, { sun: key, ambient: fill, glow: glowLayer }, { hour: preset.hour, sweepHoursPerSecond: 9 });
+  }
+  for (const button of lightBar.querySelectorAll("button")) button.classList.toggle("active", button.dataset.light === lightPreset);
+};
+lightBar.innerHTML = LIGHT_PRESETS.map((preset) => `<button data-light="${preset.id}" title="${preset.title}">${preset.label} ${preset.name}</button>`).join("");
+lightBar.addEventListener("click", (event) => {
+  const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-light]");
+  if (button?.dataset.light) applyLightPreset(button.dataset.light);
+});
+applyLightPreset("studio");
 // Particle preview: cubes land on the ground plane and on the displayed model itself.
 const colliders = createColliderField({ groundY: 0 });
 const particles = createParticleWorld(scene, { colliders, shadows, capacity: 4000 , shapes: (id) => {
@@ -1058,6 +1106,7 @@ engine.runRenderLoop(() => {
   const dt = Math.min(0.05, engine.getDeltaTime() / 1000);
   elapsed += dt;
   if (autoRotate) camera.alpha += dt * 0.35;
+  dayNight?.update(dt);
   particles.update(dt);
   if (clipPlayer && !editor.active) {
     // An idle loop takes back over once a one-shot has played out, the way it does for a placed prop:

@@ -34,18 +34,36 @@ const palette = {
   liner: "#eef4f7", liner_shade: "#dde7ec", frost: "#d5e7f2", frost_bright: "#f2fbff",
   glass: "#cfe9f5", glass_edge: "#a9cede",
   wire: "#9aa3aa", wire_dark: "#7c848b",
-  panel: "#3a4046", display: "#0b1512", display_off: "#16332a", display_glow: "#5ef5a0",
+  panel: "#3a4046", display: "#0b1512", display_back: "#1a4a39", display_off: "#123a2c", display_glow: "#5ef5a0",
   button: "#b9c0c6", button_cap: "#d9dfe4", button_hot: "#c04a40", button_hot_cap: "#e8695c",
   lamp_off: "#262c32", lamp_white: "#f4f9ff", lamp_ice: "#c3e4ff", lamp_red: "#ff5646",
   glow: "#eaf6ff",
   drawer: "#b6bdc3", drawer_face: "#cbd2d8",
 };
 /** Palette keys that light up. */
-const emissive = { glow: 1.5, display_glow: 1.3, lamp_white: 1.6, lamp_ice: 1.6, lamp_red: 1.6 };
+// A readout is seen twice: from a metre away, where the digits are the point, and from the game's
+// camera twenty-six metres out, where one segment is a single pixel and the number is gone. So the
+// whole window is backlit rather than dark: at distance the panel averages to a green glow that says
+// "this thing is running", and the digits are there for whoever comes close. Lamps burn hot for the
+// same reason — the bloom around a 3 cm lens is all that survives the distance.
+// The bloom mask is one colour PER MESH, so a dim backlight and bright digits cannot share a part —
+// put them together and the whole window blooms at the digits' strength and the number disappears into
+// a slab of light. The lit field is therefore its own part, blooming softly on its own terms.
+const emissive = { glow: 1.5, display_glow: 1.4, display_back: 0.3, lamp_white: 2.4, lamp_ice: 2.4, lamp_red: 2.4 };
+
 
 // The control panel across the top front, and the three indicator lenses standing proud of it.
 const PANEL_Y = H - WALL - 19;      // 165 .. 179
 const LAMP_X = [51, 60, 69];
+// The readout window, in cells: the well the backlight fills and the digits stand in front of.
+const READ_X0 = 13, READ_X1 = 46, READ_Y0 = PANEL_Y + 2, READ_Y1 = PANEL_Y + 12;
+
+/** The lit field behind the readout: its own part so its bloom stays a soft wash. */
+function displayField() {
+  const p = piece();
+  p.box(READ_X0, READ_Y0, 1, READ_X1, READ_Y1, 1, "display_back");
+  return p;
+}
 
 /** Seven-segment glyphs: which of a (top), b, c (right), d (bottom), e, f (left), g (middle) burn. */
 const SEGMENTS = { 0: "abcdef", 1: "bc", 2: "abdeg", 3: "abcdg", 4: "bcfg", 5: "acdfg", 6: "acdefg", 7: "abc", 8: "abcdefg", 9: "abcdfg" };
@@ -182,14 +200,14 @@ function cabinet(sockets) {
   // face on the right. This is where the eye goes on an appliance, so it gets the cells.
   const panelY = PANEL_Y;
   p.box(12, panelY, 0, W - 13, panelY + 14, 1, "panel");
-  // The readout sits in a well one cell deep, so its own frame shades it.
-  for (let x = 13; x <= 46; x++) for (let y = panelY + 2; y <= panelY + 12; y++) { p.clear(x, y, 0); p.set(x, y, 1, "display"); }
-  const readY = panelY + 2;
-  p.box(15, readY + 5, 1, 20, readY + 6, 1, "display_glow");   // the minus sign of -18
-  segmentDigit(p, "1", 23, readY, 1, "display_glow", "display_off");
-  segmentDigit(p, "8", 32, readY, 1, "display_glow", "display_off");
-  p.box(41, readY + 8, 1, 43, readY + 10, 1, "display_glow");  // the degree ring, hollow in the middle
-  p.set(42, readY + 9, 1, "display");
+  // The readout is a well two cells deep: the `display_field` part lights the back of it, and the
+  // segments stand in front, so at a metre you read a number and at twenty-six you see a lit panel.
+  for (let x = READ_X0; x <= READ_X1; x++) for (let y = READ_Y0; y <= READ_Y1; y++) { p.clear(x, y, 0); p.clear(x, y, 1); }
+  const readY = READ_Y0;
+  p.box(15, readY + 5, 0, 20, readY + 6, 0, "display_glow");   // the minus sign of -18
+  segmentDigit(p, "1", 23, readY, 0, "display_glow", "display_off");
+  segmentDigit(p, "8", 32, readY, 0, "display_glow", "display_off");
+  p.box(41, readY + 8, 0, 43, readY + 10, 0, "display_glow");  // the degree ring, hollow so the field shows through
   // Three push buttons: a collar sunk into the panel, the button a centimetre out, a smaller cap
   // beyond that. Stepped like this they catch the light and read as something you can press.
   // A lamp sits over its button, so the panel reads as three controls rather than two rows of things.
@@ -318,6 +336,7 @@ const parts = [
   part("drawer", drawer(), { parent: "body" }),
   part("light_bar", lightBar("steel_shadow"), { parent: "body", states: { on: { runs: lightBar("glow").runs() } } }),
   // Panel lamps. Each is two cells of lens with a dark and a lit state, so the idle clip can blink them.
+  part("display_field", displayField(), { parent: "body" }),
   part("lamp_run", lampLens(0, "lamp_off"), { parent: "body", states: { on: { runs: lampLens(0, "lamp_white").runs() } } }),
   part("lamp_cool", lampLens(1, "lamp_off"), { parent: "body", states: { on: { runs: lampLens(1, "lamp_ice").runs() } } }),
   part("lamp_alarm", lampLens(2, "lamp_off"), { parent: "body", states: { on: { runs: lampLens(2, "lamp_red").runs() } } }),
