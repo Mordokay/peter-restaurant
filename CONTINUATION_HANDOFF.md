@@ -2368,3 +2368,27 @@ not an ordinary voxel. Left ordinary it is lit by the scene, goes black at night
 through the display. And with the voxel's own colour finally rendering, the bloom is a halo rather than the
 light itself, so `display_glow` came down from 1.4 to 0.7 and the lamps from 2.4 to 1.6: the segments keep
 their green core instead of saturating to white up close.
+
+## Surfaces, phase 0: paying for what nobody sees (2026-09-12)
+
+The start of the wall and floor art upgrade (plan: every surface rebuilt as a high-detail voxel material).
+Before adding a single triangle, three things were being paid for and never seen. All measured on the
+compound at the default camera, no props placed.
+
+- **The glow layer was drawing the whole visible scene a second time.** A `GlowLayer` with no include list
+  falls back to `scene.getActiveMeshes()`, so every mesh was rendered into the glow texture — painted
+  black, because `customEmissiveColorSelector` returns nothing for anything untagged — then blurred four
+  times and merged. Measured by toggling `isEnabled`: **83 draw calls and 333,004 triangles a frame.**
+  `attachGlow` now starts the layer disabled and `tagGlow` switches it on when something actually asks to
+  bloom (and off again when the last one is disposed).
+- **Every floor meshed its own underside.** A flat slab exposes `+y` and `-y` equally — 2,923 quads each on
+  one farm plot. `createVoxelMesh` already takes a `solid` predicate, so floors now report everything below
+  themselves as solid and those faces are never built.
+- **The site grounds ran under every room.** `site_grounds` is 68 × 64 m and contains all 18 rooms and all
+  12 other areas, which sit 2 to 8 cm above it. Floors are told which owned slabs cover them and skip cells
+  buried underneath — only cells whose whole footprint is inside a higher slab, so no gap can open at an edge.
+
+**Measured, before → after:** draw calls 221 → 138 · triangles per frame 751,282 → 287,968 · level
+triangles 303,936 → 173,626 · build 482 → 377 ms · 60 fps throughout. No visual change: the compound
+renders identically, and the lab's freezer readout still measures (109,255,188) against its authored
+`#5ef5a0` with the glow layer enabling itself on the tagged meshes.

@@ -10,7 +10,7 @@ import { Mesh, Scene, ShadowGenerator, StandardMaterial, TransformNode, Vector3 
 import { createVoxelMaterial, createVoxelMesh, type VoxelCell } from "./voxelGeometry.ts";
 import {
   floorTypeOf, shade, wallDirection, wallNormal, wallTypeOf,
-  type Area, type LevelLayout, type LevelProgress, type Opening, type Point2, type Room, type Wall,
+  type Area, type LevelLayout, type LevelProgress, type Opening, type Point2, type Rect, type Room, type Wall,
 } from "./levelLayout.ts";
 
 /** Height of a room floor's top surface, metres. Outdoor ground sits lower so thresholds read. */
@@ -175,13 +175,33 @@ export function createLevelBuilder(scene: Scene, layout: LevelLayout, options: {
     mesh.metadata = { ...((mesh.metadata as Record<string, unknown> | null) ?? {}), surface: true, ...extra };
   };
 
-  const buildFloor = (item: Room | Area, floorTypeId: string, topY: number): void => {
+  const buildFloor = (item: Room | Area, floorTypeId: string, topY: number, covers: readonly Rect[] = []): void => {
     const type = floorTypeOf(layout, floorTypeId);
     // Big outdoor grounds do not need centimetre cells; keep their mesh cheap.
     const [x, z, width, depth] = item.rect;
     const pitch = width * depth > 900 ? 0.5 : FLOOR_PITCH;
     const { cells, nx, nz } = floorCells(width, depth, pitch, type.patternScale, type.color, type.accentColor, type.pattern);
-    const mesh = createVoxelMesh(`${name} floor ${item.id}`, cells, pitch, scene, { material });
+    // Where cell (0,0) starts in the world, so a cell can be tested against the slabs above it.
+    const originX = x + (width - nx * pitch) / 2;
+    const originZ = z + (depth - nz * pitch) / 2;
+    // The site grounds run under every room and yard on the compound, and those cells are never seen.
+    // Only cells whose WHOLE footprint sits inside a higher slab go, so no gap can open along an edge.
+    const buried = (ix: number, iz: number): boolean => {
+      const x0 = originX + ix * pitch, z0 = originZ + iz * pitch;
+      for (const rect of covers) {
+        if (x0 >= rect[0] && x0 + pitch <= rect[0] + rect[2] && z0 >= rect[1] && z0 + pitch <= rect[1] + rect[3]) return true;
+      }
+      return false;
+    };
+    const kept = covers.length ? cells.filter((cell) => !buried(cell.x, cell.z)) : cells;
+    if (!kept.length) return;
+    const present = kept.length === cells.length ? null : new Set(kept.map((cell) => `${cell.x},${cell.z}`));
+    const mesh = createVoxelMesh(`${name} floor ${item.id}`, kept, pitch, scene, {
+      material,
+      // Everything below the slab counts as solid, so the underside — exactly half of a flat floor's
+      // faces, 2,923 of 6,038 quads on one farm plot — is never built. Nobody has ever seen it.
+      solid: (cx, cy, cz) => cy < 0 || (cy === 0 && (present ? present.has(`${cx},${cz}`) : cx >= 0 && cx < nx && cz >= 0 && cz < nz)),
+    });
     // Cell (0,0,0) sits at the mesh origin, so line its corner up with the rect and drop the top to topY.
     mesh.position.set(x + pitch / 2 + (width - nx * pitch) / 2, topY - pitch / 2, z + pitch / 2 + (depth - nz * pitch) / 2);
     mesh.parent = root;
@@ -189,7 +209,7 @@ export function createLevelBuilder(scene: Scene, layout: LevelLayout, options: {
     mesh.isPickable = true;
     tagSurface(mesh, { levelFloor: item.id });
     floors.set(item.id, mesh);
-    cellCount += cells.length;
+    cellCount += kept.length;
   };
 
   const buildWall = (wall: Wall): void => {
@@ -231,8 +251,19 @@ export function createLevelBuilder(scene: Scene, layout: LevelLayout, options: {
     const started = performance.now();
     clear();
     const owned = new Set([...progress.parcels, ...progress.rooms, ...progress.walls, ...progress.areas]);
-    for (const area of layout.areas) if (owned.has(area.id)) buildFloor(area, area.ground, area.id === "site_grounds" ? GROUND_Y : OUTDOOR_FLOOR_Y);
-    for (const room of layout.rooms) if (owned.has(room.id)) buildFloor(room, room.floor, ROOM_FLOOR_Y);
+    // Floors stack rather than tile: the grounds lie under the yards and the yards under the rooms.
+    // Each slab is told which owned slabs sit above it so it can skip the cells they hide.
+    const slabs = [
+      ...layout.areas.filter((area) => owned.has(area.id)).map((area) => ({ rect: area.rect, topY: area.id === "site_grounds" ? GROUND_Y : OUTDOOR_FLOOR_Y })),
+      ...layout.rooms.filter((room) => owned.has(room.id)).map((room) => ({ rect: room.rect, topY: ROOM_FLOOR_Y })),
+    ];
+    const above = (topY: number): Rect[] => slabs.filter((slab) => slab.topY > topY + 1e-6).map((slab) => slab.rect);
+    for (const area of layout.areas) {
+      if (!owned.has(area.id)) continue;
+      const topY = area.id === "site_grounds" ? GROUND_Y : OUTDOOR_FLOOR_Y;
+      buildFloor(area, area.ground, topY, above(topY));
+    }
+    for (const room of layout.rooms) if (owned.has(room.id)) buildFloor(room, room.floor, ROOM_FLOOR_Y, above(ROOM_FLOOR_Y));
     for (const wall of layout.walls) {
       if (!owned.has(wall.id)) continue;
       // A wall needs at least one of its rooms to exist, or it fences off nothing.

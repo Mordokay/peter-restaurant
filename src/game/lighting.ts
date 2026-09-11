@@ -64,10 +64,20 @@ export function glowMaterialFor(scene: Scene): StandardMaterial {
   return material;
 }
 
+/** The glow layer of a scene, and the meshes that actually asked to bloom. */
+const glowLayers = new WeakMap<Scene, { layer: GlowLayer; meshes: Set<Mesh> }>();
+
 /** A GlowLayer that blooms only meshes tagged with metadata.glow (or drawn with the glow material). */
 export function attachGlow(scene: Scene, options: { intensity?: number; kernel?: number } = {}): GlowLayer {
   const layer = new GlowLayer("voxel glow", scene, { blurKernelSize: options.kernel ?? 48, mainTextureSamples: 1 });
   layer.intensity = options.intensity ?? 0.9;
+  // A GlowLayer with no include list falls back to every active mesh, so it draws the WHOLE visible
+  // scene a second time into its texture — painted black, because the selector below returns nothing
+  // for anything untagged — and then blurs and merges that. Measured on the compound: 83 draw calls
+  // and 333,000 triangles a frame, for pixels that never change. So it stays off until something is
+  // actually tagged to bloom, and switches off again when the last of them goes.
+  layer.isEnabled = false;
+  glowLayers.set(scene, { layer, meshes: new Set() });
   layer.customEmissiveColorSelector = (mesh, _subMesh, material, result) => {
     const info = (mesh.metadata as { glow?: GlowInfo } | null)?.glow;
     if (info && (material as StandardMaterial).metadata?.glow) result.set(info.r * info.intensity, info.g * info.intensity, info.b * info.intensity, 1);
@@ -135,4 +145,12 @@ export function modelLightPositions(model: AuthoredVoxelModel, world: Matrix): {
 /** Tag a mesh so the GlowLayer blooms it. */
 export function tagGlow(mesh: Mesh, info: GlowInfo): void {
   mesh.metadata = { ...((mesh.metadata as Record<string, unknown> | null) ?? {}), glow: info };
+  const entry = glowLayers.get(mesh.getScene());
+  if (!entry) return;
+  entry.meshes.add(mesh);
+  entry.layer.isEnabled = true;
+  mesh.onDisposeObservable.addOnce(() => {
+    entry.meshes.delete(mesh);
+    if (!entry.meshes.size) entry.layer.isEnabled = false;
+  });
 }
