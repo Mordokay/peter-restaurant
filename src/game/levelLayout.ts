@@ -75,6 +75,9 @@ export interface Room extends Buildable {
   floor: string;
   /** Metres; falls back to the wall type's height. */
   wallHeight?: number;
+  /** WallType ids used when the editor re-derives this room's walls. */
+  exteriorWall?: string;
+  interiorWall?: string;
   parcel?: string;
 }
 

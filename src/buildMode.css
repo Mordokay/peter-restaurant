@@ -1,0 +1,22 @@
+.build-root { position: absolute; right: 14px; top: 14px; width: 320px; display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid #ffffff22; border-radius: 14px; background: #1d2724ee; backdrop-filter: blur(10px); box-shadow: 0 12px 40px #0c14116a; color: #eef3ea; font: 12px/1.45 "Nunito", "Avenir Next", system-ui, sans-serif; }
+.build-head { display: flex; align-items: center; gap: 6px; font-size: 14px; }
+.build-grow { flex: 1; }
+.build-root button { padding: 4px 8px; border: 1px solid #ffffff22; border-radius: 8px; background: #ffffff0a; color: #e6efe8; font: inherit; font-weight: 700; cursor: pointer; }
+.build-root button:hover { border-color: #ffffff55; }
+.build-root button.on { border-color: #72bd63; background: #72bd6333; color: #fff; }
+.build-root button.primary { border-color: #f0c674; background: #f0c67433; }
+.build-tools { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+.build-tools button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 2px; font-size: 10px; font-weight: 700; }
+.build-tools button span { font-size: 15px; }
+.build-row { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.build-label { width: 44px; color: #9fb3a6; font-size: 11px; font-weight: 700; }
+.build-swatch { width: 22px; height: 22px; padding: 0 !important; border: 2px solid #ffffff33 !important; border-radius: 6px !important; box-shadow: inset 0 0 0 1px #0005; }
+.build-swatch.on { border-color: #f0c674 !important; box-shadow: 0 0 0 2px #f0c67466, inset 0 0 0 1px #0005; }
+.build-panel { display: flex; flex-direction: column; gap: 5px; padding: 8px; border: 1px solid #ffffff14; border-radius: 10px; background: #ffffff06; }
+.build-panel input[type="text"] { flex: 1; min-width: 80px; }
+.build-panel input { padding: 3px 6px; border: 1px solid #ffffff22; border-radius: 6px; background: #0d1512; color: #eef3ea; font: inherit; }
+.build-panel input[type="number"] { width: 62px; }
+.build-panel .build-zone { flex: 0 0 92px; }
+.build-panel code { color: #9fb3a6; font-size: 11px; }
+.build-panel label { display: inline-flex; align-items: center; gap: 3px; color: #b9c8bd; }
+.build-status { color: #cfe0d4; font-size: 11px; min-height: 15px; }

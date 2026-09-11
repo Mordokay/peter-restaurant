@@ -6,6 +6,7 @@ import { defineConfig, type Plugin } from "vite";
 // @ts-expect-error plain ESM helper shared with the node scripts
 import { hasModel, readModel, writeModel, writeThumbnail, deleteModel as removeModel, stringifyCatalog } from "./scripts/catalog-io.mjs";
 import { DETAIL_TIERS, clampVoxelHeight, initialVoxelHeight, isImportDetail, type ImportDetail } from "./src/game/importDetail";
+import { validateLevelLayout, type LevelLayout } from "./src/game/levelLayout";
 
 type CatalogModel = { id: string; name?: string; folder?: string; pitch: number; palette: Record<string, string>; parts: unknown[] };
 type CatalogOnDisk = { version: number; models: Record<string, CatalogModel> };
@@ -172,6 +173,23 @@ function labCatalogManager(): Plugin {
         }).catch((error: Error) => { response.statusCode = 400; response.end(String(error.message ?? error)); });
       });
       // Describe an uploaded file (saved under .art-assets/imports) so the lab can offer a split import.
+      // Build mode writes the site plan: rooms, walls, doors, ground and what each costs.
+      server.middlewares.use("/__lab/save-level", (request, response) => {
+        if (request.method !== "POST") { response.statusCode = 405; response.end("POST only"); return; }
+        void readJsonBody(request).then((raw) => {
+          const layout = raw as unknown as LevelLayout;
+          const problems = validateLevelLayout(layout);
+          if (problems.length) throw new Error(`invalid level plan: ${problems[0]}${problems.length > 1 ? ` (and ${problems.length - 1} more)` : ""}`);
+          const levelPath = fileURLToPath(new URL("./src/assets/scene/level.json", import.meta.url));
+          writeFileSync(levelPath, `${JSON.stringify(layout, null, 2)}\n`);
+          response.setHeader("content-type", "application/json");
+          response.end(JSON.stringify({ ok: true, rooms: layout.rooms.length, walls: layout.walls.length }));
+        }).catch((error: Error) => {
+          response.statusCode = 400;
+          response.setHeader("content-type", "application/json");
+          response.end(JSON.stringify({ ok: false, error: String(error.message ?? error) }));
+        });
+      });
       server.middlewares.use("/__lab/inspect-model", (request, response) => {
         if (request.method !== "POST") { response.statusCode = 405; response.end("POST only"); return; }
         void readJsonBody(request).then((raw) => {

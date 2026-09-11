@@ -20,6 +20,7 @@ import { attachGlow, createLightPool } from "./game/lighting";
 import { createParticleWorld } from "./game/voxelParticles";
 import { collidersOfMeshes, createColliderField } from "./game/gravity";
 import { createDayNight } from "./game/dayNight";
+import { createBuildMode } from "./buildMode";
 import { sourceCacheKey, warmSourceCache } from "./game/sourceCache";
 
 const params = new URLSearchParams(window.location.search);
@@ -35,6 +36,7 @@ document.querySelector<HTMLElement>("#world")!.innerHTML = `
       <button data-act="progress" id="world-progress" title="Switch between the plan at full build-out and what the player owns at the start">🏗 ${startingProgress ? "Starting plot" : "Full build-out"}</button>
       <button data-act="cutaway" class="on" id="world-cutaway" title="Drop the walls standing between the camera and the room you are in">🔪 Cutaway</button>
       <span class="world-sep"></span>
+      <button data-act="build" id="world-build" title="Draw rooms, walls, doors and ground (B)">🏗 Build mode</button>
       <button data-act="night" id="world-night" title="Jump the clock to evening">🌙 Evening</button>
       <button data-act="frame" title="Look at the whole site">🖼 Frame all</button>
     </div>
@@ -133,15 +135,26 @@ onLevelChanged(() => {
   applyProgress();
 });
 
+// Build mode edits the plan in place, so a new room appears the moment it is drawn.
+const build = createBuildMode({
+  scene, canvas, layout: levelLayout, camera: () => camera, mount: document.querySelector<HTMLElement>("#world")!,
+  onChanged: () => {
+    if (!startingProgress) progress = fullProgress(levelLayout);
+    applyProgress();
+  },
+});
+
 const keys = new Set<string>();
 window.addEventListener("keydown", (event) => {
   const typing = (event.target as HTMLElement | null)?.tagName === "INPUT";
   if (typing) return;
   const key = event.key.toLowerCase();
   keys.add(key);
+  if (build.active) return; // build mode owns the keyboard while it is open
   if (key === "q") turnCamera(-1);
   if (key === "e") turnCamera(1);
   if (key === "f") frameSite();
+  if (key === "b" && !event.repeat) { build.toggle(); keys.clear(); syncBuildButton(); }
 });
 window.addEventListener("keyup", (event) => keys.delete(event.key.toLowerCase()));
 window.addEventListener("blur", () => keys.clear());
@@ -177,13 +190,19 @@ document.querySelector(".world-controls")!.addEventListener("click", (event) => 
       button.classList.toggle("on", cutawayOn);
       if (!cutawayOn) for (const built of level.walls.values()) { built.mesh.visibility = 1; built.mesh.isVisible = true; }
       break;
+    case "build": build.toggle(); syncBuildButton(); break;
     case "night": dayNight.setHour(dayNight.hour > 12 && dayNight.hour < 22 ? 9 : 19.5); break;
     case "frame": frameSite(); framed = true; break;
   }
 });
 
+function syncBuildButton(): void {
+  document.querySelector<HTMLElement>("#world-build")?.classList.toggle("on", build.active);
+}
+
 const speed = 4.5;
 function walk(dt: number): void {
+  if (build.active) return; // drawing, not walking
   const forward = new Vector3(Math.sin(camera.alpha), 0, Math.cos(camera.alpha)).normalize();
   const right = new Vector3(forward.z, 0, -forward.x);
   const move = new Vector3(0, 0, 0);
@@ -239,5 +258,5 @@ engine.runRenderLoop(() => {
 window.addEventListener("resize", () => engine.resize());
 
 Object.assign(window as unknown as Record<string, unknown>, {
-  __world: { scene, camera, player, level, cutaway, decor, particles, colliders, dayNight, layout: levelLayout, turn: turnCamera, setProgress: (next: LevelProgress) => { progress = next; applyProgress(); } },
+  __world: { scene, camera, player, level, cutaway, decor, particles, colliders, dayNight, build, layout: levelLayout, turn: turnCamera, setProgress: (next: LevelProgress) => { progress = next; applyProgress(); } },
 });

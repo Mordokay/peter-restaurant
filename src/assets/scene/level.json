@@ -450,6 +450,8 @@
         9
       ],
       "floor": "plank_dining",
+      "exteriorWall": "stone_grey",
+      "interiorWall": "plaster_cream",
       "parcel": "p_core",
       "cost": 2400
     },
@@ -464,6 +466,8 @@
         1.5
       ],
       "floor": "tile_pale",
+      "exteriorWall": "stone_grey",
+      "interiorWall": "tile_white",
       "parcel": "p_core",
       "cost": 900
     },
@@ -478,6 +482,8 @@
         7.5
       ],
       "floor": "tile_pale",
+      "exteriorWall": "stone_grey",
+      "interiorWall": "tile_white",
       "parcel": "p_kitchen",
       "cost": 3200
     },
@@ -492,6 +498,8 @@
         4
       ],
       "floor": "tile_pale",
+      "exteriorWall": "stone_grey",
+      "interiorWall": "plaster_cream",
       "parcel": "p_west_wing",
       "cost": 900
     },
@@ -506,6 +514,8 @@
         3.5
       ],
       "floor": "tile_cool",
+      "exteriorWall": "stone_grey",
+      "interiorWall": "plaster_cream",
       "parcel": "p_west_wing",
       "cost": 700
     },
@@ -520,6 +530,8 @@
         4
       ],
       "floor": "tile_cool",
+      "exteriorWall": "stone_grey",
+      "interiorWall": "tile_white",
       "parcel": "p_east_wing",
       "cost": 1100
     },
@@ -534,6 +546,8 @@
         3.5
       ],
       "floor": "plank_warm",
+      "exteriorWall": "stone_grey",
+      "interiorWall": "plaster_cream",
       "parcel": "p_east_wing",
       "cost": 800
     },
@@ -548,6 +562,8 @@
         2.5
       ],
       "floor": "tile_pale",
+      "exteriorWall": "stone_grey",
+      "interiorWall": "plaster_cream",
       "parcel": "p_corridor",
       "cost": 1000
     },
@@ -562,6 +578,8 @@
         6
       ],
       "floor": "tile_pale",
+      "exteriorWall": "stone_grey",
+      "interiorWall": "plaster_cream",
       "parcel": "p_north_west",
       "cost": 900
     },
@@ -576,6 +594,8 @@
         6
       ],
       "floor": "tile_cool",
+      "exteriorWall": "stone_grey",
+      "interiorWall": "tile_white",
       "parcel": "p_north_west",
       "cost": 1400
     },
@@ -590,6 +610,8 @@
         6
       ],
       "floor": "tile_pale",
+      "exteriorWall": "stone_grey",
+      "interiorWall": "plaster_cream",
       "parcel": "p_north_east",
       "cost": 300
     },
@@ -604,6 +626,8 @@
         6
       ],
       "floor": "tile_pale",
+      "exteriorWall": "stone_grey",
+      "interiorWall": "tile_white",
       "parcel": "p_north_east",
       "cost": 1800
     },
@@ -618,6 +642,8 @@
         6
       ],
       "floor": "plank_warm",
+      "exteriorWall": "stone_grey",
+      "interiorWall": "plaster_cream",
       "parcel": "p_north_east",
       "cost": 800
     },
@@ -632,6 +658,8 @@
         6
       ],
       "floor": "tile_pale",
+      "exteriorWall": "stone_grey",
+      "interiorWall": "plaster_cream",
       "parcel": "p_north_east",
       "cost": 300
     },
@@ -646,6 +674,8 @@
         6
       ],
       "floor": "tile_cool",
+      "exteriorWall": "stone_grey",
+      "interiorWall": "tile_white",
       "parcel": "p_north_east",
       "cost": 700
     },
@@ -660,6 +690,8 @@
         6
       ],
       "floor": "tile_cool",
+      "exteriorWall": "stone_grey",
+      "interiorWall": "plaster_cream",
       "parcel": "p_north_east",
       "cost": 600
     },
@@ -674,6 +706,8 @@
         8
       ],
       "floor": "cellar_floor",
+      "exteriorWall": "cellar_stone",
+      "interiorWall": "cellar_stone",
       "parcel": "p_cellar",
       "cost": 2200
     },
@@ -688,6 +722,8 @@
         10
       ],
       "floor": "soil_rich",
+      "exteriorWall": "glass_house",
+      "interiorWall": "glass_house",
       "parcel": "p_greenhouse",
       "cost": 2500
     }

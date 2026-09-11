@@ -273,7 +273,10 @@ const layout = {
   wallTypes,
   floorTypes,
   parcels: parcels.map(([id, name, rect, cost, requires]) => ({ id, name, rect, cost, ...(requires.length ? { requires } : {}) })),
-  rooms: roomRecords.map((room) => ({ id: room.id, name: room.name, zone: room.zone, rect: room.rect, floor: room.floor, parcel: room.parcel, cost: room.cost })),
+  rooms: roomRecords.map((room) => {
+    const cfg = config.get(room.id);
+    return { id: room.id, name: room.name, zone: room.zone, rect: room.rect, floor: room.floor, exteriorWall: cfg.exterior, interiorWall: cfg.interior, parcel: room.parcel, cost: room.cost };
+  }),
   walls,
   areas: areas.map(([id, name, zone, rect, ground, parcel, cost]) => ({ id, name, zone, rect, ground, ...(parcel ? { parcel } : {}), cost })),
 };

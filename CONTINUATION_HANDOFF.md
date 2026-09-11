@@ -2229,3 +2229,14 @@ The layout reference is the **end state** — what a dedicated player owns after
 - **`src/game/cutaway.ts`** — room-aware walls-down. The room you stand in, plus rooms within a 14 m probe toward the camera, drop any wall whose outward normal faces the eye. The probe is bounded on purpose: the camera can sit 80 m back, and probing all the way opened the whole compound.
 - **`world.html` + `src/world-main.ts`** — the compound, gameplay-free, with day/night, glow, the light pool, particles, colliders and the decor scene (so decorate mode and the catalog browser work here). `?progress=start` for the opening plot, `?hour=19.5` freezes the clock. Debug hook `__world`. The shift gameplay in `index.html` is untouched.
 - Next: the build editor (draw rooms, walls, doors, paint types) saving through a `/__lab/save-level` endpoint, then dressing rooms one at a time.
+
+### Build mode (2026-09-11)
+
+`src/buildMode.ts` + `src/buildMode.css`, mounted on `world.html` (🏗 button or **B**). Tools: Select, Room, Ground, Door, Window, Paint wall, Paint floor, Erase (keys 1–8). Rooms are what you draw and walls fall out of them, which is what makes it feel like The Sims: drag a rectangle and a floor appears with walls around it, sharing any edge it meets. A ghost rectangle previews the drag (red when it would overlap a room); hovering a wall with the door or paint tool shows where the change lands.
+
+- `src/game/levelEdit.ts` holds the operations, each returning a NEW plan so undo is a stack: `deriveWalls` (room edges cut at their neighbours' boundaries, existing walls matched by geometry so paint and openings survive), `addRoom`/`removeRoom`/`updateRoom`, `addArea`/`removeArea`/`updateArea`, `paintWall`, `addOpening`/`removeOpeningAt`, plus pointer helpers `snap`, `rectFromDrag`, `itemAt`, `wallNear`, `projectOntoWall`, `overlapsRoom`.
+- The edited plan is copied onto the live `levelLayout` object with `Object.assign`, the same trick the HMR hook uses, so the renderer and every other holder see one state.
+- Saving posts to `/__lab/save-level` (vite.config.ts), which runs `validateLevelLayout` and refuses a bad plan with the first problem rather than writing it. Ctrl+S saves, Ctrl+Z/Y undo and redo.
+- `scripts/seed-level.mjs` now emits `exteriorWall`/`interiorWall` per room so a re-derive in the editor picks the same types. Verified: re-deriving the authored compound reproduces all 57 walls and all 33 openings.
+- Verified in the browser: drawing a 6 × 6 room added one room, four walls and a floor; cutting a doorway added an opening; two undos restored the plan exactly; saving wrote the file; a deliberately broken plan was refused with a 400 and a readable message.
+- Next: dress rooms one at a time with decorate mode and the catalog browser, then list what the catalog is missing.
