@@ -19,10 +19,11 @@ import type { SurfaceMaterial } from "./surfaces.ts";
 
 /** Dining oak: wide boards, staggered butts, a dark gap between, the odd knot and a worn walking line. */
 export const plankDining: SurfaceMaterial = {
-  id: "plank_dining", name: "Dining oak", pitch: 0.05,
+  id: "plank_dining", name: "Dining oak", pitch: 0.025,
   tones: ["#a8764a", "#a06f45", "#b07c4e", "#9c6a41", "#ab7950"],
   lattice: { kind: "rows", width: 0.14, length: 2.1, stagger: 0.37, along: "u" },
-  joint: { color: "#6d4a2c", width: 0.014, depth: 0.012 },
+  joint: { color: "#6d4a2c", width: 0.016, depth: 0.025 },   // one cell deep: a groove you can see
+  relief: { jitter: 0.018 },                                 // reclaimed boards do not lie perfectly flush
   // A board is very slightly crowned, so its long edges sit a shade darker than its middle.
   bands: [{ from: 0.82, color: "#976a42" }],
   scatter: [
@@ -36,7 +37,8 @@ export const tileQuarry: SurfaceMaterial = {
   id: "tile_quarry", name: "Quarry tile", pitch: 0.025,
   tones: ["#b9744e", "#b06d4a", "#c07d55", "#ab6846"],
   lattice: { kind: "grid", size: 0.3 },
-  joint: { color: "#9c8a76", width: 0.022, depth: 0.012 },
+  joint: { color: "#9c8a76", width: 0.022, depth: 0.025 },
+  relief: { jitter: 0.014 },   // a hand-laid floor is never dead level
   bands: [{ from: 0.88, color: "#a05f40" }],   // the fired edge of a tile
   scatter: [{ color: "#8f5a3d", coverage: 0.05, cluster: 0.3, where: "feature", salt: 17 }],
 };
@@ -116,7 +118,8 @@ export const stoneCoursed: SurfaceMaterial = {
   id: "stone_coursed", name: "Coursed stone", pitch: 0.025,
   tones: ["#8f8d87", "#89877f", "#97958e", "#838179", "#928f86"],
   lattice: { kind: "rows", width: 0.26, length: 0.62, stagger: 0.5, along: "u" },
-  joint: { color: "#6f6d67", width: 0.035, depth: 0.02 },
+  joint: { color: "#6f6d67", width: 0.035, depth: 0.05 },    // two cells: rubble mortar is deep
+  relief: { jitter: 0.02 },                                  // and no two stones sit at the same depth
   bands: [{ from: 0.76, color: "#7e7c75" }],   // blocks are worn round at their edges
   scatter: [
     { color: "#7d8a63", coverage: 0.12, cluster: 0.2, where: "joint", salt: 11 },    // lichen in the mortar

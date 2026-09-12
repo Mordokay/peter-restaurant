@@ -159,3 +159,40 @@ test("pebbles never move, whatever the wind is doing", () => {
   assert.ok(cells.length > 100);
   assert.ok(cells.every((cell) => (cell.sway ?? 0) === 0), "a stone that sways is a stone rolling downhill");
 });
+
+test("no relief is too shallow to exist", () => {
+  // The mistake this guards: relief is rounded to whole cells, so a 1.2 cm joint on 2.5 cm cells rounds
+  // to zero and the groove silently does not happen. Six materials shipped flat that way, on the
+  // reasoning that a realistic grout recess is a millimetre or two — which is true, and the wrong target.
+  // In a voxel game the right depth is exactly one cell, whatever the cell happens to be.
+  for (const material of surfaceLibrary) {
+    const pitch = material.pitch ?? 0.05;
+    const values: [string, number | undefined][] = [
+      ["joint depth", material.joint?.depth],
+      ["relief height", material.relief?.height],
+      ["crown", material.relief?.crown],
+      ["jitter", material.relief?.jitter],
+    ];
+    for (const [what, value] of values) {
+      if (!value) continue;
+      assert.ok(value >= pitch * 0.5,
+        `${material.id}: a ${(value * 100).toFixed(1)} cm ${what} rounds to nothing at ${pitch * 100} cm cells`);
+    }
+  }
+});
+
+test("the materials that are boards and slabs actually have depth", () => {
+  // What the user asked for in as many words: these are boards with fissures between them, so the
+  // fissures should be at a different height, and no two boards should sit at exactly the same level.
+  for (const id of ["plank_dining", "tile_quarry", "stone_coursed"]) {
+    const material = surfaceById(id)!;
+    const pitch = material.pitch ?? 0.05;
+    assert.ok(material.joint?.depth, `${id} has no recessed joint`);
+    assert.ok(material.relief?.jitter, `${id} lays every feature at exactly the same height`);
+    // Walking across features finds more than one height, and a joint lower than the faces beside it.
+    const heights = new Set<number>();
+    for (let u = 0; u < 8; u += 0.02) heights.add(Math.round(sampleSurface(material, u, 1.37).relief / pitch));
+    assert.ok(heights.size >= 3, `${id}: crossing a floor should meet several heights, saw ${heights.size}`);
+    assert.ok(Math.min(...heights) < 0, `${id}: nothing is cut below the surface`);
+  }
+});

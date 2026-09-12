@@ -66,7 +66,15 @@ export interface SurfaceMaterial {
   joint?: { color: string; width: number; depth?: number };
   /** How far the body of a feature stands above the walking surface, and how much it domes toward its
    *  centre — a cobble sett, the crown of a ploughed ridge. Metres. */
-  relief?: { height?: number; crown?: number };
+  relief?: {
+    height?: number;
+    crown?: number;
+    /** Per-FEATURE height variation, metres: every board, slab or stone sits a little higher or lower
+     *  than its neighbour. Drawn from the feature's own address, so a board is level along its length —
+     *  which is what a floor of reclaimed timber actually looks like, and what stops a tiled floor
+     *  reading as printed lino. Set it to a whole number of cells or it rounds away to nothing. */
+    jitter?: number;
+  };
   /** Tone ACROSS a feature, from its centre (0) to its edge (1), each band starting at `from`.
    *
    *  This is what makes shape read at the game camera. Realistic relief is sub-cell at every pitch we
@@ -191,6 +199,7 @@ export function sampleSurface(material: SurfaceMaterial, u: number, v: number): 
 
   let relief = material.relief?.height ?? 0;
   if (material.relief?.crown) relief += material.relief.crown * (1 - hit.fromCentre * hit.fromCentre);
+  if (material.relief?.jitter) relief += material.relief.jitter * hash2(hit.fu, hit.fv, 13);
   if (inJoint) {
     color = material.joint!.color;
     relief = -(material.joint!.depth ?? 0);
@@ -212,5 +221,5 @@ export function reliefFloor(material: SurfaceMaterial): number {
 
 /** The highest it stands above it. */
 export function reliefCeiling(material: SurfaceMaterial): number {
-  return (material.relief?.height ?? 0) + (material.relief?.crown ?? 0);
+  return (material.relief?.height ?? 0) + (material.relief?.crown ?? 0) + (material.relief?.jitter ?? 0);
 }

@@ -2540,3 +2540,31 @@ change between two frames 0.7 s apart with wind, and exactly 0 with it off.**
 
 One artefact found and fixed by a test: two blades could land on the same cell column and interleave their
 wind weights, which the shader would have bent into a corkscrew. One blade to a column now.
+
+### Surfaces, phase 7: the boards get their depth back (2026-09-12)
+
+A correction to phase 3. The reasoning there — "realistic relief is sub-cell at every pitch we can afford,
+so form must come from `bands`" — was half right and led to a wrong call. A realistic grout recess *is* a
+millimetre or two and *does* round to nothing. But that is the wrong target: **in a voxel game the right
+depth is exactly one cell, whatever the cell happens to be.** A realism argument was allowed to override a
+voxel one, and four materials shipped flat that should not have been.
+
+Fixed by letting relief be a whole number of cells by construction, which needs finer cells where relief
+matters. Dining oak moved to 2.5 cm so a board gap can be a real groove; quarry tile and coursed stone were
+already there.
+
+- **Joints are cut a cell deep** (two for rubble mortar) — real grooves with shadow in them.
+- **`relief.jitter`** lays every board, tile and stone at a slightly different height, drawn from the
+  feature's own address so a board stays level along its length. Reclaimed boards do not lie flush and a
+  hand-laid tile floor is not dead level; this is what stops both reading as printed lino.
+
+**Measured, flat → with relief:** dining oak 48 → 98 triangles a square metre, quarry tile 49 → 66,
+coursed stone 100 → 180, tilled soil 21 → 33. All still far under the ~246/m² the old per-cell noise cost.
+
+The real bill is cells and build time, not triangles: about 3,400 cells a square metre at 2.5 cm, so a
+14 × 14 m patch takes 660k cells and 830 ms to build (1.14 s for stone at 927k). For the compound's
+1,071 m² of rooms that is roughly 3.6M cells — nine times today's whole level. Phase 1's signature diff
+means an edit never pays it, only a cold build, but it is the number that decides whether relief stays on
+the carpet everywhere or moves into the near-camera crust. To be settled when the ring is wired up.
+
+A test now fails any relief value below half a cell, so a groove can never again silently not happen.
