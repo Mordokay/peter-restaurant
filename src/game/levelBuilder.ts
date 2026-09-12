@@ -271,7 +271,10 @@ export function createLevelBuilder(scene: Scene, layout: LevelLayout, options: {
     // A material, if this type names one; otherwise the old pattern rule. Big outdoor grounds stay coarse
     // whatever they are made of — a 4,352 m² lawn at 2.5 cm cells is seven million of them.
     const huge = width * depth > 900;
-    const material = huge ? undefined : surfaceById(type.surface ?? "");
+    // The site grounds are 4,352 m² and stay coarse whatever they are made of — but the detail ring still
+    // needs to know they are grass, or the lawn is the one surface that never grows a blade.
+    const named = surfaceById(type.surface ?? "");
+    const material = huge ? undefined : named;
     // The CARPET is coarse and flat. A material's own pitch is what the near-camera ring will mesh it at;
     // laying 1,600 m² of 2.5 cm cells with relief measured 11.7 million cells and a 19.5 second build,
     // against 138 draw calls and 120 fps — the runtime was never the problem, the mesher was.
@@ -318,7 +321,7 @@ export function createLevelBuilder(scene: Scene, layout: LevelLayout, options: {
     mesh.isPickable = true;
     tagSurface(mesh, { levelFloor: item.id });
     floors.set(item.id, mesh);
-    if (material) laid.set(item.id, { rect: item.rect, surface: type.surface!, topY });
+    if (named) laid.set(item.id, { rect: item.rect, surface: type.surface!, topY });
     cellCounts.set(`floor:${item.id}`, kept.length);
   };
 

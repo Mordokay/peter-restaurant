@@ -24,6 +24,8 @@ import { collidersOfMeshes, createColliderField } from "./game/gravity";
 import { createDayNight } from "./game/dayNight";
 import { createBuildMode } from "./buildMode";
 import { runStages, type LoadingStage } from "./game/loading";
+import { createSurfaceRing } from "./game/surfaceRing";
+import { createWindMaterial } from "./game/voxelWind";
 import { sourceCacheKey, warmSourceCache } from "./game/sourceCache";
 
 const params = new URLSearchParams(window.location.search);
@@ -127,7 +129,17 @@ let progress: LevelProgress = startingProgress ? levelProgress : fullProgress(le
 function applyProgress(): void {
   level.setProgress(progress);
   colliders.set("level", collidersOfMeshes(level.meshes()));
+  ring?.invalidate();
 }
+
+// Grass, pebbles and clods, grown only where the camera is. On the wind material — a pebble carries no
+// sway weight, so it stands perfectly still while the blades beside it bend.
+const crustMaterial = createWindMaterial("level crust", scene);
+const ring = createSurfaceRing(scene, {
+  surfaces: () => level.surfaces(),
+  material: crustMaterial,
+  parent: level.root,
+});
 
 // ── loading and baking ────────────────────────────────────────────────────────
 // The first build is the expensive one — 1.3 s flat, 12 s with floor relief — and it is only going to
@@ -157,6 +169,11 @@ async function buildEverything(): Promise<void> {
       weight: 1,
       run() { colliders.set("level", collidersOfMeshes(level.meshes())); },
     },
+    {
+      name: "Growing grass and gravel",
+      weight: 2,
+      run() { ring.invalidate(); ring.update(player.position, camera.radius); },
+    },
   ];
   const ms = await runStages(stages, ({ fraction, stage, index, total }) => {
     loadFill.style.width = `${(fraction * 100).toFixed(1)}%`;
@@ -182,6 +199,8 @@ async function relayLevel(title: string): Promise<void> {
         if (performance.now() - since >= 24) { await slice(); since = performance.now(); }
       });
       colliders.set("level", collidersOfMeshes(level.meshes()));
+      ring.invalidate();
+      ring.update(player.position, camera.radius);
     },
   }], ({ fraction }) => { loadFill.style.width = `${(fraction * 100).toFixed(1)}%`; });
   loadingEl.classList.add("gone");
@@ -315,12 +334,14 @@ const fmt = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 
 let frames = 0, fpsWindow = performance.now(), fps = 0;
 function updateHud(): void {
   const stats = level.stats();
+  const ringStats = ring.stats();
   const decorStats = decor.renderer.stats();
   const roomId = cutaway.room();
   const room = roomId ? levelLayout.rooms.find((candidate) => candidate.id === roomId) : null;
   roomEl.textContent = room ? room.name : "outside";
   statsEl.innerHTML = `<b>${fps.toFixed(0)} fps</b> · ${instrumentation.frameTimeCounter.lastSecAverage.toFixed(1)} ms/frame · draw calls ${fmt(instrumentation.drawCallsCounter.current)}`
     + ` · level: ${stats.floors} floors, ${stats.walls} walls, ${fmt(stats.triangles)} triangles, built in ${fmt(stats.buildMs)} ms`
+    + (ringStats.meshes ? ` · crust ${fmt(ringStats.triangles)} tris in ${ringStats.meshes}` : "")
     + ` · walls down ${cutaway.down().length}`
     + (decorStats.instances ? ` · props ${fmt(decorStats.instances)}` : "");
   clockEl.textContent = `${dayNight.hour >= 6.5 && dayNight.hour < 20 ? "☀" : "🌙"} ${dayNight.label()}`;
@@ -338,6 +359,7 @@ engine.runRenderLoop(() => {
     const wanted = player.position.add(new Vector3(0, 0.8, 0));
     camera.target.addInPlace(wanted.subtract(camera.target).scale(Math.min(1, dt * 8)));
   }
+  ring.update(player.position, camera.radius);
   if (cutawayOn) cutaway.update(dt);
   decor.update(dt);
   particles.update(dt);

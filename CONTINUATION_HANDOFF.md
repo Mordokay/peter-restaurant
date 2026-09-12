@@ -2650,3 +2650,34 @@ Where this goes next, in rough order of payoff:
 - **Generate cells into typed arrays** instead of a JS object per cell. One 300 m² room at 2.5 cm is
   1,013,856 cells and 76 MB of objects; that is where the build time goes.
 - **Mesh in a Web Worker.** Embarrassingly parallel and touches no DOM.
+
+### Surfaces, phase 9: the detail ring (2026-09-12)
+
+`src/game/surfaceRing.ts`. Grass, pebbles and clods now grow in the compound, in a ring around the camera
+and nowhere else. A square metre of lawn costs 581 triangles where a tiled floor costs 18, so growing it
+over the site's 4,352 m² of ground would be two and a half million triangles for detail that is sub-pixel
+past twenty metres.
+
+**Chunks are the cache unit, meshes are the draw unit.** One mesh per chunk would have put fifty extra
+draws on a budget of a hundred and twenty — and each costs two while anything glows. Every patch's cells
+go into one mesh per crust pitch instead, so the whole ring is **+1 draw call** (138 → 139).
+
+Three things it got wrong first, all now tests:
+
+- **Snapping the bounds out to whole chunks** turned a 15 m radius into a 40 m square — nearly three times
+  the area and **777,000 triangles**. It bought nothing: the crust is a function of world position, so
+  regrowing a slightly different rect puts every tuft back in the same place. The chunk decides only WHEN
+  to regrow, never how much. Now 137–150k.
+- **The site grounds were excluded from having a material at all** because they are "huge" and meshed
+  coarse — which meant the lawn, the one surface most in need of grass, was the only one that could never
+  grow any.
+- **Grass grew up through the farm plots.** Floors stack: the grounds run under every room and plot on the
+  site. A crust site is now skipped where a higher floor covers that ground, the same rule the carpet uses
+  for buried cells.
+
+Measured: **120 fps held while walking**, crust 137–150k triangles in 1–2 meshes, +1 draw call, level
+unchanged at 205,148. Radius 9 m, regrown when the camera crosses a 6 m chunk, and dropped entirely past a
+42 m camera distance where it is invisible anyway.
+
+Known artefact: the ring's edge is visible as grass simply stopping at 9 m. A density falloff over the last
+metre or two would hide it.

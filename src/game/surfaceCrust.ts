@@ -147,13 +147,20 @@ function growSite(
 /** Every crust cell over a patch of ground, in cells from (originX, originZ). */
 export function crustCells(
   material: SurfaceMaterial, originX: number, originZ: number, width: number, depth: number,
+  /** Where cell (0,0) sits, if not the corner of the rect. The detail ring addresses every patch from
+   *  the world origin so chunks meshed separately still line up cell for cell. */
+  address: { x: number; z: number } = { x: originX, z: originZ },
+  /** Shared between patches so a blade straddling two of them is not grown twice. */
+  columns: Set<string> = new Set(),
+  /** Say no to a site — somewhere a higher floor covers this ground, so nothing grows there. */
+  exclude?: (x: number, z: number) => boolean,
 ): { cells: VoxelCell[]; pitch: number } {
   if (!material.crust) return { cells: [], pitch: material.pitch ?? 0.05 };
   const pitch = material.crust.pitch ?? material.pitch ?? 0.05;
   const cells: VoxelCell[] = [];
-  const columns = new Set<string>();
   for (const site of crustSites(material.crust, originX, originZ, width, depth)) {
-    growSite(site.form, site.x, site.z, site.seed, pitch, cells, originX, originZ, columns);
+    if (exclude?.(site.x, site.z)) continue;
+    growSite(site.form, site.x, site.z, site.seed, pitch, cells, address.x, address.z, columns);
   }
   return { cells, pitch };
 }
