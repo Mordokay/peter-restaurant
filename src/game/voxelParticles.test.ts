@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { Matrix, NullEngine, Scene, Vector3 } from "@babylonjs/core";
 import { createParticleWorld, defaultEmitter, spawnVelocity } from "./voxelParticles.ts";
-import type { AuthoredVoxelModel } from "./voxelModel.ts";
+import type { AuthoredVoxelModel, ParticleEmitter } from "./voxelModel.ts";
 
 test("spawn velocities stay inside the emitter cone at the requested speed", () => {
   let seed = 7;
@@ -146,7 +146,7 @@ test("particles can grow, shrink and fade across their life, and use a shape of 
   assert.ok(middle.width > born.width && old.width > middle.width, `it should swell: ${born.width.toFixed(3)} → ${old.width.toFixed(3)}`);
   assert.ok(middleAlpha < bornAlpha, `and thin out: ${bornAlpha.toFixed(2)} → ${middleAlpha.toFixed(2)}`);
   assert.ok(born.height < born.width * 0.5, "a flake is flat, not a cube");
-  assert.ok(world.stats().pools >= 2, "the plain cube pool is still there alongside it");
+  assert.ok(world.stats().pools.length >= 2, "the plain cube pool is still there alongside it");
 
   handle.dispose(); world.dispose(); scene.dispose(); engine.dispose();
 });
@@ -187,4 +187,42 @@ test("a clip-driven emitter waits for its clip, then builds up from nothing", ()
   world.dispose();
   scene.dispose();
   engine.dispose();
+});
+
+test("a pool that runs out says so instead of quietly emitting less", () => {
+  // The failure this guards: `spawn` popped from a free list and, when it came back empty, simply
+  // stopped. A saturated scene therefore measured as cheap — it was drawing far fewer particles than
+  // it had been asked for, and nothing in the stats said so.
+  const engine = new NullEngine();
+  const scene = new Scene(engine);
+  const world = createParticleWorld(scene, { capacity: 50, groundY: -100 });
+  const spec: ParticleEmitter = { ...defaultEmitter("burst", [0, 0, 0], "#ffffff"), count: 80, mode: "burst" };
+
+  const made = world.emitAt(spec, new Vector3(0, 5, 0), new Vector3(0, 1, 0), 0.01);
+  assert.equal(made, 50, "it should fill the pool");
+  assert.equal(world.stats().dropped, 30, "the thirty it could not make went unreported");
+  assert.equal(world.stats().alive, 50);
+
+  world.dispose(); scene.dispose(); engine.dispose();
+});
+
+test("the second pool is smaller than the first, and the first is the opaque one", () => {
+  // Worth stating in a test because the consequence is counter-intuitive: the pool created first gets
+  // the full capacity and every later one gets half, and the plain cube pool is always created first.
+  // So translucent effects — steam over a pot, cold air off a freezer, the things a kitchen actually
+  // has — draw on the SMALLER share. Any reading of "capacity" as a single number is misleading.
+  const engine = new NullEngine();
+  const scene = new Scene(engine);
+  const world = createParticleWorld(scene, { capacity: 1000, groundY: -100 });
+  const steam: ParticleEmitter = { ...defaultEmitter("steam", [0, 0, 0], "#ffffff"), alpha: 0.4, count: 10, mode: "burst" };
+  world.emitAt(steam, new Vector3(0, 1, 0), new Vector3(0, 1, 0), 0.01);
+
+  const stats = world.stats();
+  assert.equal(stats.pools.length, 2);
+  const [opaque, translucent] = stats.pools;
+  assert.equal(opaque!.capacity, 1000, "the cube pool is created first and takes the full figure");
+  assert.equal(translucent!.capacity, 500, "everything after it gets half");
+  assert.equal(stats.capacity, 1500, "capacity is the sum, which no single emitter can reach");
+
+  world.dispose(); scene.dispose(); engine.dispose();
 });

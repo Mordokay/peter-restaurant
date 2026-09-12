@@ -1,7 +1,7 @@
 import { Mesh, Scene, ShadowGenerator, TransformNode, Vector3 } from "@babylonjs/core";
-import { cellsFromAuthoredModel, type AuthoredVoxelCatalog } from "./voxelModel";
-import { createVoxelMesh } from "./voxelGeometry";
-import { TOMATO_STAGE_SECONDS, stageScales } from "./stageTransition";
+import { cellsFromAuthoredModel, type AuthoredVoxelCatalog } from "./voxelModel.ts";
+import { createVoxelMesh } from "./voxelGeometry.ts";
+import { TOMATO_STAGE_SECONDS, stageScales } from "./stageTransition.ts";
 
 // Tomato as staged scan art: three voxelized growth stages (sprout, vine,
 // ripe) from the external-model pipeline. Stage changes animate as a

@@ -18,7 +18,7 @@
 //
 // Pure functions over Uint8Array: shared by the browser (fetch + DecompressionStream)
 // and by Node tooling (scripts/catalog-io.mjs via zlib). Compression is the caller's job.
-import type { AuthoredVoxelModel, AuthoredVoxelPart, PartGeometry, VoxelBox, VoxelCoordinate, VoxelRun } from "./voxelModel";
+import type { AuthoredVoxelModel, AuthoredVoxelPart, PartGeometry, VoxelBox, VoxelCoordinate, VoxelRun } from "./voxelModel.ts";
 
 export const VXM_MAGIC = "VXM1";
 

@@ -1,4 +1,4 @@
-import type { VoxelCell } from "./voxelGeometry";
+import type { VoxelCell } from "./voxelGeometry.ts";
 import { cellsFromAuthoredModel, cellsOfPartState, type AuthoredClip, type AuthoredVoxelModel, type AuthoredVoxelPart, type ClipEvent, type ClipKey, type ModelLight, type ParticleEmitter, type PartRestTransform, type VoxelRun } from "./voxelModel.ts";
 import { withKey, withoutKey } from "./voxelClips.ts";
 

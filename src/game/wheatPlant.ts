@@ -1,6 +1,6 @@
 import { Mesh, Scene, ShadowGenerator, TransformNode, Vector3 } from "@babylonjs/core";
-import { cellsFromAuthoredModel, type AuthoredVoxelCatalog } from "./voxelModel";
-import { createVoxelMesh, type VoxelCell } from "./voxelGeometry";
+import { cellsFromAuthoredModel, type AuthoredVoxelCatalog } from "./voxelModel.ts";
+import { createVoxelMesh, type VoxelCell } from "./voxelGeometry.ts";
 
 // Wheat is scan art: a free CC0 "Wheat" plant by Quaternius, voxelized into the
 // authored catalog by the external-model pipeline (scripts/voxelize-mesh.py +

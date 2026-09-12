@@ -1,4 +1,4 @@
-import type { CatalogItemId } from "./catalog";
+import type { CatalogItemId } from "./catalog.ts";
 
 export type BaseMaterialId = Extract<CatalogItemId,
   | "sunleaf"

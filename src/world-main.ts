@@ -14,6 +14,7 @@ import { catalog, catalogIndex, ensureModels } from "./assets/catalog/index";
 import { decorLayout, levelLayout, levelProgress, onLevelChanged } from "./assets/scene/index";
 import { createDecorScene } from "./game/decor";
 import { createLevelBuilder, ROOM_FLOOR_Y } from "./game/levelBuilder";
+import { createFrameTimer } from "./game/frameTimer";
 import { createCutaway } from "./game/cutaway";
 import { fullProgress, roomAt, validateLevelLayout, type LevelProgress } from "./game/levelLayout";
 import { attachGlow, createLightPool } from "./game/lighting";
@@ -66,6 +67,10 @@ const scene = new Scene(engine);
 scene.clearColor = Color4.FromHexString("#a9c889ff");
 const instrumentation = new SceneInstrumentation(scene);
 instrumentation.captureFrameTime = true;
+// Babylon's frameTime covers only what happens INSIDE scene.render(); interFrameTime covers the gap
+// between renders, which is where every simulation call in the loop below actually lives.
+instrumentation.captureInterFrameTime = true;
+const frameTimer = createFrameTimer({ renderMs: () => instrumentation.frameTimeCounter.lastSecAverage });
 
 const sun = new DirectionalLight("sun", new Vector3(-0.7, -1, 0.55), scene);
 sun.position.set(20, 40, -20);
@@ -345,7 +350,7 @@ function walk(dt: number): void {
 }
 
 const fmt = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 0 });
-let frames = 0, fpsWindow = performance.now(), fps = 0;
+let hudWindow = performance.now();
 function updateHud(): void {
   const stats = level.stats();
   const crustStats = crust.stats();
@@ -354,7 +359,13 @@ function updateHud(): void {
   const roomId = cutaway.room();
   const room = roomId ? levelLayout.rooms.find((candidate) => candidate.id === roomId) : null;
   roomEl.textContent = room ? room.name : "outside";
-  statsEl.innerHTML = `<b>${fps.toFixed(0)} fps</b> · ${instrumentation.frameTimeCounter.lastSecAverage.toFixed(1)} ms/frame · draw calls ${fmt(instrumentation.drawCallsCounter.current)}`
+  const frame = frameTimer.stats();
+  // sim and render are shown apart on purpose: for most of this project's life only the second was
+  // being measured, and the first is where the props, clips and particles actually cost anything.
+  statsEl.innerHTML = `<b>${frame.fps.toFixed(0)} fps</b> · sim ${frame.simMs.toFixed(1)} + render ${frame.renderMs.toFixed(1)} ms`
+    + ` · gap min ${frame.minGapMs.toFixed(1)} / p99 ${frame.p99GapMs.toFixed(1)} ms`
+    + (frame.longTasks ? ` · <b>${frame.longTasks} long tasks</b> (worst ${frame.longestTaskMs.toFixed(0)} ms)` : "")
+    + ` · draw calls ${fmt(instrumentation.drawCallsCounter.current)}`
     + ` · level: ${stats.floors} floors, ${stats.walls} walls, ${fmt(stats.triangles)} triangles, built in ${fmt(stats.buildMs)} ms`
     + (crustStats.meshes ? ` · stones ${fmt(crustStats.triangles)} tris in ${crustStats.meshes}` : "")
     + (grassStats.blades ? ` · grass ${fmt(grassStats.blades)} blades / ${fmt(grassStats.tufts)} tufts, ${fmt(grassStats.triangles)} tris, ${grassStats.near} near + ${grassStats.far} far` : "")
@@ -363,11 +374,8 @@ function updateHud(): void {
   clockEl.textContent = `${dayNight.hour >= 6.5 && dayNight.hour < 20 ? "☀" : "🌙"} ${dayNight.label()}`;
 }
 
-let previous = performance.now();
 engine.runRenderLoop(() => {
-  const now = performance.now();
-  const dt = Math.min(0.05, (now - previous) / 1000);
-  previous = now;
+  const dt = frameTimer.begin();
   walk(dt);
   camera.alpha += (targetAlpha - camera.alpha) * Math.min(1, dt * 8);
   camera.radius += (targetRadius - camera.radius) * Math.min(1, dt * 8);
@@ -380,9 +388,11 @@ engine.runRenderLoop(() => {
   decor.update(dt);
   particles.update(dt);
   dayNight.update(dt);
+  // Everything above this line is the simulation half, and none of it is in Babylon's frameTime.
+  frameTimer.simDone();
   scene.render();
-  frames++;
-  if (now - fpsWindow >= 500) { fps = (frames * 1000) / (now - fpsWindow); frames = 0; fpsWindow = now; updateHud(); }
+  frameTimer.end();
+  if (performance.now() - hudWindow >= 500) { hudWindow = performance.now(); updateHud(); }
 });
 window.addEventListener("resize", () => engine.resize());
 

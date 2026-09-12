@@ -14,6 +14,7 @@ import { createVoxelRig, type VoxelRig } from "./game/voxelRig";
 import { attachGlow, createLightPool } from "./game/lighting";
 import { sourceCacheKey, warmSourceCache } from "./game/sourceCache";
 import { sizeClassOf } from "./game/catalogTags";
+import { createFrameTimer } from "./game/frameTimer";
 
 const params = new URLSearchParams(window.location.search);
 const count = Math.max(1, Math.min(20000, Number(params.get("n")) || 3000));
@@ -22,6 +23,10 @@ const seed = Number(params.get("seed")) || 1;
 const distinct = Math.max(1, Math.min(400, Number(params.get("models")) || 60));
 const night = params.get("night") === "1";
 const useCache = params.get("cache") !== "0";
+/** One prop in `lampEvery` is a lamp. This used to be hard-coded to 12, which meant every row of a
+ *  density sweep also changed the number of registered lights and the size of the glow pass — so
+ *  "more props cost more" and "the light pool scales badly" were indistinguishable. 0 means none. */
+const lampEvery = Math.max(0, Number(params.get("lights") ?? 12) | 0);
 
 document.querySelector("#stress")!.innerHTML = `
   <canvas id="stress-canvas"></canvas>
@@ -49,6 +54,9 @@ const scene = new Scene(engine);
 scene.clearColor = Color4.FromHexString("#b7c9b3ff");
 const instrumentation = new SceneInstrumentation(scene);
 instrumentation.captureFrameTime = true;
+// frameTime is what happens inside scene.render(); interFrameTime is everything else.
+instrumentation.captureInterFrameTime = true;
+const frameTimer = createFrameTimer({ renderMs: () => instrumentation.frameTimeCounter.lastSecAverage });
 scene.skipPointerMovePicking = true;
 const camera = new ArcRotateCamera("stress camera", -Math.PI / 4, 1.0, 60, new Vector3(0, 1, 0), scene);
 camera.minZ = 0.1; camera.maxZ = 800; camera.lowerRadiusLimit = 1; camera.upperRadiusLimit = 400; camera.wheelDeltaPercentage = 0.05;
@@ -80,8 +88,9 @@ for (const lamp of lamps) if (!chosen.includes(lamp)) chosen.push(lamp);
 const instances: WorldInstance[] = [];
 const side = Math.ceil(Math.sqrt(count));
 for (let i = 0; i < count; i++) {
-  // Every twelfth prop is a lamp when the catalog has any, so lighting is visible in the test.
-  const model = lamps.length && i % 12 === 0 ? lamps[Math.floor(rand() * lamps.length)]! : chosen[Math.floor(rand() * chosen.length)]!;
+  // One prop in `lampEvery` is a lamp, so lighting is visible in the test — and so the lamp count can
+  // be held still while prop count varies, which is the only way to tell the two costs apart.
+  const model = lamps.length && lampEvery > 0 && i % lampEvery === 0 ? lamps[Math.floor(rand() * lamps.length)]! : chosen[Math.floor(rand() * chosen.length)]!;
   const size = catalogIndex[model]!.size;
   const spacing = sizeClassOf(size) === "large" ? 3.2 : 3.0;
   const gx = (i % side) - side / 2, gz = Math.floor(i / side) - side / 2;
@@ -117,12 +126,13 @@ if (mode === "instanced") {
 const tBuilt = performance.now();
 console.log(`[stress] cache warmed in ${(tWarmed - tLoaded).toFixed(0)} ms (${cacheHits}/${chosen.length} hits); scene built in ${(tBuilt - tWarmed).toFixed(0)} ms`);
 
-let frames = 0, fpsWindowStart = performance.now(), fps = 0;
 engine.runRenderLoop(() => {
+  frameTimer.begin();
+  // Nothing simulates on this page by design — it is a microbenchmark for the marginal cost of one more
+  // instance. The bracket is still here so its numbers are directly comparable with the compound's.
+  frameTimer.simDone();
   scene.render();
-  frames++;
-  const now = performance.now();
-  if (now - fpsWindowStart >= 500) { fps = (frames * 1000) / (now - fpsWindowStart); frames = 0; fpsWindowStart = now; }
+  frameTimer.end();
 });
 window.addEventListener("resize", () => engine.resize());
 
@@ -130,14 +140,35 @@ const fmt = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 
 function updateStats(): void {
   const drawCalls = instrumentation.drawCallsCounter.current;
   const active = scene.getActiveMeshes().length;
-  let line = `<b>${fps.toFixed(0)} fps</b> · ${instrumentation.frameTimeCounter.lastSecAverage.toFixed(1)} ms/frame (CPU) · draw calls ${fmt(drawCalls)} · active meshes ${fmt(active)} · triangles drawn ${fmt(scene.getActiveIndices() / 3)} · total meshes ${fmt(scene.meshes.length)}`;
+  const frame = frameTimer.stats();
+  // `getActiveIndices` sums the main pass, the shadow map AND the glow pass, and the multiplier changes
+  // between configurations — so it is labelled as submitted, not drawn.
+  let line = `<b>${frame.fps.toFixed(0)} fps</b> · sim ${frame.simMs.toFixed(1)} + render ${frame.renderMs.toFixed(1)} ms`
+    + ` · gap min ${frame.minGapMs.toFixed(1)} / p99 ${frame.p99GapMs.toFixed(1)} ms`
+    + (frame.longTasks ? ` · <b>${frame.longTasks} long tasks</b> (worst ${frame.longestTaskMs.toFixed(0)} ms)` : "")
+    + ` · draw calls ${fmt(drawCalls)} · active meshes ${fmt(active)} · triangles submitted ${fmt(scene.getActiveIndices() / 3)} · total meshes ${fmt(scene.meshes.length)}`;
   if (renderer) {
     const s = renderer.stats();
     const lp = lightPool.stats();
-    line += `<br>world renderer: ${fmt(s.instances)} instances of ${s.models} models · ${fmt(s.activeInstances)} in view · ~${fmt(s.triangles)} triangles after LOD · resident geometry ${fmt(s.residentTriangles)} triangles · sources meshed in ${fmt(s.buildMs)} ms (${s.cachedSources} from cache, warmed in ${fmt(tWarmed - tLoaded)} ms) · lights ${lp.active}/${lp.registered} real · glow ${glowLayer.isEnabled ? "on" : "off"}`;
+    // instances vs activeInstances is the culling tell: below about half, the row is measuring
+    // cullDistance rather than density.
+    line += `<br>world renderer: ${fmt(s.instances)} instances of ${s.models} models · ${fmt(s.activeInstances)} in view (${((s.activeInstances / Math.max(1, s.instances)) * 100).toFixed(0)}%) · ~${fmt(s.triangles)} triangles after LOD · resident geometry ${fmt(s.residentTriangles)} triangles · sources meshed in ${fmt(s.buildMs)} ms (${s.cachedSources} from cache, warmed in ${fmt(tWarmed - tLoaded)} ms) · lights ${lp.active}/${lp.registered} real, ${lp.ranks} re-ranks · glow ${glowLayer.isEnabled ? "on" : "off"}`;
   } else line += `<br>individual rigs: ${fmt(rigs.length)} rigs (capped at 800) · ${fmt(rigs.reduce((sum, rig) => sum + rig.meshes.length, 0))} part meshes`;
   line += `<br>models fetched+decoded in ${fmt(tLoaded - t0)} ms · scene built in ${fmt(tBuilt - tWarmed)} ms · ${chosen.length} distinct models · GPU: ${engine.getGlInfo().renderer}`;
   stats.innerHTML = line;
 }
 setInterval(updateStats, 500);
-Object.assign(window as unknown as Record<string, unknown>, { __stress: { scene, engine, renderer, rigs, instances, chosen, stats: () => ({ fps, drawCalls: instrumentation.drawCallsCounter.current, frameMs: instrumentation.frameTimeCounter.lastSecAverage, active: scene.getActiveMeshes().length, triangles: scene.getActiveIndices() / 3, meshes: scene.meshes.length, loadMs: tLoaded - t0, buildMs: tBuilt - tLoaded, renderer: renderer?.stats() }) } });
+Object.assign(window as unknown as Record<string, unknown>, { __stress: { scene, engine, renderer, rigs, instances, chosen, stats: () => ({
+  ...frameTimer.stats(),
+  drawCalls: instrumentation.drawCallsCounter.current,
+  active: scene.getActiveMeshes().length,
+  trianglesSubmitted: scene.getActiveIndices() / 3,
+  meshes: scene.meshes.length,
+  loadMs: tLoaded - t0, warmMs: tWarmed - tLoaded, buildMs: tBuilt - tWarmed,
+  props: count, distinct: chosen.length, lampEvery, mode, seed,
+  glow: glowLayer.isEnabled,
+  lights: lightPool.stats(),
+  renderer: renderer?.stats(),
+  gl: engine.getGlInfo().renderer,
+  width: engine.getRenderWidth(), height: engine.getRenderHeight(), scaling: engine.getHardwareScalingLevel(),
+}) } });

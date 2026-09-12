@@ -15,12 +15,12 @@
 // Static props only: anything animated, selected or reacting is promoted to a real rig by
 // the caller (decor.ts) and skipped here. Picking returns the instance id.
 import { AbstractMesh, Mesh, Scene, ShadowGenerator, StandardMaterial } from "@babylonjs/core";
-import type { AuthoredVoxelModel } from "./voxelModel";
-import { cellsFromAuthoredModel } from "./voxelModel";
-import { createVoxelMaterial, createVoxelMesh, type VoxelCell } from "./voxelGeometry";
-import { createVoxelRig } from "./voxelRig";
-import { emissiveByHex, glowInfoOf, glowMaterialFor, modelLightPositions, splitGlowCells, tagGlow, type GlowInfo, type LightPool } from "./lighting";
-import { peekSource, restoreMesh, serializeMesh, sourceCacheKey, storeSource } from "./sourceCache";
+import type { AuthoredVoxelModel } from "./voxelModel.ts";
+import { cellsFromAuthoredModel } from "./voxelModel.ts";
+import { createVoxelMaterial, createVoxelMesh, type VoxelCell } from "./voxelGeometry.ts";
+import { createVoxelRig } from "./voxelRig.ts";
+import { emissiveByHex, glowInfoOf, glowMaterialFor, modelLightPositions, splitGlowCells, tagGlow, type GlowInfo, type LightPool } from "./lighting.ts";
+import { peekSource, restoreMesh, serializeMesh, sourceCacheKey, storeSource } from "./sourceCache.ts";
 
 export interface WorldInstance {
   id: string;
@@ -254,8 +254,14 @@ export function createWorldRenderer(scene: Scene, options: WorldRendererOptions 
     meshOf(id) { return placed.get(id)?.mesh ?? null; },
     pickables() { return [...placed.values()].map((entry) => entry.mesh); },
     stats() {
-      let activeInstances = 0, triangles = 0;
-      const camera = scene.activeCamera;
+      // This used to re-derive the LOD tier from `getAbsolutePosition()` — the instance ORIGIN — and
+      // compare it against lodDistance. Babylon does not decide that way: `InstancedMesh.getLOD` uses
+      // the bounding SPHERE's centre. For a two-metre lamp that is about a metre out, which misclassifies
+      // a whole shell of props either side of the boundary. So read what Babylon actually chose.
+      // (It also allocated two Vector3 per active mesh per call — at twelve thousand props on a
+      // half-second HUD interval that is forty-eight thousand allocations a second to draw a line of
+      // text: the instrument perturbing the experiment.)
+      let activeInstances = 0, triangles = 0, coarseInstances = 0;
       const active = scene.getActiveMeshes();
       for (let i = 0; i < active.length; i++) {
         const mesh = active.data[i]!;
@@ -263,10 +269,15 @@ export function createWorldRenderer(scene: Scene, options: WorldRendererOptions 
         if (!id) continue;
         activeInstances++;
         const source = sources.get(placed.get(id)!.modelId)!;
-        const distance = camera ? mesh.getAbsolutePosition().subtract(camera.globalPosition).length() : 0;
-        triangles += lodDistance > 0 && source.coarse && distance > lodDistance ? source.coarseTriangles : source.triangles;
+        const chosen = (mesh as unknown as { _currentLOD?: unknown })._currentLOD;
+        // Three outcomes: the coarse twin, the full mesh, or null — `addLODLevel(cullDistance, null)`
+        // means nothing is drawn past the cull distance, and the old code still charged full triangles
+        // for those.
+        if (chosen === null || chosen === undefined) continue;
+        if (source.coarse && chosen === source.coarse) { triangles += source.coarseTriangles; coarseInstances++; }
+        else triangles += source.triangles;
       }
-      return { models: sources.size, instances: placed.size, activeInstances, triangles, residentTriangles: [...sources.values()].reduce((sum, source) => sum + source.triangles + source.coarseTriangles, 0), buildMs, cachedSources };
+      return { models: sources.size, instances: placed.size, activeInstances, coarseInstances, triangles, residentTriangles: [...sources.values()].reduce((sum, source) => sum + source.triangles + source.coarseTriangles, 0), buildMs, cachedSources };
     },
     dispose() {
       for (const id of [...placed.keys()]) removeOne(id);

@@ -1,4 +1,4 @@
-import type { AuthoredVoxelCatalog } from "./voxelModel";
+import type { AuthoredVoxelCatalog } from "./voxelModel.ts";
 
 // Decor layout data and validation (no Babylon): hand-placed catalog models in
 // the game world, saved in src/assets/scene/decor.json by decorate mode.

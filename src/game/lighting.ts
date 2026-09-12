@@ -74,8 +74,14 @@ export function attachGlow(scene: Scene, options: { intensity?: number; kernel?:
   // A GlowLayer with no include list falls back to every active mesh, so it draws the WHOLE visible
   // scene a second time into its texture — painted black, because the selector below returns nothing
   // for anything untagged — and then blurs and merges that. Measured on the compound: 83 draw calls
-  // and 333,000 triangles a frame, for pixels that never change. So it stays off until something is
-  // actually tagged to bloom, and switches off again when the last of them goes.
+  // and 333,000 triangles a frame, for pixels that never change.
+  //
+  // Two things keep that from happening, and both are needed. The layer stays off until something is
+  // actually tagged to bloom, and switches off again when the last of them goes — but "off" was never
+  // enough on its own, because one lamp anywhere in the scene turned it on for EVERYTHING. So every
+  // tagged mesh is also added to the include list (`tagGlow`), which is what confines the second pass
+  // to the handful of meshes that actually glow. Without it, placing a single pendant lamp in a dressed
+  // compound costs a full extra scene pass.
   layer.isEnabled = false;
   glowLayers.set(scene, { layer, meshes: new Set() });
   layer.customEmissiveColorSelector = (mesh, _subMesh, material, result) => {
@@ -90,8 +96,10 @@ export interface LightPool {
   /** Register a light position in world space (id must be unique; re-registering moves it). */
   register(id: string, position: Vector3, spec: ModelLight): void;
   unregister(id: string): void;
-  /** Number of registered lights and how many are currently real. */
-  stats(): { registered: number; active: number };
+  /** Registered lights, how many are currently real, how long the LAST re-rank took, and how many
+   *  re-ranks have happened at all. `ranks` is the one to watch: it should stay flat while the camera
+   *  is still, however many lamps are registered. */
+  stats(): { registered: number; active: number; assignMs: number; ranks: number };
   /** Scale every pooled light's intensity (day/night: lamps barely matter at noon). */
   setIntensityScale(scale: number): void;
   dispose(): void;
@@ -100,7 +108,10 @@ export interface LightPool {
 /** Keep `max` PointLights and park them at the registered positions nearest the camera. */
 export function createLightPool(scene: Scene, options: { max?: number; camera?: () => Camera | null } = {}): LightPool {
   const max = options.max ?? 6;
-  const entries = new Map<string, { position: Vector3; spec: ModelLight }>();
+  /** The parsed colour is cached on the entry: it never changes, and parsing it per light per frame
+   *  was allocating a Color3 sixty times a second for a value that was already known at register(). */
+  interface Entry { position: Vector3; spec: ModelLight; colour: Color3 }
+  const entries = new Map<string, Entry>();
   const pool: PointLight[] = [];
   for (let i = 0; i < max; i++) {
     const light = new PointLight(`pool light ${i}`, Vector3.Zero(), scene);
@@ -110,29 +121,77 @@ export function createLightPool(scene: Scene, options: { max?: number; camera?: 
   }
   let active = 0;
   let intensityScale = 1;
+  let assignMs = 0;
+  let ranks = 0;
+
+  // Ranking state. This used to be `[...entries.values()].map(...).sort(...).slice(0, max)` on EVERY
+  // frame — one throwaway object per registered light plus a full sort, for a ranking that only changes
+  // when the camera moves. A dressed compound registers hundreds of lamps, so the cost grew with prop
+  // density and would have been read off a stress sweep as "props are expensive". Two changes fix it:
+  // we pick the nearest `max` by bounded insertion (O(N) with no allocation, and `max` is 6), and we
+  // only re-pick when the camera has actually moved or the set of lights has changed.
+  const nearest: (Entry | undefined)[] = new Array(max).fill(undefined);
+  const nearestDistance = new Float64Array(max);
+  const lastFocus = new Vector3(NaN, NaN, NaN);
+  /** Bumped by register/unregister so a light appearing or moving re-ranks even from a still camera. */
+  let revision = 0;
+  let rankedRevision = -1;
+  /** Metres the focus may drift before the ranking is recomputed. Well under a light's range, so the
+   *  swap always happens long before it could be visible. */
+  const FOCUS_EPSILON_SQUARED = 0.25 * 0.25;
+
   const assign = () => {
     const camera = options.camera?.() ?? scene.activeCamera;
     if (!camera) return;
     const focus = (camera as unknown as { target?: Vector3 }).target ?? camera.globalPosition;
-    const ranked = [...entries.values()].map((entry) => ({ entry, d: Vector3.DistanceSquared(entry.position, focus) })).sort((a, b) => a.d - b.d).slice(0, max);
-    active = ranked.length;
-    pool.forEach((light, index) => {
-      const hit = ranked[index];
-      if (!hit) { if (light.isEnabled()) light.setEnabled(false); return; }
-      light.position.copyFrom(hit.entry.position);
-      const colour = Color3.FromHexString(hit.entry.spec.color ?? "#ffd9a0");
-      light.diffuse.copyFrom(colour); light.specular.copyFrom(colour).scaleInPlace(0.3);
-      light.intensity = (hit.entry.spec.intensity ?? 1) * intensityScale;
-      light.range = hit.entry.spec.range ?? 7;
+    if (revision === rankedRevision && Vector3.DistanceSquared(focus, lastFocus) <= FOCUS_EPSILON_SQUARED) return;
+    const started = performance.now();
+    ranks++;
+    lastFocus.copyFrom(focus);
+    rankedRevision = revision;
+
+    // Bounded insertion: keep the `max` nearest seen so far, in order, without touching the heap.
+    let found = 0;
+    for (const entry of entries.values()) {
+      const d = Vector3.DistanceSquared(entry.position, focus);
+      if (found === max && d >= nearestDistance[max - 1]!) continue;
+      let slot = Math.min(found, max - 1);
+      while (slot > 0 && nearestDistance[slot - 1]! > d) {
+        nearestDistance[slot] = nearestDistance[slot - 1]!;
+        nearest[slot] = nearest[slot - 1];
+        slot--;
+      }
+      nearestDistance[slot] = d;
+      nearest[slot] = entry;
+      if (found < max) found++;
+    }
+    active = found;
+
+    for (let index = 0; index < max; index++) {
+      const light = pool[index]!;
+      const hit = index < found ? nearest[index] : undefined;
+      if (!hit) { nearest[index] = undefined; if (light.isEnabled()) light.setEnabled(false); continue; }
+      light.position.copyFrom(hit.position);
+      light.diffuse.copyFrom(hit.colour);
+      light.specular.copyFrom(hit.colour).scaleInPlace(0.3);
+      light.intensity = (hit.spec.intensity ?? 1) * intensityScale;
+      light.range = hit.spec.range ?? 7;
       if (!light.isEnabled()) light.setEnabled(true);
-    });
+    }
+    assignMs = performance.now() - started;
   };
   const observer = scene.onBeforeRenderObservable.add(assign);
   return {
-    register(id, position, spec) { entries.set(id, { position: position.clone(), spec }); },
-    unregister(id) { entries.delete(id); },
-    stats: () => ({ registered: entries.size, active }),
-    setIntensityScale(scale) { intensityScale = Math.max(0, scale); },
+    register(id, position, spec) {
+      entries.set(id, { position: position.clone(), spec, colour: Color3.FromHexString(spec.color ?? "#ffd9a0") });
+      revision++;
+    },
+    unregister(id) { if (entries.delete(id)) revision++; },
+    stats: () => ({ registered: entries.size, active, assignMs, ranks }),
+    setIntensityScale(scale) {
+      intensityScale = Math.max(0, scale);
+      revision++; // day/night dims every pooled light, so the pool must be rewritten even if nothing moved
+    },
     dispose() { scene.onBeforeRenderObservable.remove(observer); for (const light of pool) light.dispose(); entries.clear(); },
   };
 }
@@ -148,9 +207,12 @@ export function tagGlow(mesh: Mesh, info: GlowInfo): void {
   const entry = glowLayers.get(mesh.getScene());
   if (!entry) return;
   entry.meshes.add(mesh);
+  // The include list is what stops the glow pass from redrawing the whole scene; see attachGlow.
+  entry.layer.addIncludedOnlyMesh(mesh);
   entry.layer.isEnabled = true;
   mesh.onDisposeObservable.addOnce(() => {
     entry.meshes.delete(mesh);
+    entry.layer.removeIncludedOnlyMesh(mesh);
     if (!entry.meshes.size) entry.layer.isEnabled = false;
   });
 }

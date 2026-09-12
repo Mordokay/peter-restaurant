@@ -1,14 +1,14 @@
 import { TransformNode, type AbstractMesh, type Scene, type ShadowGenerator } from "@babylonjs/core";
-import type { AuthoredVoxelCatalog, AuthoredVoxelModel } from "./voxelModel";
-import { createClipPlayer, createVoxelRig, type ClipPlayer, type VoxelRig } from "./voxelRig";
-import { modelLightPositions, type LightPool } from "./lighting";
-import { createWorldRenderer, type WorldInstance, type WorldRenderer } from "./worldRenderer";
-import { collidersOfMeshes, GRAVITY, modelColliders, type ColliderField } from "./gravity";
-import { createStorageDisplay, type StorageDisplay } from "./storageDisplay";
-import type { EmitterHandle, ParticleWorld } from "./voxelParticles";
-import { cellsFromAuthoredModel } from "./voxelModel";
-import { propRotation, propScale, propVisible, type DecorLayout, type DecorProp } from "./decorLayout";
-export { validateDecorLayout, propRotation, propScale, propVisible, type DecorGroup, type DecorLayout, type DecorProp } from "./decorLayout";
+import type { AuthoredVoxelCatalog, AuthoredVoxelModel } from "./voxelModel.ts";
+import { createClipPlayer, createVoxelRig, type ClipPlayer, type VoxelRig } from "./voxelRig.ts";
+import { modelLightPositions, type LightPool } from "./lighting.ts";
+import { createWorldRenderer, type WorldInstance, type WorldRenderer } from "./worldRenderer.ts";
+import { collidersOfMeshes, GRAVITY, modelColliders, type ColliderField } from "./gravity.ts";
+import { createStorageDisplay, type StorageDisplay } from "./storageDisplay.ts";
+import type { EmitterHandle, ParticleWorld } from "./voxelParticles.ts";
+import { cellsFromAuthoredModel } from "./voxelModel.ts";
+import { propRotation, propScale, propVisible, type DecorLayout, type DecorProp } from "./decorLayout.ts";
+export { validateDecorLayout, propRotation, propScale, propVisible, type DecorGroup, type DecorLayout, type DecorProp } from "./decorLayout.ts";
 
 // Decor: catalog models placed in the game world by hand (vases, spoons, crates,
 // a mural prop) — the human-crafted layer on top of the coded scene. The layout
@@ -73,6 +73,11 @@ export interface DecorScene {
   onDropped: ((id: string, y: number) => void) | null;
   /** The world renderer behind the static props (stats, tuning). */
   readonly renderer: WorldRenderer;
+  /** What the decor is actually costing. `rigs` is the one that matters: a rig is an individually
+   *  meshed prop with its own draw calls and a clip sampled every frame, and props become rigs on
+   *  their own — any model carrying a looping clip is promoted the moment it is placed. `rigBuildMs`
+   *  is cumulative, because those promotions are uncached remeshes on the main thread. */
+  stats(): { props: number; rigs: number; instances: number; tracksSampled: number; rigBuildMs: number; rigBuilds: number };
   dispose(): void;
 }
 
@@ -142,6 +147,12 @@ export function createDecorScene(scene: Scene, catalog: AuthoredVoxelCatalog, la
     entry.storage.show(entry.prop.stock);
   };
   const renderer = createWorldRenderer(scene, { name: "decor", shadows: options.shadows, lightPool: options.lightPool, receiveShadows: true, cacheRev: options.cacheRev });
+  /** Cumulative cost of promoting props to rigs. Every one of these is a full remesh of every part in
+   *  every state, on the main thread, uncached — see `asRig`. */
+  let rigBuildMs = 0;
+  let rigBuilds = 0;
+  /** Clip tracks sampled in the last update; `sampleClip` allocates several arrays per track per frame. */
+  let tracksSampled = 0;
 
   /** A prop needs a rig while it animates, reacts, is pinned, or is the editor's ghost. */
   const wantsRig = (entry: PlacedProp): boolean => entry.pinned || entry.reacting || entry.idleClip !== undefined || entry.prop.id.startsWith("__");
@@ -188,7 +199,10 @@ export function createDecorScene(scene: Scene, catalog: AuthoredVoxelCatalog, la
     if (!entry.rig) {
       entry.emitters?.dispose(); entry.emitters = undefined;
       entry.root.dispose();
+      const promotionStarted = performance.now();
       const rig = createVoxelRig(model, scene, { name: `decor ${entry.prop.id}`, shadows: options.shadows });
+      rigBuildMs += performance.now() - promotionStarted;
+      rigBuilds++;
       for (const mesh of rig.meshes) mesh.metadata = { ...((mesh.metadata as Record<string, unknown> | null) ?? {}), decorId: entry.prop.id };
       entry.rig = rig;
       entry.player = createClipPlayer(rig, { onEvent: (event) => entry.emitters?.handleEvent(event) });
@@ -292,8 +306,10 @@ export function createDecorScene(scene: Scene, catalog: AuthoredVoxelCatalog, la
         if (entry.rig) { entry.root.computeWorldMatrix(true); syncLights(entry); } else sync(entry);
         if (settled) { falling.delete(id); if (options.colliders) options.colliders.set(id, collidersOfMeshes(entry.meshes())); this.onDropped?.(id, entry.prop.position[1]); }
       }
+      tracksSampled = 0;
       for (const entry of placed.values()) {
         if (!entry.player) continue;
+        tracksSampled += entry.player.clip?.tracks.length ?? 0;
         entry.player.update(dt);
         // A clip that switches a gated part's state turns its light on or off with it.
         if (entry.rig?.model.lights?.some((light) => light.whenState)) {
@@ -306,6 +322,11 @@ export function createDecorScene(scene: Scene, catalog: AuthoredVoxelCatalog, la
           else { entry.player.stop(); sync(entry); } // back to an instance unless pinned
         }
       }
+    },
+    stats() {
+      let rigs = 0;
+      for (const entry of placed.values()) if (entry.rig) rigs++;
+      return { props: placed.size, rigs, instances: placed.size - rigs, tracksSampled, rigBuildMs, rigBuilds };
     },
     dispose() { for (const entry of placed.values()) { dropLights(entry); dropPhysics(entry); entry.rig?.dispose(); entry.root.dispose(); } placed.clear(); falling.clear(); renderer.dispose(); },
   };

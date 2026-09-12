@@ -75,7 +75,11 @@ export interface ParticleWorld {
   attach(host: EmitterHost, options?: { autoStart?: boolean }): EmitterHandle;
   attachRig(rig: VoxelRig, options?: { autoStart?: boolean; excludeCollider?: string }): EmitterHandle;
   update(dt: number): void;
-  stats(): { alive: number; capacity: number; handles: number; pools: number };
+  /** `capacity` is the SUM across pools, which is not the number any single emitter can draw on: the
+   *  first pool created gets the full figure and every later one gets half. Since the first pool is
+   *  always the opaque cube pool, steam and fog — the things a kitchen actually has — get the smaller
+   *  share. `pools` breaks it down, and `dropped` says how much was asked for and never existed. */
+  stats(): { alive: number; capacity: number; handles: number; dropped: number; pools: { key: string; capacity: number; alive: number; dropped: number }[] };
   readonly mesh: Mesh;
   dispose(): void;
 }
@@ -94,7 +98,7 @@ export function createParticleWorld(scene: Scene, options: {
   const random = options.random ?? Math.random;
   /** Opaque cubes and translucent ones cannot share a mesh, so there are two pools. The translucent
    *  one blends per particle through its vertex alpha, which lets each emitter pick its own. */
-  interface Pool { sps: SolidParticleSystem; mesh: Mesh; free: SolidParticle[]; alive: number }
+  interface Pool { sps: SolidParticleSystem; mesh: Mesh; free: SolidParticle[]; alive: number; capacity: number; dropped: number }
   /** One particle's geometry, normalised into a unit cube so `size` means the same for every shape. */
   const buildShape = (shape: string): Mesh => {
     if (shape.startsWith("model:")) {
@@ -141,7 +145,7 @@ export function createParticleWorld(scene: Scene, options: {
     const free: SolidParticle[] = [];
     for (let i = sps.nbParticles - 1; i >= 0; i--) { const p = sps.particles[i]!; p.isVisible = false; p.scaling.setAll(0); free.push(p); }
     sps.setParticles();
-    return { sps, mesh, free, alive: 0 };
+    return { sps, mesh, free, alive: 0, capacity: size, dropped: 0 };
   };
   // A pool per (shape, translucency): they cannot share a mesh, and most worlds use only one or two.
   const pools = new Map<string, Pool>();
@@ -167,7 +171,9 @@ export function createParticleWorld(scene: Scene, options: {
     const pool = poolFor(spec.shape ?? "cube", Boolean(spec.alphaOverLife) || alpha < 0.999);
     for (let i = 0; i < count; i++) {
       const particle = pool.free.pop();
-      if (!particle) break;
+      // An exhausted pool used to swallow the rest of the burst in silence, so a saturated scene looked
+      // cheap — it simply emitted less than it was asked for and nothing said so. Count it.
+      if (!particle) { pool.dropped += count - i; break; }
       const hex = spec.colors[Math.floor(random() * spec.colors.length)] ?? "#ffffff";
       const c = Color3.FromHexString(hex);
       particle.color = new Color4(c.r, c.g, c.b, alpha * (spec.alphaOverLife?.[0] ?? 1));
@@ -339,7 +345,16 @@ export function createParticleWorld(scene: Scene, options: {
       }
       for (const pool of pools.values()) pool.sps.setParticles();
     },
-    stats: () => ({ alive: live.length, capacity, handles: handles.size, pools: pools.size }),
+    stats: () => {
+      const breakdown = [...pools.entries()].map(([key, pool]) => ({ key, capacity: pool.capacity, alive: pool.alive, dropped: pool.dropped }));
+      return {
+        alive: live.length,
+        capacity: breakdown.reduce((sum, pool) => sum + pool.capacity, 0),
+        handles: handles.size,
+        dropped: breakdown.reduce((sum, pool) => sum + pool.dropped, 0),
+        pools: breakdown,
+      };
+    },
     dispose() { handles.clear(); live.length = 0; for (const pool of pools.values()) pool.sps.dispose(); pools.clear(); },
   };
 }
