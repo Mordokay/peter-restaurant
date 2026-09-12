@@ -14,3 +14,13 @@ html, body, #world { margin: 0; height: 100%; overflow: hidden; background: #93a
 .world-sep { width: 1px; height: 18px; background: #ffffff22; margin: 0 4px; }
 .world-hint { color: #9fb3a6; font-size: 11px; }
 .world-clock { margin-left: auto; color: #f3ead6; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+/* Loading and baking: shown while the level is meshed, and later while lights, navigation and
+   surfaces are baked. Sits over the canvas and fades out rather than vanishing. */
+.world-loading { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: #16201cf2; color: #edf4e8; transition: opacity .45s ease; }
+.world-loading.gone { opacity: 0; pointer-events: none; }
+.world-loading h1 { margin: 0; font-size: 20px; font-weight: 800; letter-spacing: .01em; }
+.world-loading .world-load-stage { color: #9fb3a6; font-size: 12px; min-height: 16px; font-variant-numeric: tabular-nums; }
+.world-loading .world-load-track { width: min(420px, 60vw); height: 8px; border: 1px solid #ffffff22; border-radius: 999px; background: #0f1614; overflow: hidden; }
+.world-loading .world-load-fill { height: 100%; width: 0; border-radius: 999px; background: linear-gradient(90deg, #4f8f47, #8fd47a); transition: width .18s ease; }
+.world-loading .world-load-note { color: #6f8377; font-size: 11px; }

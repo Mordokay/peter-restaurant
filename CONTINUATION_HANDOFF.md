@@ -2626,3 +2626,27 @@ It is also cheaper than first measured: 19.5 s → 12.0 s, because the wall-shel
 The case for the ring is now narrower and should be stated as what it is: it buys *finer* detail than
 2.5 cm where the camera actually is, avoids a 12 second stall on every progress change, and keeps the main
 thread free — a blocking build cannot animate a loading screen. It is no longer a correctness argument.
+
+### A loading and baking pipeline (2026-09-12)
+
+`src/game/loading.ts` — weighted stages that hand the frame back between pieces, and a bar over the
+compound that moves while they do. Built as a list of stages rather than one task because of what is
+coming: meshing the level is the first, and navigation meshes, baked light, cached surface geometry and
+prop meshing are all the same shape of problem.
+
+**A progress bar is only honest if the work yields.** One synchronous twelve-second build paints nothing:
+the bar sits at zero, the tab locks, and it jumps to a hundred at the end — worse than no bar, because it
+looks broken. So `BuiltLevel.setProgressSliced` runs the same signature diff as `setProgress` but hands
+back a frame between pieces, on a **time budget rather than a piece count** — level pieces differ
+enormously in size, so a fixed count would stall on the big ones and yield pointlessly on the small ones.
+
+Verified by sampling the bar's width through a rebuild: sixteen distinct steps (0%, 9.7%, 12.9%, 19.4%,
+25.8% …) rather than one jump. The relief toggle relays through the same overlay instead of freezing the
+tab, and costs 4.9 s rather than 12 because the diff only rebuilds floors.
+
+Where this goes next, in rough order of payoff:
+- **Cache meshed level geometry in IndexedDB.** `sourceCache.ts` already does exactly this for props. Pay
+  the build once, and every later load is instant — which would make floor relief free after first run.
+- **Generate cells into typed arrays** instead of a JS object per cell. One 300 m² room at 2.5 cm is
+  1,013,856 cells and 76 MB of objects; that is where the build time goes.
+- **Mesh in a Web Worker.** Embarrassingly parallel and touches no DOM.

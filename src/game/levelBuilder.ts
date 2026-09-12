@@ -42,6 +42,11 @@ export interface BuiltLevel {
   walls: Map<string, BuiltWall>;
   /** Rebuild for a different progress (a purchase, or the full build-out toggle). */
   setProgress(progress: LevelProgress): void;
+  /** The same, spread over frames so a loading bar can move. `onPiece` fires as each is meshed. */
+  setProgressSliced(progress: LevelProgress, onPiece: (done: number, total: number) => Promise<void> | void): Promise<void>;
+  /** Every floor currently laid that has a material, with the rect it covers and the height of its top
+   *  surface. The detail ring uses this to know what to grow where. */
+  surfaces(): { id: string; rect: Rect; material: SurfaceMaterial; topY: number }[];
   /** Are floors laid at each material's own pitch with relief, or coarse and flat? */
   readonly surfaceDetail: boolean;
   /** Switch it; the caller re-runs setProgress, and every floor's signature has changed so all rebuild. */
@@ -250,6 +255,8 @@ export function createLevelBuilder(scene: Scene, layout: LevelLayout, options: {
   let surfaceDetail = options.surfaceDetail ?? false;
   /** Cells per piece, so the total survives a rebuild that only touches some of them. */
   const cellCounts = new Map<string, number>();
+  /** What material each built floor was laid in, for the detail ring. */
+  const laid = new Map<string, { rect: Rect; surface: string; topY: number }>();
   /** What each built piece was built FROM. A piece whose signature still matches is left alone. */
   const signatures = new Map<string, string>();
   let buildMs = 0;
@@ -311,6 +318,7 @@ export function createLevelBuilder(scene: Scene, layout: LevelLayout, options: {
     mesh.isPickable = true;
     tagSurface(mesh, { levelFloor: item.id });
     floors.set(item.id, mesh);
+    if (material) laid.set(item.id, { rect: item.rect, surface: type.surface!, topY });
     cellCounts.set(`floor:${item.id}`, kept.length);
   };
 
@@ -348,6 +356,7 @@ export function createLevelBuilder(scene: Scene, layout: LevelLayout, options: {
   const dropFloor = (id: string): void => {
     floors.get(id)?.dispose(false, false);
     floors.delete(id);
+    laid.delete(id);
     cellCounts.delete(`floor:${id}`);
     signatures.delete(`floor:${id}`);
   };
@@ -377,7 +386,8 @@ export function createLevelBuilder(scene: Scene, layout: LevelLayout, options: {
       wall.height ?? room?.wallHeight ?? type.height, wall.openings ?? []]);
   };
 
-  const setProgress = (progress: LevelProgress): void => {
+  /** What the level should become, and what has to be taken down to get there. Pure: no meshes touched. */
+  const planProgress = (progress: LevelProgress) => {
     const started = performance.now();
     const owned = new Set([...progress.parcels, ...progress.rooms, ...progress.walls, ...progress.areas]);
     // Floors stack rather than tile: the grounds lie under the yards and the yards under the rooms.
@@ -410,16 +420,21 @@ export function createLevelBuilder(scene: Scene, layout: LevelLayout, options: {
     // Take down only what left or changed. Painting one floor used to re-mesh all 87 pieces.
     for (const id of [...floors.keys()]) if (signatures.get(`floor:${id}`) !== wantedFloors.get(id)?.signature) dropFloor(id);
     for (const id of [...walls.keys()]) if (signatures.get(`wall:${id}`) !== wantedWalls.get(id)?.signature) dropWall(id);
+    const jobs: (() => void)[] = [];
     for (const [id, want] of wantedFloors) {
       if (floors.has(id)) continue;
-      buildFloor(want.item, want.floorType, want.topY, want.covers);
-      signatures.set(`floor:${id}`, want.signature);
+      jobs.push(() => { buildFloor(want.item, want.floorType, want.topY, want.covers); signatures.set(`floor:${id}`, want.signature); });
     }
     for (const [id, want] of wantedWalls) {
       if (walls.has(id)) continue;
-      buildWall(want.wall);
-      signatures.set(`wall:${id}`, want.signature);
+      jobs.push(() => { buildWall(want.wall); signatures.set(`wall:${id}`, want.signature); });
     }
+    return { jobs, started };
+  };
+
+  const setProgress = (progress: LevelProgress): void => {
+    const { jobs, started } = planProgress(progress);
+    for (const job of jobs) job();
     buildMs = performance.now() - started;
   };
 
@@ -428,6 +443,22 @@ export function createLevelBuilder(scene: Scene, layout: LevelLayout, options: {
     floors,
     walls,
     setProgress,
+    async setProgressSliced(progress, onPiece) {
+      const { jobs, started } = planProgress(progress);
+      for (const [index, job] of jobs.entries()) {
+        job();
+        await onPiece(index + 1, jobs.length);
+      }
+      buildMs = performance.now() - started;
+    },
+    surfaces() {
+      const out: { id: string; rect: Rect; material: SurfaceMaterial; topY: number }[] = [];
+      for (const [id, record] of laid) {
+        const material = surfaceById(record.surface);
+        if (material) out.push({ id, rect: record.rect, material, topY: record.topY });
+      }
+      return out;
+    },
     get surfaceDetail() { return surfaceDetail; },
     setSurfaceDetail(on: boolean) { surfaceDetail = on; },
     meshes() { return [...floors.values(), ...[...walls.values()].map((built) => built.mesh)]; },

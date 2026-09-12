@@ -23,6 +23,7 @@ import { createVoxelMesh } from "./game/voxelGeometry";
 import { collidersOfMeshes, createColliderField } from "./game/gravity";
 import { createDayNight } from "./game/dayNight";
 import { createBuildMode } from "./buildMode";
+import { runStages, type LoadingStage } from "./game/loading";
 import { sourceCacheKey, warmSourceCache } from "./game/sourceCache";
 
 const params = new URLSearchParams(window.location.search);
@@ -44,6 +45,12 @@ document.querySelector<HTMLElement>("#world")!.innerHTML = `
       <button data-act="frame" title="Look at the whole site">🖼 Frame all</button>
     </div>
     <div class="world-hint">W A S D walk · Q / E turn the camera · wheel zooms · F frames the site</div>
+  </div>
+  <div class="world-loading" id="world-loading">
+    <h1>🍅 Building the compound</h1>
+    <div class="world-load-track"><div class="world-load-fill" id="world-load-fill"></div></div>
+    <div class="world-load-stage" id="world-load-stage">…</div>
+    <div class="world-load-note">meshing the site from its plan — later this is also where light, navigation and surfaces get baked</div>
   </div>`;
 
 const canvas = document.querySelector<HTMLCanvasElement>("#world-canvas")!;
@@ -121,7 +128,64 @@ function applyProgress(): void {
   level.setProgress(progress);
   colliders.set("level", collidersOfMeshes(level.meshes()));
 }
-applyProgress();
+
+// ── loading and baking ────────────────────────────────────────────────────────
+// The first build is the expensive one — 1.3 s flat, 12 s with floor relief — and it is only going to
+// grow: navigation meshes, baked light and cached surface geometry are the same shape of work. So it runs
+// as weighted stages that hand the frame back between pieces, and the bar actually moves.
+const loadingEl = document.querySelector<HTMLElement>("#world-loading")!;
+const loadFill = document.querySelector<HTMLElement>("#world-load-fill")!;
+const loadStage = document.querySelector<HTMLElement>("#world-load-stage")!;
+
+async function buildEverything(): Promise<void> {
+  const stages: LoadingStage[] = [
+    {
+      name: "Meshing floors and walls",
+      weight: 8,
+      async run({ report, slice }) {
+        let since = performance.now();
+        await level.setProgressSliced(progress, async (done, total) => {
+          report(done / total);
+          // Yield on a time budget: level pieces differ enormously in size, so a fixed count would
+          // either stall on the big ones or give the frame away pointlessly on the small ones.
+          if (performance.now() - since >= 24) { await slice(); since = performance.now(); }
+        });
+      },
+    },
+    {
+      name: "Working out what stands on what",
+      weight: 1,
+      run() { colliders.set("level", collidersOfMeshes(level.meshes())); },
+    },
+  ];
+  const ms = await runStages(stages, ({ fraction, stage, index, total }) => {
+    loadFill.style.width = `${(fraction * 100).toFixed(1)}%`;
+    loadStage.textContent = `${stage} · ${index} of ${total}`;
+  });
+  loadStage.textContent = `ready in ${(ms / 1000).toFixed(1)} s`;
+  // Kept in the DOM rather than removed: the relief toggle relays the whole level and wants it back.
+  loadingEl.classList.add("gone");
+}
+void buildEverything();
+
+/** Rebuild the level behind the loading overlay — used when the relief toggle changes every floor. */
+async function relayLevel(title: string): Promise<void> {
+  loadingEl.classList.remove("gone");
+  loadStage.textContent = title;
+  loadFill.style.width = "0%";
+  await runStages([{
+    name: title, weight: 1,
+    async run({ report, slice }) {
+      let since = performance.now();
+      await level.setProgressSliced(progress, async (done, total) => {
+        report(done / total);
+        if (performance.now() - since >= 24) { await slice(); since = performance.now(); }
+      });
+      colliders.set("level", collidersOfMeshes(level.meshes()));
+    },
+  }], ({ fraction }) => { loadFill.style.width = `${(fraction * 100).toFixed(1)}%`; });
+  loadingEl.classList.add("gone");
+}
 
 const cutaway = createCutaway(scene, levelLayout, level, { target: () => ({ x: player.position.x, z: player.position.z }) });
 let cutawayOn = true;
@@ -196,12 +260,10 @@ document.querySelector(".world-controls")!.addEventListener("click", (event) => 
       const on = !level.surfaceDetail;
       button.classList.toggle("on", on);
       button.textContent = on ? "🪵 Relief on…" : "🪵 Floor relief";
-      // Let the browser paint the pressed button before the main thread disappears into the mesher.
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        level.setSurfaceDetail(on);
-        applyProgress();
+      level.setSurfaceDetail(on);
+      void relayLevel(on ? "Laying floors with relief" : "Laying the flat carpet").then(() => {
         button.textContent = "🪵 Floor relief";
-      }));
+      });
       break;
     }
     case "cutaway":
