@@ -42,6 +42,10 @@ export interface BuiltLevel {
   walls: Map<string, BuiltWall>;
   /** Rebuild for a different progress (a purchase, or the full build-out toggle). */
   setProgress(progress: LevelProgress): void;
+  /** Are floors laid at each material's own pitch with relief, or coarse and flat? */
+  readonly surfaceDetail: boolean;
+  /** Switch it; the caller re-runs setProgress, and every floor's signature has changed so all rebuild. */
+  setSurfaceDetail(on: boolean): void;
   /** Every mesh, for colliders and picking. */
   meshes(): Mesh[];
   stats(): { floors: number; walls: number; cells: number; triangles: number; buildMs: number };
@@ -234,12 +238,16 @@ export function surfaceWallCells(
   return { cells, thicknessCells: nw, pitch, solid };
 }
 
-export function createLevelBuilder(scene: Scene, layout: LevelLayout, options: { shadows?: ShadowGenerator; name?: string; material?: StandardMaterial } = {}): BuiltLevel {
+export function createLevelBuilder(scene: Scene, layout: LevelLayout, options: { shadows?: ShadowGenerator; name?: string; material?: StandardMaterial; surfaceDetail?: boolean } = {}): BuiltLevel {
   const name = options.name ?? "level";
   const root = new TransformNode(`${name} root`, scene);
   const voxelMaterial = options.material ?? createVoxelMaterial(`${name} material`, scene);
   const floors = new Map<string, Mesh>();
   const walls = new Map<string, BuiltWall>();
+  /** Lay floors at each material's own (finer) pitch with real relief, rather than the coarse flat
+   *  carpet. Measured on the whole compound: 11.7M cells and a 19.5 s build against 1.4M and 1.3 s, at
+   *  the same 138 draw calls and 120 fps. Here so the look can be judged against the cost. */
+  let surfaceDetail = options.surfaceDetail ?? false;
   /** Cells per piece, so the total survives a rebuild that only touches some of them. */
   const cellCounts = new Map<string, number>();
   /** What each built piece was built FROM. A piece whose signature still matches is left alone. */
@@ -260,12 +268,12 @@ export function createLevelBuilder(scene: Scene, layout: LevelLayout, options: {
     // The CARPET is coarse and flat. A material's own pitch is what the near-camera ring will mesh it at;
     // laying 1,600 m² of 2.5 cm cells with relief measured 11.7 million cells and a 19.5 second build,
     // against 138 draw calls and 120 fps — the runtime was never the problem, the mesher was.
-    const pitch = material ? Math.max(material.pitch ?? 0.05, CARPET_PITCH) : huge ? 0.5 : FLOOR_PITCH;
+    const pitch = material ? (surfaceDetail ? material.pitch ?? 0.05 : Math.max(material.pitch ?? 0.05, CARPET_PITCH)) : huge ? 0.5 : FLOOR_PITCH;
     // Cell (0,0) starts here in the world; the material is asked about world metres from this corner.
     const originX = x + (width - Math.max(1, Math.round(width / pitch)) * pitch) / 2;
     const originZ = z + (depth - Math.max(1, Math.round(depth / pitch)) * pitch) / 2;
     const built = material
-      ? surfaceFloorCells(material, originX, originZ, width, depth, { pitch, relief: false })
+      ? surfaceFloorCells(material, originX, originZ, width, depth, { pitch, relief: surfaceDetail })
       : { ...floorCells(width, depth, pitch, type.patternScale, type.color, type.accentColor, type.pattern), low: 0, top: null };
     const { cells, nx, nz } = built;
     const low = built.low;
@@ -360,7 +368,7 @@ export function createLevelBuilder(scene: Scene, layout: LevelLayout, options: {
     a[0] < b[0] + b[2] && b[0] < a[0] + a[2] && a[1] < b[1] + b[3] && b[1] < a[1] + a[3];
   const floorSignature = (item: Room | Area, floorTypeId: string, topY: number, covers: readonly Rect[]): string => {
     const type = floorTypeOf(layout, floorTypeId);
-    return JSON.stringify([item.rect, type.color, type.accentColor, type.pattern, type.patternScale, type.surface, topY, covers]);
+    return JSON.stringify([item.rect, type.color, type.accentColor, type.pattern, type.patternScale, type.surface, surfaceDetail, topY, covers]);
   };
   const wallSignature = (wall: Wall): string => {
     const type = wallTypeOf(layout, wall.type);
@@ -420,6 +428,8 @@ export function createLevelBuilder(scene: Scene, layout: LevelLayout, options: {
     floors,
     walls,
     setProgress,
+    get surfaceDetail() { return surfaceDetail; },
+    setSurfaceDetail(on: boolean) { surfaceDetail = on; },
     meshes() { return [...floors.values(), ...[...walls.values()].map((built) => built.mesh)]; },
     stats() {
       let triangles = 0;

@@ -2600,3 +2600,29 @@ Wiring it at full size produced the measurement the plan was waiting for, and it
 So the ring is no longer optional: it is where the relief and crust the last two phases built actually get
 to live. Floors in the compound are currently the flat-but-structured versions, which is still a large
 improvement on per-cell noise, and 205k triangles against 304k at the start.
+
+### Surfaces: a relief toggle in the compound, and a correction (2026-09-12)
+
+`🪵 Floor relief` in world.html lays every floor at its material's own pitch with real relief instead of
+the coarse flat carpet, and rebuilds. `BuiltLevel.setSurfaceDetail` drives it; the flag is part of each
+floor's signature, so the diff rebuilds all of them and nothing else.
+
+**Measured on the whole compound, both at 138 draw calls and 120 fps:**
+
+| | cells | triangles | cold build | JS heap |
+|---|---|---|---|---|
+| flat carpet | 1.40M | 205,148 | 1.5 s | 82 MB |
+| floor relief | 4.26M | 269,660 | 12.0 s | 109 MB |
+
+**A correction to what was written here earlier.** The argument against relief everywhere included "about
+880 MB of transient allocation", extrapolated from 76 MB for one room's cells. The resident cost is
+nothing like that: the heap goes up by **27 MB**, because the cells are garbage once meshed and are
+collected. The transient peak is what makes the build slow, but it does not persist and it is not the
+out-of-memory risk that was claimed. The honest cost of relief everywhere is the build time, full stop —
+and behind a loading screen that is a legitimate product choice, which was the user's point.
+
+It is also cheaper than first measured: 19.5 s → 12.0 s, because the wall-shell fix landed in between.
+
+The case for the ring is now narrower and should be stated as what it is: it buys *finer* detail than
+2.5 cm where the camera actually is, avoids a 12 second stall on every progress change, and keeps the main
+thread free — a blocking build cannot animate a loading screen. It is no longer a correctness argument.

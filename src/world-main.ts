@@ -39,6 +39,7 @@ document.querySelector<HTMLElement>("#world")!.innerHTML = `
       <button data-act="cutaway" class="on" id="world-cutaway" title="Drop the walls standing between the camera and the room you are in">🔪 Cutaway</button>
       <span class="world-sep"></span>
       <button data-act="build" id="world-build" title="Draw rooms, walls, doors and ground (B)">🏗 Build mode</button>
+      <button data-act="relief" id="world-relief" title="Lay the floors at each material's own cell size with real relief — board gaps cut a cell deep, every board and tile at its own height — instead of the coarse flat carpet. Measured on the whole compound: 11.7M cells and a 19.5 second build against 1.4M and 1.3 s, at the same 138 draw calls and 120 fps. The runtime is not the cost; the mesher and about 880 MB of transient cells are.">🪵 Floor relief</button>
       <button data-act="night" id="world-night" title="Jump the clock to evening">🌙 Evening</button>
       <button data-act="frame" title="Look at the whole site">🖼 Frame all</button>
     </div>
@@ -189,6 +190,18 @@ document.querySelector(".world-controls")!.addEventListener("click", (event) => 
       progress = full ? levelProgress : fullProgress(levelLayout);
       button.textContent = `🏗 ${full ? "Starting plot" : "Full build-out"}`;
       applyProgress();
+      break;
+    }
+    case "relief": {
+      const on = !level.surfaceDetail;
+      button.classList.toggle("on", on);
+      button.textContent = on ? "🪵 Relief on…" : "🪵 Floor relief";
+      // Let the browser paint the pressed button before the main thread disappears into the mesher.
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        level.setSurfaceDetail(on);
+        applyProgress();
+        button.textContent = "🪵 Floor relief";
+      }));
       break;
     }
     case "cutaway":
