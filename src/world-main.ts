@@ -185,7 +185,7 @@ async function buildEverything(): Promise<void> {
     {
       name: "Growing the grass",
       weight: 3,
-      async run({ slice }) { await grass.build(slice); },
+      async run({ slice }) { await grass.build(slice); grass.update(player.position); },
     },
   ];
   const ms = await runStages(stages, ({ fraction, stage, index, total }) => {
@@ -214,6 +214,7 @@ async function relayLevel(title: string): Promise<void> {
       colliders.set("level", collidersOfMeshes(level.meshes()));
       await crust.build(slice);
       await grass.build(slice);
+      grass.update(player.position);
     },
   }], ({ fraction }) => { loadFill.style.width = `${(fraction * 100).toFixed(1)}%`; });
   loadingEl.classList.add("gone");
@@ -356,7 +357,7 @@ function updateHud(): void {
   statsEl.innerHTML = `<b>${fps.toFixed(0)} fps</b> · ${instrumentation.frameTimeCounter.lastSecAverage.toFixed(1)} ms/frame · draw calls ${fmt(instrumentation.drawCallsCounter.current)}`
     + ` · level: ${stats.floors} floors, ${stats.walls} walls, ${fmt(stats.triangles)} triangles, built in ${fmt(stats.buildMs)} ms`
     + (crustStats.meshes ? ` · stones ${fmt(crustStats.triangles)} tris in ${crustStats.meshes}` : "")
-    + (grassStats.blades ? ` · grass ${fmt(grassStats.blades)} blades, ${fmt(grassStats.triangles)} tris in ${grassStats.prototypes} draws` : "")
+    + (grassStats.blades ? ` · grass ${fmt(grassStats.blades)} blades / ${fmt(grassStats.tufts)} tufts, ${fmt(grassStats.triangles)} tris, ${grassStats.near} near + ${grassStats.far} far` : "")
     + ` · walls down ${cutaway.down().length}`
     + (decorStats.instances ? ` · props ${fmt(decorStats.instances)}` : "");
   clockEl.textContent = `${dayNight.hour >= 6.5 && dayNight.hour < 20 ? "☀" : "🌙"} ${dayNight.label()}`;
@@ -374,6 +375,7 @@ engine.runRenderLoop(() => {
     const wanted = player.position.add(new Vector3(0, 0.8, 0));
     camera.target.addInPlace(wanted.subtract(camera.target).scale(Math.min(1, dt * 8)));
   }
+  grass.update(player.position);
   if (cutawayOn) cutaway.update(dt);
   decor.update(dt);
   particles.update(dt);

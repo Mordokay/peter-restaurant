@@ -108,6 +108,43 @@ function tuftBlades(
   return out;
 }
 
+/** One tuft seen from far enough away that its blades have merged into a single smudge. */
+export interface Tuft { cx: number; cz: number; height: number; width: number; tone: string }
+
+/** Every tuft over a patch of ground, summarised. At twenty metres a clump of six blades is two pixels
+ *  wide, so the distant lawn is drawn as one squat column per tuft instead of six thin ones — a tenth of
+ *  the geometry for a silhouette nobody can tell apart. The blades' own spread becomes its width. */
+export function crustTufts(
+  material: SurfaceMaterial, originX: number, originZ: number, width: number, depth: number,
+  columns: Set<string> = new Set(), exclude?: (x: number, z: number) => boolean,
+): { tufts: Tuft[]; pitch: number } {
+  if (!material.crust) return { tufts: [], pitch: material.pitch ?? 0.05 };
+  const pitch = material.crust.pitch ?? material.pitch ?? 0.05;
+  const tufts: Tuft[] = [];
+  for (const site of crustSites(material.crust, originX, originZ, width, depth)) {
+    if (site.form.kind !== "tuft") continue;
+    if (exclude?.(site.x, site.z)) continue;
+    const cx = Math.round(site.x / pitch), cz = Math.round(site.z / pitch);
+    const rnd = (n: number) => hash2(cx, cz, 900 + n);
+    const blades = tuftBlades(site.form, cx, cz, site.seed, pitch, rnd, columns);
+    if (!blades.length) continue;
+    // Tall enough to keep the clump's silhouette, wide enough to cover where its blades stood.
+    let tallest = 0, minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (const blade of blades) {
+      tallest = Math.max(tallest, blade.height);
+      minX = Math.min(minX, blade.cx); maxX = Math.max(maxX, blade.cx);
+      minZ = Math.min(minZ, blade.cz); maxZ = Math.max(maxZ, blade.cz);
+    }
+    tufts.push({
+      cx: Math.round((minX + maxX) / 2), cz: Math.round((minZ + maxZ) / 2),
+      height: Math.max(2, Math.round(tallest * 0.8)),
+      width: Math.max(1, Math.min(3, Math.round((maxX - minX + maxZ - minZ) / 2) || 1)),
+      tone: blades[Math.floor(blades.length / 2)]!.tone,
+    });
+  }
+  return { tufts, pitch };
+}
+
 /** Every blade over a patch of ground, as placements rather than cells — what the instancer wants. */
 export function crustBlades(
   material: SurfaceMaterial, originX: number, originZ: number, width: number, depth: number,

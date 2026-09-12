@@ -2750,3 +2750,31 @@ setting where culling actually does something, and it restored 120 fps. The cost
 1.5–2 ms of CPU here and would be more on a weak one. The lever that cuts both draws and triangles without
 touching a single blade is **per-instance LOD**: a two-quad prototype for blades more than ~15 m from the
 camera, where a blade is two pixels. That is the next optimisation. Not fewer blades, not shorter ones.
+
+### Grass LOD, and a bug that reported nothing wrong (2026-09-12)
+
+Past 18 m a clump of six blades is two pixels wide, so a far region is drawn as **one squat column per
+tuft** instead of six thin ones per tuft — a fifth of the instances, a tenth of the triangles, for a
+silhouette you cannot tell apart. LOD is per region, swapped by one distance test each; nothing is removed
+and nothing gets shorter.
+
+**Measured, near the compound's buildings:** grass 1,306,896 → 210,476–401,048 triangles depending on where
+the camera stands, draw calls 311 → 151, triangles a frame 1.36M → 510k, 1.1 ms of CPU, zero frames over
+50 ms walking. (fps reads 60 because the display dropped to 60 Hz — the minimum frame gap is 6.8 ms, so
+there is a great deal of headroom. Check `minGapMs`, not fps.)
+
+**The bug worth remembering: thin-instance buffers live on the GEOMETRY, not the mesh.** Bucketing by
+region was done with `prototype.clone()`, and Babylon's clone SHARES the source geometry — so sixteen
+regional clones of one blade all wrote their instance buffers into geometry #222 and overwrote each other.
+The entire lawn rendered nothing while reporting 47,762 blades, correct bounding boxes, correct materials,
+`isReady() === true`, and forty-eight active meshes. Nothing in the numbers gave it away; only the empty
+screen did. Every instanced mesh is now built fresh with `createVoxelMesh` so it owns its geometry (a blade
+is 56 vertices — duplication costs nothing next to being invisible), and a test asserts that no two
+instanced meshes share a geometry.
+
+Also fixed: floors whose type is still on the old pattern path are now recorded as covering the ground even
+though they grow nothing, or grass sprouts up through every room that has not been converted yet.
+
+Two quantisation notes: far tuft heights are rounded to multiples of four cells and their width fixed at
+two, because a prototype per exact height and width put **264 meshes on screen — more than the blades it
+replaced**, cutting triangles by a third and leaving draw calls untouched.

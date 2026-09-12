@@ -46,7 +46,7 @@ export interface BuiltLevel {
   setProgressSliced(progress: LevelProgress, onPiece: (done: number, total: number) => Promise<void> | void): Promise<void>;
   /** Every floor currently laid that has a material, with the rect it covers and the height of its top
    *  surface. The detail ring uses this to know what to grow where. */
-  surfaces(): { id: string; rect: Rect; material: SurfaceMaterial; topY: number }[];
+  surfaces(): { id: string; rect: Rect; material?: SurfaceMaterial; topY: number }[];
   /** Are floors laid at each material's own pitch with relief, or coarse and flat? */
   readonly surfaceDetail: boolean;
   /** Switch it; the caller re-runs setProgress, and every floor's signature has changed so all rebuild. */
@@ -255,8 +255,10 @@ export function createLevelBuilder(scene: Scene, layout: LevelLayout, options: {
   let surfaceDetail = options.surfaceDetail ?? false;
   /** Cells per piece, so the total survives a rebuild that only touches some of them. */
   const cellCounts = new Map<string, number>();
-  /** What material each built floor was laid in, for the detail ring. */
-  const laid = new Map<string, { rect: Rect; surface: string; topY: number }>();
+  /** Every built floor: its rect, its top, and the material it was laid in if it has one yet. Floors
+   *  WITHOUT a material are recorded too, because the crust layer needs to know they cover the ground —
+   *  otherwise grass grows up through every room whose floor type has not been converted. */
+  const laid = new Map<string, { rect: Rect; surface: string | undefined; topY: number }>();
   /** What each built piece was built FROM. A piece whose signature still matches is left alone. */
   const signatures = new Map<string, string>();
   let buildMs = 0;
@@ -321,7 +323,7 @@ export function createLevelBuilder(scene: Scene, layout: LevelLayout, options: {
     mesh.isPickable = true;
     tagSurface(mesh, { levelFloor: item.id });
     floors.set(item.id, mesh);
-    if (named) laid.set(item.id, { rect: item.rect, surface: type.surface!, topY });
+    laid.set(item.id, { rect: item.rect, surface: type.surface, topY });
     cellCounts.set(`floor:${item.id}`, kept.length);
   };
 
@@ -455,10 +457,9 @@ export function createLevelBuilder(scene: Scene, layout: LevelLayout, options: {
       buildMs = performance.now() - started;
     },
     surfaces() {
-      const out: { id: string; rect: Rect; material: SurfaceMaterial; topY: number }[] = [];
+      const out: { id: string; rect: Rect; material?: SurfaceMaterial; topY: number }[] = [];
       for (const [id, record] of laid) {
-        const material = surfaceById(record.surface);
-        if (material) out.push({ id, rect: record.rect, material, topY: record.topY });
+        out.push({ id, rect: record.rect, material: record.surface ? surfaceById(record.surface) : undefined, topY: record.topY });
       }
       return out;
     },

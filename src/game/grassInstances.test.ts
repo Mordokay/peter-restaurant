@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { NullEngine, Scene } from "@babylonjs/core";
+import { NullEngine, Scene, Vector3 } from "@babylonjs/core";
 import { createGrassInstances } from "./grassInstances.ts";
 import { crustBlades } from "./surfaceCrust.ts";
 import { createVoxelMaterial } from "./voxelGeometry.ts";
@@ -26,8 +26,10 @@ test("the whole lawn is blades, and they cost a handful of draw calls", async ()
     const stats = grass.stats();
     // 3,456 m² uncovered at 5 tufts a square metre and 3-9 blades each: tens of thousands of blades.
     assert.ok(stats.blades > 30000, `expected a lawn's worth of blades, got ${stats.blades}`);
-    assert.ok(stats.prototypes <= 12 * 16, `one mesh per height per region: ${stats.prototypes}`);
-    assert.ok(stats.triangles > stats.blades * 8, "each instance draws its prototype's triangles");
+    assert.ok(stats.tufts > 5000, `and the tufts they belong to, for the far tier: ${stats.tufts}`);
+    assert.ok(stats.blades > stats.tufts * 2, "a tuft is several blades, which is the whole point of the swap");
+    grass.update(new Vector3(0, 0, 0));
+    assert.ok(stats.blades > 0);
   });
 });
 
@@ -42,8 +44,8 @@ test("no blade stands where a higher floor covers the ground", async () => {
 test("a prototype is white with the wind baked up it, so instances supply the tone and keep the sway", async () => {
   await withGrass(async (grass, scene) => {
     await grass.build();
-    const prototype = scene.meshes.find((mesh) => /^grass blade/.test(mesh.name) && !/\[/.test(mesh.name))!;
-    assert.ok(prototype, "a prototype exists");
+    const prototype = scene.meshes.find((mesh) => /^grass blade/.test(mesh.name))!;
+    assert.ok(prototype, "a blade mesh exists");
     const colors = prototype.getVerticesData("color")!;
     let anchored = 0, free = 0;
     for (let i = 0; i < colors.length; i += 4) {
@@ -51,9 +53,8 @@ test("a prototype is white with the wind baked up it, so instances supply the to
       if (colors[i + 3]! > 0.99) anchored++; else if (colors[i + 3]! < 0.01) free++;
     }
     assert.ok(anchored > 0 && free > 0, "the root is anchored and the tip is free");
-    assert.equal(prototype.isEnabled(), false, "the prototype itself draws nothing");
     const regional = scene.meshes.filter((mesh) => /^grass blade.*\[/.test(mesh.name));
-    assert.ok(regional.length > 1, "its regional clones carry the instances");
+    assert.ok(regional.length > 1, "one mesh per height per region");
     assert.ok(regional.some((mesh) => mesh.thinInstanceCount > 100), "and they are instanced many times over");
     // Each clone's bounding box is sized by its instances, which is what lets the frustum cull a region.
     const wide = regional.filter((mesh) => mesh.getBoundingInfo().boundingBox.extendSizeWorld.x > 1);
@@ -61,12 +62,54 @@ test("a prototype is white with the wind baked up it, so instances supply the to
   });
 });
 
+test("a far region is drawn as tufts and a near one as blades", async () => {
+  await withGrass(async (grass) => {
+    await grass.build();
+    // Standing on the lawn: the region underfoot shows blades, the far corners show tufts.
+    grass.update(new Vector3(-28, 0, -28));
+    const here = grass.stats();
+    assert.ok(here.near > 0, "the region you are standing in is blades");
+    assert.ok(here.far > 0, "and the far side of the site is tufts");
+    // Backing off to the whole-site view puts everything on the cheap tier.
+    grass.update(new Vector3(200, 0, 200));
+    assert.equal(grass.stats().near, 0, "nothing near, so nothing drawn as blades");
+  });
+});
+
+test("the far tier is a fraction of the near one, or the swap is not worth its complexity", async () => {
+  await withGrass(async (grass, scene) => {
+    await grass.build();
+    // Compare the two representations of the WHOLE lawn, not whatever happens to be enabled.
+    const tier = (pattern: RegExp): number => scene.meshes
+      .filter((mesh) => pattern.test(mesh.name) && /\[/.test(mesh.name))
+      .reduce((sum, mesh) => sum + (mesh.getTotalIndices() / 3) * mesh.thinInstanceCount, 0);
+    const blades = tier(/^grass blade/), tufts = tier(/^grass tuft/);
+    assert.ok(blades > 0 && tufts > 0, "both tiers exist");
+    assert.ok(tufts * 4 < blades, `tufts ${tufts} against blades ${blades} — only ${(blades / tufts).toFixed(1)}x`);
+  });
+});
+
+test("no two instanced meshes share a geometry", async () => {
+  // Thin-instance buffers live on the GEOMETRY. Sixteen clones of one prototype shared one geometry and
+  // overwrote each other's instance buffers: the whole lawn rendered nothing while reporting 47,762
+  // blades, correct bounding boxes and forty-eight active meshes. Nothing in the numbers gave it away.
+  await withGrass(async (grass, scene) => {
+    await grass.build();
+    const instanced = scene.meshes.filter((mesh) => mesh.thinInstanceCount > 0);
+    assert.ok(instanced.length > 4, "there are several instanced meshes");
+    const geometries = new Set(instanced.map((mesh) => mesh.geometry?.uniqueId));
+    assert.equal(geometries.size, instanced.length,
+      `${instanced.length} instanced meshes but only ${geometries.size} geometries — they will overwrite each other`);
+  });
+});
+
 test("every blade stands on its own floor", async () => {
   await withGrass(async (grass, scene) => {
     await grass.build();
     // Read the instance matrices back: every translation's y is half a cell above the ground it stands on.
+    grass.update(new Vector3(0, 0, 0));
     for (const mesh of scene.meshes) {
-      if (!/^grass blade/.test(mesh.name)) continue;
+      if (!/^grass blade/.test(mesh.name) || !/\[/.test(mesh.name)) continue;
       const matrices = mesh.thinInstanceGetWorldMatrices();
       for (const m of matrices.slice(0, 50)) {
         const y = m.getTranslation().y;

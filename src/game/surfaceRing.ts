@@ -23,7 +23,9 @@ import type { Rect } from "./levelLayout.ts";
 export interface RingSurface {
   id: string;
   rect: Rect;
-  material: SurfaceMaterial;
+  /** Absent while a floor type is still on the old pattern path. Such a floor grows nothing, but it does
+   *  COVER the ground beneath it, which is why it is in the list at all. */
+  material?: SurfaceMaterial;
   /** Height of the surface the crust stands on. */
   topY: number;
 }
@@ -64,7 +66,7 @@ export function createSurfaceCrustLayer(scene: Scene, options: {
       const started = performance.now();
       clear();
       const all = options.surfaces();
-      const laid = all.filter((surface) => surface.material.crust);
+      const laid = all.filter((surface) => surface.material?.crust);
       if (!laid.length) { buildMs = performance.now() - started; return; }
       // Floors stack: the grounds run under every room and plot on the site, and grass must not sprout
       // up through a farm plot laid on top of them.
@@ -89,7 +91,7 @@ export function createSurfaceCrustLayer(scene: Scene, options: {
             // Addressed from the world origin, so two tiles of the same material line up cell for cell,
             // and a tuft straddling their border is grown once by whichever tile reaches it first.
             // Stones and chips only: blades are GPU instances (grassInstances.ts), not merged geometry.
-            const grown = crustCells(surface.material, ax, az, aw, ad, { x: 0, z: 0 }, columns, covering(surface), ["pebble", "chip"]);
+            const grown = crustCells(surface.material!, ax, az, aw, ad, { x: 0, z: 0 }, columns, covering(surface), ["pebble", "chip"]);
             if (!grown.cells.length) continue;
             const lift = Math.round(surface.topY / grown.pitch);
             for (const cell of grown.cells) cell.y += lift;
