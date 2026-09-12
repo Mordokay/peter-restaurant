@@ -2732,3 +2732,21 @@ that is behind the camera. Expected: back to 120 fps, ~30 draw calls.
 
 Standing rule, saved to memory: **no reductions in voxel detail for performance, ever again.** Engineering
 first — instancing, LOD, baking, workers, WebGPU — and the game runs on any machine.
+
+### Instanced grass, regional culling (2026-09-12)
+
+Instances are bucketed by region as well as height — one mesh per (height, region), bounding box refreshed
+from its instances, prototype disabled — so the frustum can drop what is behind the camera. Measured, both
+at 120 fps with zero frame hitches walking:
+
+| region | meshes | draw calls | triangles/frame | culled |
+|---|---|---|---|---|
+| none (one mesh per height) | 12 | 145 | 1.72M | 0% — GPU floor at 86–94 fps |
+| 32 m | 144 | 237 | 1.71M | ~0% |
+| **22 m** | 192 | 309 | 1.36M | 30% |
+
+The game camera at 26 m sees most of the site at once, so regions rarely leave the frustum; 22 m is the
+setting where culling actually does something, and it restored 120 fps. The cost is draw calls — 309 is
+1.5–2 ms of CPU here and would be more on a weak one. The lever that cuts both draws and triangles without
+touching a single blade is **per-instance LOD**: a two-quad prototype for blades more than ~15 m from the
+camera, where a blade is two pixels. That is the next optimisation. Not fewer blades, not shorter ones.

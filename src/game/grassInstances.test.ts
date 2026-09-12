@@ -26,7 +26,7 @@ test("the whole lawn is blades, and they cost a handful of draw calls", async ()
     const stats = grass.stats();
     // 3,456 m² uncovered at 5 tufts a square metre and 3-9 blades each: tens of thousands of blades.
     assert.ok(stats.blades > 30000, `expected a lawn's worth of blades, got ${stats.blades}`);
-    assert.ok(stats.prototypes <= 16, `one prototype per blade height, so a handful of draws: ${stats.prototypes}`);
+    assert.ok(stats.prototypes <= 12 * 16, `one mesh per height per region: ${stats.prototypes}`);
     assert.ok(stats.triangles > stats.blades * 8, "each instance draws its prototype's triangles");
   });
 });
@@ -42,7 +42,7 @@ test("no blade stands where a higher floor covers the ground", async () => {
 test("a prototype is white with the wind baked up it, so instances supply the tone and keep the sway", async () => {
   await withGrass(async (grass, scene) => {
     await grass.build();
-    const prototype = scene.meshes.find((mesh) => /^grass blade/.test(mesh.name))!;
+    const prototype = scene.meshes.find((mesh) => /^grass blade/.test(mesh.name) && !/\[/.test(mesh.name))!;
     assert.ok(prototype, "a prototype exists");
     const colors = prototype.getVerticesData("color")!;
     let anchored = 0, free = 0;
@@ -51,8 +51,13 @@ test("a prototype is white with the wind baked up it, so instances supply the to
       if (colors[i + 3]! > 0.99) anchored++; else if (colors[i + 3]! < 0.01) free++;
     }
     assert.ok(anchored > 0 && free > 0, "the root is anchored and the tip is free");
-    assert.ok(prototype.thinInstanceCount > 100, "and it is instanced many times over");
-    assert.equal(prototype.alwaysSelectAsActiveMesh, true, "never culled by its own tiny bounding box");
+    assert.equal(prototype.isEnabled(), false, "the prototype itself draws nothing");
+    const regional = scene.meshes.filter((mesh) => /^grass blade.*\[/.test(mesh.name));
+    assert.ok(regional.length > 1, "its regional clones carry the instances");
+    assert.ok(regional.some((mesh) => mesh.thinInstanceCount > 100), "and they are instanced many times over");
+    // Each clone's bounding box is sized by its instances, which is what lets the frustum cull a region.
+    const wide = regional.filter((mesh) => mesh.getBoundingInfo().boundingBox.extendSizeWorld.x > 1);
+    assert.ok(wide.length > 0, "a region's box spans its instances, not one two-centimetre blade");
   });
 });
 
