@@ -2446,3 +2446,37 @@ The finding that matters for phase 4: **realistic relief depths are sub-cell at 
 (a 1.2 cm grout recess rounds to zero even at 2.5 cm cells). So the carpet carries joints as *colour* at
 5 cm, and geometric relief belongs to the crust near the camera, where a cell is small enough to express
 it. Cells are the cost that scales, not triangles: 802 cells/m² at 5 cm against 3,208 at 2.5 cm.
+
+### Surfaces, phase 3: the surface lab, and the two lessons it taught (2026-09-12)
+
+`/surfaces.html` + `src/surfaces-main.ts`. A patch of one material, shown at **the compound's own camera**
+by default — same fov 0.62, same beta 0.92, same 26 m — because ART_DIRECTION.md says "validate every asset
+in the actual camera at normal zoom, not in a close-up model viewer". View buttons snap to 26 m, 8 m,
+2.4 m and 0.9 m; the light presets from the model lab; a 1.8 m post for scale; a live triangle-per-square-
+metre counter. `src/game/surfaceLibrary.ts` holds the six materials.
+
+Looking at the first six taught two things no amount of reasoning would have:
+
+- **A lattice that only changes geometry changes nothing.** The first tilled soil was a flat brown field:
+  the corduroy existed, but relief is sub-cell at every affordable pitch, so it rendered as nothing.
+  Hence `bands` — tone ACROSS a feature, from its centre to its edge. Give the ridge a dry pale crown and
+  the furrow a damp dark trough and the ploughing reads from twenty-six metres with no geometry at all.
+- **A scatter cluster near the cell size is per-cell noise wearing a hat.** The first pass had 7–11 cm
+  blotches on 5 cm cells; they read as pepper — the "noisy texture" the bible forbids — and cost almost as
+  much as the old static. Clusters are now 0.2 m and up.
+
+**Triangles per square metre at the 5 cm carpet, before → after those two fixes:**
+
+| material | first pass | now |
+|---|---|---|
+| tilled soil | 196 | **17** |
+| gravel | 117 | **18** |
+| dining oak | 65 | **26** |
+| grass | 9 | **5** |
+| quarry tile | 18 | 18 |
+| coursed stone | 52 | 73 |
+
+Against **~246/m² for the old per-cell noise**. Both lessons are now tests, not comments: one fails if any
+scatter cluster drops below three cells, one meshes every material with the real greedy mesher and fails if
+it exceeds its budget, and one checks every colour in the library is real hex — written after
+`#976displaced` went in as a board tone and rendered black.

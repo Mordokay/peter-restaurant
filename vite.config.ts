@@ -316,6 +316,7 @@ export default defineConfig({
         game: "index.html",
         modelLab: "model-lab.html",
         stress: "stress.html",
+        surfaces: "surfaces.html",
         world: "world.html",
       },
     },

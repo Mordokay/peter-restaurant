@@ -55,6 +55,14 @@ export interface SurfaceMaterial {
   /** How far the body of a feature stands above the walking surface, and how much it domes toward its
    *  centre — a cobble sett, the crown of a ploughed ridge. Metres. */
   relief?: { height?: number; crown?: number };
+  /** Tone ACROSS a feature, from its centre (0) to its edge (1), each band starting at `from`.
+   *
+   *  This is what makes shape read at the game camera. Realistic relief is sub-cell at every pitch we
+   *  can afford — a 1.2 cm grout recess rounds to nothing even at 2.5 cm cells — so a ploughed field
+   *  whose only ridge is geometric is a flat brown field. Give the crown a dry pale tone and the furrow
+   *  a damp dark one and the corduroy reads from twenty-six metres with no geometry at all. It also
+   *  merges, because a band is a contiguous region and not a speckle. */
+  bands?: { from: number; color: string }[];
   scatter?: Scatter[];
   /** Broad, slow variation laid over everything: a lush corner, a sun-bleached patch, a damp strip.
    *  `scale` is the size of one patch in metres. */
@@ -139,6 +147,11 @@ export function sampleSurface(material: SurfaceMaterial, u: number, v: number): 
   let color = material.patch
     ? pick(material.patch.tones, hash2(Math.floor(u / material.patch.scale), Math.floor(v / material.patch.scale), 7))
     : pick(material.tones, hash2(hit.fu, hit.fv, 1));
+
+  // Shading across the feature wins over the per-feature tone: it is the thing that carries the form.
+  if (material.bands) {
+    for (const band of material.bands) if (hit.fromCentre >= band.from) color = band.color;
+  }
 
   let relief = material.relief?.height ?? 0;
   if (material.relief?.crown) relief += material.relief.crown * (1 - hit.fromCentre * hit.fromCentre);

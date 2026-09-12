@@ -1,0 +1,14 @@
+* { box-sizing: border-box; }
+body { margin: 0; background: #16201c; color: #edf4e8; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; overflow: hidden; }
+#surfaces { position: fixed; inset: 0; }
+#surface-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; outline: none; touch-action: none; }
+.sf-bar { position: absolute; z-index: 2; display: flex; align-items: center; gap: 8px; padding: 9px; border: 1px solid #ffffff1c; border-radius: 13px; background: #24312ddd; box-shadow: 0 8px 24px #10171455; }
+.sf-top { top: 18px; left: 18px; right: 18px; flex-wrap: wrap; }
+.sf-stats { right: 18px; bottom: 18px; color: #c7d4cc; font-size: 11px; font-variant-numeric: tabular-nums; }
+.sf-help { left: 18px; bottom: 18px; color: #9fb3a6; font-size: 11px; }
+.sf-bar button { padding: 7px 10px; border: 1px solid #ffffff28; border-radius: 8px; color: #edf4e8; background: #18221f; font: inherit; font-size: 11px; cursor: pointer; }
+.sf-bar button.on { border-color: #72bd63; background: #476f45; }
+.sf-bar .sf-group { display: inline-flex; gap: 4px; padding-right: 8px; border-right: 1px solid #ffffff1c; }
+.sf-bar .sf-label { color: #9fb3a6; font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; }
+.sf-title { font-weight: 700; font-size: 13px; padding-right: 6px; }
+.sf-title a { color: #9fd48a; text-decoration: none; font-weight: 600; font-size: 11px; margin-left: 8px; }
