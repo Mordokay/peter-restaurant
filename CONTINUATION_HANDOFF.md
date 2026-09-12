@@ -2681,3 +2681,25 @@ unchanged at 205,148. Radius 9 m, regrown when the camera crosses a 6 m chunk, a
 
 Known artefact: the ring's edge is visible as grass simply stopping at 9 m. A density falloff over the last
 metre or two would hide it.
+
+### Surfaces, phase 10: the ring becomes a layer (2026-09-12)
+
+The camera-following ring was the wrong shape for the job, and two symptoms said so: a frame hitch every
+few metres of walking, because a rebuild is a hundred-odd milliseconds of meshing on the main thread; and a
+visible boundary, because **grass is ground cover — its absence is what you notice.** A lawn with blades
+near the player and none thirty metres out reads as broken, not as detail.
+
+It is static now: built once over everything, during loading, split into 18 m tiles so Babylon's frustum
+culling drops what is behind you. The compromise is real and was worth taking — **a fifth of the density
+for a sixth of the cost**: 5 tufts a square metre at 2 cm cells cost 408 triangles a square metre and two
+million over the lawn; 2 tufts at 4 cm cost 73 and about 230,000. Up close it is a thinner lawn; everywhere
+else it is a lawn at all.
+
+Two things make it affordable: crust is skipped where a higher floor covers the ground, so nothing grows
+under the buildings — about a third of the site — and the tiling lets the frustum do the rest.
+
+**Measured while walking:** zero frames over 50 ms, worst frame 11 ms, median 8.3 ms, 120 fps throughout.
+Crust 231,088 triangles in 21 meshes; draw calls 152 against 138 without it. Level unchanged at 205,148.
+
+Draw calls are over the 120 the budget in `visual.ts` asks for, at 1.1 ms a frame. Bigger tiles would trade
+culling for draws if that becomes the binding constraint.
