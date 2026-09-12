@@ -42,3 +42,19 @@ test("greedy meshing merges coplanar same-color faces into single quads", () => 
   assert.equal(tomatoArea, visibleVoxelFaceCount(tomato));
   assert.ok(tomatoQuads.length < visibleVoxelFaceCount(tomato) * 0.7);
 });
+
+test("cells of one colour but different wind weights never merge", () => {
+  // Sway rides in the vertex colour's alpha, so it has to be part of the merge key. Without this a
+  // blade's root and tip merge into one quad and the whole blade moves rigidly — or not at all.
+  const column = [
+    { x: 0, y: 0, z: 0, color: "#7ea563", sway: 0 },
+    { x: 0, y: 1, z: 0, color: "#7ea563", sway: 0 },
+    { x: 0, y: 2, z: 0, color: "#7ea563", sway: 1 },
+  ];
+  const sides = mergedVoxelQuads(column).filter((quad) => quad.face === 0);
+  assert.equal(sides.length, 2, "the +x side should split where the sway changes");
+  assert.deepEqual(sides.map((quad) => quad.sway).sort(), [0, 1]);
+  // The same column with one sway throughout merges into a single quad per side.
+  const uniform = column.map((cell) => ({ ...cell, sway: 0 }));
+  assert.equal(mergedVoxelQuads(uniform).filter((quad) => quad.face === 0).length, 1);
+});

@@ -98,7 +98,10 @@ test("the crust stays inside its budget, and blades stand up", () => {
   // blades that lean cell-by-cell cost 1,521 where straight ones cost 294 — and looked worse, because a
   // stepped blade is a staircase of detached cubes rather than a blade.
   const side = 8;
-  const budget: Record<string, number> = { gravel_path: 220, grass_lawn: 420 };
+  // Grass is dearer than it looks because the wind weight is part of the merge key: a blade splits
+  // into one run per sway step. Three steps cost 924 triangles a square metre, two cost 770, one 566,
+  // against 363 for a blade that cannot move at all. Two is the bargain that was struck.
+  const budget: Record<string, number> = { gravel_path: 220, grass_lawn: 650 };
   for (const material of surfaceLibrary) {
     if (!material.crust) continue;
     const { cells, pitch } = crustCells(material, 0, 0, side, side);
@@ -125,4 +128,34 @@ test("no two crust sites are the same, and they stay put", () => {
   for (const [index, site] of inside.entries()) {
     assert.ok(Math.abs(site.x - sites[index]!.x) < 1e-9 && Math.abs(site.z - sites[index]!.z) < 1e-9, "a tuft moved");
   }
+});
+
+test("a blade is anchored at its root and free at its tip", () => {
+  const grass = surfaceById("grass_lawn")!;
+  const { cells } = crustCells(grass, 0, 0, 6, 6);
+  // Group a column by its x,z: every blade is a straight run, which is what lets the shader bend it.
+  const columns = new Map<string, { y: number; sway: number }[]>();
+  for (const cell of cells) {
+    const key = `${cell.x},${cell.z}`;
+    (columns.get(key) ?? columns.set(key, []).get(key)!).push({ y: cell.y, sway: cell.sway ?? 0 });
+  }
+  let checked = 0;
+  for (const column of columns.values()) {
+    if (column.length < 3) continue;
+    column.sort((a, b) => a.y - b.y);
+    assert.equal(column[0]!.sway, 0, "the root of a blade must not move, or the grass walks away");
+    assert.equal(column[column.length - 1]!.sway, 1, "and the tip must be free");
+    for (let i = 1; i < column.length; i++) {
+      assert.ok(column[i]!.sway >= column[i - 1]!.sway, "sway rises monotonically up a blade");
+    }
+    checked++;
+  }
+  assert.ok(checked > 20, `expected plenty of blades to check, saw ${checked}`);
+});
+
+test("pebbles never move, whatever the wind is doing", () => {
+  const gravel = surfaceById("gravel_path")!;
+  const { cells } = crustCells(gravel, 0, 0, 6, 6);
+  assert.ok(cells.length > 100);
+  assert.ok(cells.every((cell) => (cell.sway ?? 0) === 0), "a stone that sways is a stone rolling downhill");
 });

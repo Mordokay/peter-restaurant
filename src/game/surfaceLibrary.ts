@@ -101,7 +101,7 @@ export const grassLawn: SurfaceMaterial = {
   // three times one that leans a little — 1,521 triangles a square metre against 427 — so they lean less
   // than they might, and the wind will do the rest of the work later.
   crust: {
-    density: 9, salt: 9, pitch: 0.02, drift: { scale: 1.8, swing: 1.7 },
+    density: 7, salt: 9, pitch: 0.02, drift: { scale: 1.8, swing: 1.7 },
     forms: [
       { kind: "tuft", blades: [3, 6], height: [0.05, 0.1], lean: 0.05, tones: ["#87ae66", "#7aa25c", "#93b972"] },
       { kind: "tuft", blades: [4, 8], height: [0.08, 0.16], lean: 0.07, tones: ["#7ea563", "#719757", "#8cb36c"] },

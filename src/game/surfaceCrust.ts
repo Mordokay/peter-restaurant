@@ -43,6 +43,9 @@ export interface Crust {
   pitch?: number;
 }
 
+/** How many steps a blade's wind weight is quantised to. More is smoother and costs merging. */
+const SWAY_STEPS = 2;
+
 const lerp = (range: readonly [number, number], t: number): number => range[0] + (range[1] - range[0]) * t;
 const pick = <T>(list: readonly T[], t: number): T => list[Math.min(list.length - 1, Math.floor(t * list.length))]!;
 
@@ -76,6 +79,7 @@ export function crustSites(crust: Crust, x0: number, z0: number, width: number, 
 /** Grow one site into cells, addressed in cells from the patch origin. */
 function growSite(
   form: CrustForm, x: number, z: number, seed: number, pitch: number, out: VoxelCell[], originX: number, originZ: number,
+  columns: Set<string>,
 ): void {
   const cx = Math.round((x - originX) / pitch);
   const cz = Math.round((z - originZ) / pitch);
@@ -96,7 +100,19 @@ function growSite(
         const tone = pick(form.tones, rnd(b * 4 + 3));
         const bx = cx + Math.round(Math.cos(angle) * reach);
         const bz = cz + Math.round(Math.sin(angle) * reach);
-        for (let y = 0; y < height; y++) out.push({ x: bx, y, z: bz, color: tone });
+        // One blade to a column. Two blades sharing one would interleave their wind weights up the same
+        // stack of cells, and the shader would bend the result into a corkscrew.
+        const column = `${bx},${bz}`;
+        if (columns.has(column)) continue;
+        columns.add(column);
+        // Anchored at the root, free at the tip, in four steps rather than continuously. Sway is part
+        // of the mesher's merge key, so a distinct value per cell makes every cell of a blade its own
+        // quad: measured 1,360 triangles a square metre against 363. Four steps merge back into runs and
+        // still bend as a curve, because the shader squares the weight before it uses it.
+        for (let y = 0; y < height; y++) {
+          const along = height < 2 ? 0 : y / (height - 1);
+          out.push({ x: bx, y, z: bz, color: tone, sway: Math.round(along * SWAY_STEPS) / SWAY_STEPS });
+        }
       }
       return;
     }
@@ -135,8 +151,9 @@ export function crustCells(
   if (!material.crust) return { cells: [], pitch: material.pitch ?? 0.05 };
   const pitch = material.crust.pitch ?? material.pitch ?? 0.05;
   const cells: VoxelCell[] = [];
+  const columns = new Set<string>();
   for (const site of crustSites(material.crust, originX, originZ, width, depth)) {
-    growSite(site.form, site.x, site.z, site.seed, pitch, cells, originX, originZ);
+    growSite(site.form, site.x, site.z, site.seed, pitch, cells, originX, originZ, columns);
   }
   return { cells, pitch };
 }

@@ -5,6 +5,12 @@ export interface VoxelCell {
   y: number;
   z: number;
   color: string;
+  /** How freely this cell moves in the wind: 0 anchored (the default), 1 the tip of a blade.
+   *  It rides in the vertex colour's ALPHA, which costs nothing — the buffer is already vec4 and the
+   *  fragment shader throws the channel away unless `hasVertexAlpha` is set, which it must not be or
+   *  every floor becomes a sorted transparent draw. Stored as 1 - sway, so everything that never heard
+   *  of wind keeps alpha 1 and stands perfectly still. See voxelWind.ts. */
+  sway?: number;
 }
 
 const faceDefinitions = [
@@ -51,6 +57,8 @@ export interface VoxelQuad {
   v0: number;
   v1: number;
   color: string;
+  /** 0 anchored, 1 free. Part of the merge key, so a blade's tip never merges with its root. */
+  sway: number;
 }
 
 /** Greedy meshing: exposed faces are grouped per plane and merged into the
@@ -69,7 +77,7 @@ export function mergedVoxelQuads(cells: readonly VoxelCell[], solid?: (x: number
     const axis = dx !== 0 ? 0 : dy !== 0 ? 1 : 2;
     const [axisU, axisV] = axis === 0 ? [1, 2] : axis === 1 ? [0, 2] : [0, 1];
     // slice -> "u,v" -> color, for every exposed face in this direction.
-    const planes = new Map<number, Map<string, { u: number; v: number; color: string }>>();
+    const planes = new Map<number, Map<string, { u: number; v: number; color: string; sway: number }>>();
     for (const cell of cells) {
       if (isSolid(cell.x + dx, cell.y + dy, cell.z + dz)) continue;
       const coordinates = [cell.x, cell.y, cell.z];
@@ -78,29 +86,30 @@ export function mergedVoxelQuads(cells: readonly VoxelCell[], solid?: (x: number
       if (!plane) planes.set(slice, (plane = new Map()));
       const u = coordinates[axisU]!;
       const v = coordinates[axisV]!;
-      plane.set(`${u},${v}`, { u, v, color: cell.color });
+      plane.set(`${u},${v}`, { u, v, color: cell.color, sway: cell.sway ?? 0 });
     }
     for (const [slice, plane] of [...planes.entries()].sort((a, b) => a[0] - b[0])) {
       const done = new Set<string>();
       const entries = [...plane.values()].sort((a, b) => (a.v - b.v) || (a.u - b.u));
-      const matches = (u: number, v: number, color: string): boolean => {
+      const matches = (u: number, v: number, color: string, sway: number): boolean => {
         const key = `${u},${v}`;
-        return !done.has(key) && plane.get(key)?.color === color;
+        const other = plane.get(key);
+        return !done.has(key) && other?.color === color && other.sway === sway;
       };
       for (const start of entries) {
         if (done.has(`${start.u},${start.v}`)) continue;
         let width = 1;
-        while (matches(start.u + width, start.v, start.color)) width++;
+        while (matches(start.u + width, start.v, start.color, start.sway)) width++;
         let height = 1;
         let growing = true;
         while (growing) {
           for (let du = 0; du < width; du++) {
-            if (!matches(start.u + du, start.v + height, start.color)) { growing = false; break; }
+            if (!matches(start.u + du, start.v + height, start.color, start.sway)) { growing = false; break; }
           }
           if (growing) height++;
         }
         for (let dv = 0; dv < height; dv++) for (let du = 0; du < width; du++) done.add(`${start.u + du},${start.v + dv}`);
-        quads.push({ face: faceIndex, slice, u0: start.u, u1: start.u + width - 1, v0: start.v, v1: start.v + height - 1, color: start.color });
+        quads.push({ face: faceIndex, slice, u0: start.u, u1: start.u + width - 1, v0: start.v, v1: start.v + height - 1, color: start.color, sway: start.sway });
       }
     }
   }
@@ -158,6 +167,8 @@ export function createVoxelMesh(name: string, cells: readonly VoxelCell[], pitch
     const axis = dx !== 0 ? 0 : dy !== 0 ? 1 : 2;
     const [axisU, axisV] = axis === 0 ? [1, 2] : axis === 1 ? [0, 2] : [0, 1];
     const color = Color4.FromHexString(`${quad.color}ff`);
+    // Alpha carries the wind weight, inverted so anything that never heard of wind keeps alpha 1.
+    const anchored = 1 - Math.min(1, Math.max(0, quad.sway));
     const vertexStart = positions.length / 3;
     for (const corner of face.corners) {
       // Same corner pattern as a single cell, stretched over the merged
@@ -175,7 +186,7 @@ export function createVoxelMesh(name: string, cells: readonly VoxelCell[], pitch
         coordinate[2]! * pitch - half + outward[2]!,
       );
       normals.push(...face.normal);
-      colors.push(color.r, color.g, color.b, color.a);
+      colors.push(color.r, color.g, color.b, anchored);
     }
     indices.push(...clockwiseQuadIndices(vertexStart));
   }

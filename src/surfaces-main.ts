@@ -16,6 +16,7 @@ import { reliefFloor, sampleSurface } from "./game/surfaces";
 import { crustCells } from "./game/surfaceCrust";
 import { surfaceLibrary } from "./game/surfaceLibrary";
 import { createDayNight, type DayNight } from "./game/dayNight";
+import { createWindMaterial } from "./game/voxelWind";
 
 const params = new URLSearchParams(window.location.search);
 /** Metres across the patch. Big enough that a 2 m board and a 30 cm tile both read at the game camera. */
@@ -29,6 +30,7 @@ document.querySelector<HTMLElement>("#surfaces")!.innerHTML = `
     <span class="sf-group"><span class="sf-label">Cell</span><span id="sf-pitch"></span></span>
     <span class="sf-group"><span class="sf-label">Light</span><span id="sf-light"></span></span>
     <span class="sf-group"><span class="sf-label">View</span><span id="sf-view"></span></span>
+    <button id="sf-wind" title="Bend the crust in the wind. Blades are built straight on purpose: a bend baked into the geometry is frozen in one shape and costs five times as much, while the shader bends a straight column into a smooth curve that moves.">Wind</button>
     <button id="sf-crust" title="The pebbles, tufts and chips that stand out of the surface. Gravel and grass are nothing without them; in the world they are built only near the camera.">Crust</button>
     <button id="sf-relief" title="Show the material's relief as real geometry. Realistic depths are sub-cell at these pitches, so this is how you tell whether a joint can ever read as a recess.">Relief</button>
   </div>
@@ -36,7 +38,9 @@ document.querySelector<HTMLElement>("#surfaces")!.innerHTML = `
   <div class="sf-bar sf-help">Drag to orbit · wheel to zoom · the View buttons snap to the distances that matter</div>`;
 
 const canvas = document.querySelector<HTMLCanvasElement>("#surface-canvas")!;
-const engine = new Engine(canvas, true, { stencil: true });
+// preserveDrawingBuffer so the page can be read back and checked: without it a canvas grab
+// returns an empty buffer, which once made a wind test "prove" that nothing was moving.
+const engine = new Engine(canvas, true, { stencil: true, preserveDrawingBuffer: true });
 const scene = new Scene(engine);
 const instrumentation = new SceneInstrumentation(scene);
 instrumentation.captureFrameTime = true;
@@ -60,6 +64,8 @@ const shadows = new ShadowGenerator(2048, sun);
 shadows.useBlurExponentialShadowMap = true;
 shadows.blurKernel = 16;
 const material = createVoxelMaterial("surface material", scene);
+// Anything that stands up goes on the wind material; the carpet never moves.
+const windMaterial = createWindMaterial("surface wind", scene);
 
 // Something of known size to judge against: a post as tall as a person, and a one-metre rule at its foot.
 const postMaterial = new StandardMaterial("post", scene);
@@ -74,6 +80,7 @@ let dayNight: DayNight | null = null;
 let patch: Mesh | null = null;
 let crustMesh: Mesh | null = null;
 let crust = true;
+let wind = true;
 let materialId = params.get("material") ?? surfaceLibrary[0]!.id;
 let pitch = Number(params.get("pitch")) || 0;
 let relief = false;
@@ -124,7 +131,7 @@ function rebuild(): void {
   if (crust && spec.crust) {
     const grown = crustCells(spec, origin, origin, PATCH, PATCH);
     if (grown.cells.length) {
-      crustMesh = createVoxelMesh(`crust ${spec.id}`, grown.cells, grown.pitch, scene, { material });
+      crustMesh = createVoxelMesh(`crust ${spec.id}`, grown.cells, grown.pitch, scene, { material: wind ? windMaterial : material });
       crustMesh.position.set(origin + grown.pitch / 2, grown.pitch / 2, origin + grown.pitch / 2);
       crustMesh.receiveShadows = true;
       shadows.addShadowCaster(crustMesh);
@@ -185,6 +192,7 @@ function render(): void {
       name === "game" ? "The compound's own camera. If it does not read here, it does not read." : "")).join("");
   document.querySelector<HTMLElement>("#sf-relief")!.classList.toggle("on", relief);
   document.querySelector<HTMLElement>("#sf-crust")!.classList.toggle("on", crust);
+  document.querySelector<HTMLElement>("#sf-wind")!.classList.toggle("on", wind);
   const triangles = (patch ? patch.getTotalIndices() / 3 : 0) + (crustMesh ? crustMesh.getTotalIndices() / 3 : 0);
   document.querySelector<HTMLElement>("#sf-stats")!.textContent =
     `${cellTotal.toLocaleString()} cells · ${triangles.toLocaleString()} triangles · ${(triangles / (PATCH * PATCH)).toFixed(0)} per m² · built in ${buildMs.toFixed(0)} ms`;
@@ -197,6 +205,7 @@ document.querySelector<HTMLElement>(".sf-top")!.addEventListener("click", (event
   if (target.dataset.pitch) { pitch = Number(target.dataset.pitch); rebuild(); return; }
   if (target.dataset.light) { setLight(target.dataset.light); return; }
   if (target.dataset.view) { setView(target.dataset.view); return; }
+  if (target.id === "sf-wind") { wind = !wind; rebuild(); return; }
   if (target.id === "sf-crust") { crust = !crust; rebuild(); return; }
   if (target.id === "sf-relief") { relief = !relief; rebuild(); }
 });
@@ -223,5 +232,6 @@ window.addEventListener("resize", () => engine.resize());
   view: setView, light: setLight,
   relief: (on: boolean) => { relief = on; rebuild(); },
   crustOn: (on: boolean) => { crust = on; rebuild(); },
+  windOn: (on: boolean) => { wind = on; rebuild(); },
   stats: () => ({ material: materialId, pitch, relief, crust, cells: cellTotal, triangles: (patch ? patch.getTotalIndices() / 3 : 0) + (crustMesh ? crustMesh.getTotalIndices() / 3 : 0), buildMs }),
 };

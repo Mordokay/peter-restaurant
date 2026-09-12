@@ -2508,3 +2508,35 @@ Three measured lessons, all now tests:
 
 Crust cost now: gravel 148/m², grass 363/m², both bounded by the ring. The `voronoi` lattice stays in
 `surfaces.ts` — it is the right primitive for flagstones and cobbles, which are big enough to afford it.
+
+### Surfaces, phase 6: wind (2026-09-12)
+
+`src/game/voxelWind.ts` — the project's first shader, and deliberately its smallest. Blades are built as
+straight columns on purpose: a bend baked into geometry is frozen in one shape, is a staircase of detached
+cubes at voxel resolution, and costs five times as much; a bend applied in the vertex shader is a smooth
+curve that also *moves*, and lives on the GPU.
+
+- **`MaterialPluginBase`**, not a hand-written `ShaderMaterial`, so vertex colours, eight lights, shadow
+  receiving, fog and the glow layer keep working untouched. On its own material — never the shared one,
+  which props, particles, the lab and the level all use.
+- Injected at **`CUSTOM_VERTEX_UPDATE_WORLDPOS`**, after the world transform and before `gl_Position`.
+  `UPDATE_POSITION` would bend in local space and a wall rotated east-west would lean the wrong way.
+- The weight rides in **vertex colour alpha**, stored inverted so everything that never heard of wind keeps
+  alpha 1 and stands still. `hasVertexAlpha` must stay off or every surface joins the sorted transparent
+  pass.
+- **Wind is not one direction.** The heading is a low-frequency field in both time *and* space — it turns
+  slowly, and it is turning differently over there than here. Blades side by side lean together, blades
+  metres apart lean differently, which is what real grass does. Every term is a continuous function of
+  world position, so two corners of a quad can never disagree and tear a blade in half.
+
+Costs and the bargain struck: sway is part of the mesher's merge key (it must be, or a blade's root and
+tip merge into one quad and it moves rigidly), so a blade splits into one run per sway step. Three steps
+cost 924 triangles a square metre, two 770, one 566, against 363 for a blade that cannot move at all. Two
+steps, density 7 — **581 triangles a square metre**, bounded by the detail radius.
+
+Verified by A/B pixel diff, which needed a fix of its own: the surfaces page had no `preserveDrawingBuffer`,
+so the first wind test read an empty buffer and "proved" nothing was moving. With it on: **118,125 pixels
+change between two frames 0.7 s apart with wind, and exactly 0 with it off.**
+
+One artefact found and fixed by a test: two blades could land on the same cell column and interleave their
+wind weights, which the shader would have bent into a corkscrew. One blade to a column now.
