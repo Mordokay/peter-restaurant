@@ -13,7 +13,8 @@
       "baseColor": "#55534f",
       "pattern": "stone",
       "thickness": 0.3,
-      "height": 2.9
+      "height": 2.9,
+      "surface": "stone_coursed"
     },
     {
       "id": "plaster_cream",
@@ -53,7 +54,8 @@
       "baseColor": "#4a433a",
       "pattern": "stone",
       "thickness": 0.38,
-      "height": 2.4
+      "height": 2.4,
+      "surface": "stone_coursed"
     },
     {
       "id": "glass_house",
@@ -73,7 +75,8 @@
       "color": "#ded5c0",
       "accentColor": "#c3b89e",
       "pattern": "tile",
-      "patternScale": 0.5
+      "patternScale": 0.5,
+      "surface": "tile_quarry"
     },
     {
       "id": "tile_cool",
@@ -81,7 +84,8 @@
       "color": "#cfd6d3",
       "accentColor": "#b4beba",
       "pattern": "tile",
-      "patternScale": 0.5
+      "patternScale": 0.5,
+      "surface": "tile_quarry"
     },
     {
       "id": "plank_warm",
@@ -89,7 +93,8 @@
       "color": "#a8764a",
       "accentColor": "#8f6540",
       "pattern": "plank",
-      "patternScale": 0.28
+      "patternScale": 0.28,
+      "surface": "plank_dining"
     },
     {
       "id": "plank_dining",
@@ -97,7 +102,8 @@
       "color": "#b07c4e",
       "accentColor": "#976846",
       "pattern": "plank",
-      "patternScale": 0.3
+      "patternScale": 0.3,
+      "surface": "plank_dining"
     },
     {
       "id": "cellar_floor",
@@ -113,7 +119,8 @@
       "color": "#6b4a33",
       "accentColor": "#5d4029",
       "pattern": "soil",
-      "patternScale": 0.35
+      "patternScale": 0.35,
+      "surface": "soil_tilled"
     },
     {
       "id": "soil_dark",
@@ -121,7 +128,8 @@
       "color": "#4f3726",
       "accentColor": "#453020",
       "pattern": "soil",
-      "patternScale": 0.35
+      "patternScale": 0.35,
+      "surface": "soil_tilled"
     },
     {
       "id": "grass",
@@ -129,7 +137,8 @@
       "color": "#7ea563",
       "accentColor": "#71975a",
       "pattern": "grass",
-      "patternScale": 0.5
+      "patternScale": 0.5,
+      "surface": "grass_lawn"
     },
     {
       "id": "gravel",
@@ -137,7 +146,8 @@
       "color": "#a8a396",
       "accentColor": "#948f84",
       "pattern": "gravel",
-      "patternScale": 0.3
+      "patternScale": 0.3,
+      "surface": "gravel_path"
     },
     {
       "id": "stone_path",

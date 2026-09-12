@@ -8,6 +8,8 @@
 // than a texture. Every piece is its own mesh so the cutaway can hide one wall without touching the rest.
 import { Mesh, Scene, ShadowGenerator, StandardMaterial, TransformNode, Vector3 } from "@babylonjs/core";
 import { createVoxelMaterial, createVoxelMesh, type VoxelCell } from "./voxelGeometry.ts";
+import { reliefFloor, sampleSurface, type SurfaceMaterial } from "./surfaces.ts";
+import { surfaceById } from "./surfaceLibrary.ts";
 import {
   floorTypeOf, shade, wallDirection, wallNormal, wallTypeOf,
   type Area, type LevelLayout, type LevelProgress, type Opening, type Point2, type Rect, type Room, type Wall,
@@ -20,6 +22,9 @@ export const GROUND_Y = 0;
 /** Cell size of wall and floor voxels, metres. Pattern features are measured in cells, so a grout line
  *  is one cell wide however big the tiles are. */
 const WALL_PITCH = 0.1;
+/** The coarsest a material may be laid across a whole room or field. Finer than this only happens inside
+ *  the detail ring, where the camera can actually see the difference. */
+const CARPET_PITCH = 0.05;
 const FLOOR_PITCH = 0.1;
 
 export interface BuiltWall {
@@ -162,10 +167,77 @@ export function wallCells(length: number, height: number, thickness: number, col
   return { cells, thicknessCells: nw };
 }
 
+/** A floor built from a material rather than a pattern rule: one column of cells per sample, running from
+ *  the deepest the material cuts to however high that spot stands. The material is asked about WORLD
+ *  metres, so coursing runs unbroken from one room into the next and two rooms sharing a floor share its
+ *  grain — which the old local-rect sampling could never do. */
+export function surfaceFloorCells(
+  material: SurfaceMaterial, originX: number, originZ: number, width: number, depth: number,
+  options: { pitch?: number; relief?: boolean } = {},
+): { cells: VoxelCell[]; nx: number; nz: number; pitch: number; low: number; top: Map<string, number> } {
+  const pitch = options.pitch ?? material.pitch ?? 0.05;
+  const withRelief = options.relief ?? true;
+  const nx = Math.max(1, Math.round(width / pitch));
+  const nz = Math.max(1, Math.round(depth / pitch));
+  const low = withRelief ? Math.floor(reliefFloor(material) / pitch) : 0;
+  const cells: VoxelCell[] = [];
+  const top = new Map<string, number>();
+  for (let ix = 0; ix < nx; ix++) {
+    for (let iz = 0; iz < nz; iz++) {
+      const sample = sampleSurface(material, originX + (ix + 0.5) * pitch, originZ + (iz + 0.5) * pitch);
+      const high = withRelief ? Math.round(sample.relief / pitch) : 0;
+      top.set(`${ix},${iz}`, high);
+      for (let y = low; y <= high; y++) cells.push({ x: ix, y, z: iz, color: sample.color });
+    }
+  }
+  return { cells, nx, nz, pitch, low, top };
+}
+
+/** A wall built from a material. Relief cuts INTO both faces for a joint and stands proud of both for a
+ *  block, so a rubble wall has real mortar grooves on either side; the core is never breached. */
+export function surfaceWallCells(
+  material: SurfaceMaterial, length: number, height: number, thickness: number,
+  openings: readonly Opening[] = [], options: { pitch?: number; relief?: boolean } = {},
+): { cells: VoxelCell[]; thicknessCells: number; pitch: number; solid: (x: number, y: number, z: number) => boolean } {
+  const pitch = options.pitch ?? material.pitch ?? 0.05;
+  const withRelief = options.relief ?? true;
+  const nu = Math.max(1, Math.round(length / pitch));
+  const nv = Math.max(1, Math.round(height / pitch));
+  const nw = Math.max(1, Math.round(thickness / pitch));
+  // A wall is a SHELL. Nobody has ever seen the middle of one, and extruding it whole was costing 18,447
+  // cells a square metre — 8 million for the compound's walls, two thirds of the entire level. Only the
+  // cells within `SHELL` of either face are built; the core is reported solid so no inner faces appear.
+  const SHELL = 2;
+  const cells: VoxelCell[] = [];
+  const faces = new Map<string, number>();
+  for (let iu = 0; iu < nu; iu++) {
+    const along = (iu + 0.5) * pitch;
+    for (let iv = 0; iv < nv; iv++) {
+      const up = (iv + 0.5) * pitch;
+      if (inOpening(openings, along, up)) continue;
+      const sample = sampleSurface(material, along, up);
+      // Keep at least one cell of core, or a deep joint would cut a slot clean through the wall.
+      const step = withRelief ? Math.max(-Math.floor((nw - 1) / 2), Math.round(sample.relief / pitch)) : 0;
+      faces.set(`${iu},${iv}`, step);
+      const from = -step, to = nw + step - 1;
+      for (let iw = from; iw <= to; iw++) {
+        if (iw >= from + SHELL && iw <= to - SHELL) continue;   // the hidden core
+        cells.push({ x: iu, y: iv, z: iw, color: sample.color });
+      }
+    }
+  }
+  const solid = (x: number, y: number, z: number): boolean => {
+    const step = faces.get(`${x},${y}`);
+    if (step === undefined) return false;
+    return z >= -step && z <= nw + step - 1;
+  };
+  return { cells, thicknessCells: nw, pitch, solid };
+}
+
 export function createLevelBuilder(scene: Scene, layout: LevelLayout, options: { shadows?: ShadowGenerator; name?: string; material?: StandardMaterial } = {}): BuiltLevel {
   const name = options.name ?? "level";
   const root = new TransformNode(`${name} root`, scene);
-  const material = options.material ?? createVoxelMaterial(`${name} material`, scene);
+  const voxelMaterial = options.material ?? createVoxelMaterial(`${name} material`, scene);
   const floors = new Map<string, Mesh>();
   const walls = new Map<string, BuiltWall>();
   /** Cells per piece, so the total survives a rebuild that only touches some of them. */
@@ -180,13 +252,24 @@ export function createLevelBuilder(scene: Scene, layout: LevelLayout, options: {
 
   const buildFloor = (item: Room | Area, floorTypeId: string, topY: number, covers: readonly Rect[] = []): void => {
     const type = floorTypeOf(layout, floorTypeId);
-    // Big outdoor grounds do not need centimetre cells; keep their mesh cheap.
     const [x, z, width, depth] = item.rect;
-    const pitch = width * depth > 900 ? 0.5 : FLOOR_PITCH;
-    const { cells, nx, nz } = floorCells(width, depth, pitch, type.patternScale, type.color, type.accentColor, type.pattern);
-    // Where cell (0,0) starts in the world, so a cell can be tested against the slabs above it.
-    const originX = x + (width - nx * pitch) / 2;
-    const originZ = z + (depth - nz * pitch) / 2;
+    // A material, if this type names one; otherwise the old pattern rule. Big outdoor grounds stay coarse
+    // whatever they are made of — a 4,352 m² lawn at 2.5 cm cells is seven million of them.
+    const huge = width * depth > 900;
+    const material = huge ? undefined : surfaceById(type.surface ?? "");
+    // The CARPET is coarse and flat. A material's own pitch is what the near-camera ring will mesh it at;
+    // laying 1,600 m² of 2.5 cm cells with relief measured 11.7 million cells and a 19.5 second build,
+    // against 138 draw calls and 120 fps — the runtime was never the problem, the mesher was.
+    const pitch = material ? Math.max(material.pitch ?? 0.05, CARPET_PITCH) : huge ? 0.5 : FLOOR_PITCH;
+    // Cell (0,0) starts here in the world; the material is asked about world metres from this corner.
+    const originX = x + (width - Math.max(1, Math.round(width / pitch)) * pitch) / 2;
+    const originZ = z + (depth - Math.max(1, Math.round(depth / pitch)) * pitch) / 2;
+    const built = material
+      ? surfaceFloorCells(material, originX, originZ, width, depth, { pitch, relief: false })
+      : { ...floorCells(width, depth, pitch, type.patternScale, type.color, type.accentColor, type.pattern), low: 0, top: null };
+    const { cells, nx, nz } = built;
+    const low = built.low;
+    const relief = built.top;
     // The site grounds run under every room and yard on the compound, and those cells are never seen.
     // Only cells whose WHOLE footprint sits inside a higher slab go, so no gap can open along an edge.
     const buried = (ix: number, iz: number): boolean => {
@@ -199,11 +282,19 @@ export function createLevelBuilder(scene: Scene, layout: LevelLayout, options: {
     const kept = covers.length ? cells.filter((cell) => !buried(cell.x, cell.z)) : cells;
     if (!kept.length) return;
     const present = kept.length === cells.length ? null : new Set(kept.map((cell) => `${cell.x},${cell.z}`));
+    const inSlab = (cx: number, cz: number): boolean =>
+      present ? present.has(`${cx},${cz}`) : cx >= 0 && cx < nx && cz >= 0 && cz < nz;
     const mesh = createVoxelMesh(`${name} floor ${item.id}`, kept, pitch, scene, {
-      material,
+      material: voxelMaterial,
       // Everything below the slab counts as solid, so the underside — exactly half of a flat floor's
       // faces, 2,923 of 6,038 quads on one farm plot — is never built. Nobody has ever seen it.
-      solid: (cx, cy, cz) => cy < 0 || (cy === 0 && (present ? present.has(`${cx},${cz}`) : cx >= 0 && cx < nx && cz >= 0 && cz < nz)),
+      solid: (cx, cy, cz) => {
+        if (cy < low) return true;
+        if (!inSlab(cx, cz)) return false;
+        if (!relief) return cy === 0;
+        const high = relief.get(`${cx},${cz}`);
+        return high !== undefined && cy <= high;
+      },
     });
     // Cell (0,0,0) sits at the mesh origin, so line its corner up with the rect and drop the top to topY.
     mesh.position.set(x + pitch / 2 + (width - nx * pitch) / 2, topY - pitch / 2, z + pitch / 2 + (depth - nz * pitch) / 2);
@@ -220,19 +311,23 @@ export function createLevelBuilder(scene: Scene, layout: LevelLayout, options: {
     const room = wall.room ? layout.rooms.find((candidate) => candidate.id === wall.room) : undefined;
     const height = wall.height ?? room?.wallHeight ?? type.height;
     const length = Math.hypot(wall.to[0] - wall.from[0], wall.to[1] - wall.from[1]);
-    const { cells, thicknessCells } = wallCells(length, height, type.thickness, type, type.pattern, wall.openings ?? []);
+    const material = surfaceById(type.surface ?? "");
+    const built = material
+      ? surfaceWallCells(material, length, height, type.thickness, wall.openings ?? [], { pitch: Math.max(material.pitch ?? 0.05, CARPET_PITCH), relief: true })
+      : { ...wallCells(length, height, type.thickness, type, type.pattern, wall.openings ?? []), pitch: WALL_PITCH, solid: undefined };
+    const { cells, thicknessCells, pitch } = built;
     if (!cells.length) return;
-    const mesh = createVoxelMesh(`${name} wall ${wall.id}`, cells, WALL_PITCH, scene, { material });
+    const mesh = createVoxelMesh(`${name} wall ${wall.id}`, cells, pitch, scene, { material: voxelMaterial, solid: built.solid });
     const [dx, dz] = wallDirection(wall);
     const normal = wallNormal(wall, layout);
     // Rotate so local +x runs along the wall, then centre the thickness on the wall line.
     mesh.rotation.y = Math.atan2(-dz, dx);
-    const across = (thicknessCells - 1) * WALL_PITCH / 2;
+    const across = (thicknessCells - 1) * pitch / 2;
     const leftNormal: Point2 = [-dz, dx];
     mesh.position.set(
-      wall.from[0] + dx * (WALL_PITCH / 2) - leftNormal[0] * across,
-      ROOM_FLOOR_Y + WALL_PITCH / 2,
-      wall.from[1] + dz * (WALL_PITCH / 2) - leftNormal[1] * across,
+      wall.from[0] + dx * (pitch / 2) - leftNormal[0] * across,
+      ROOM_FLOOR_Y + pitch / 2,
+      wall.from[1] + dz * (pitch / 2) - leftNormal[1] * across,
     );
     mesh.parent = root;
     mesh.receiveShadows = true;
@@ -265,12 +360,12 @@ export function createLevelBuilder(scene: Scene, layout: LevelLayout, options: {
     a[0] < b[0] + b[2] && b[0] < a[0] + a[2] && a[1] < b[1] + b[3] && b[1] < a[1] + a[3];
   const floorSignature = (item: Room | Area, floorTypeId: string, topY: number, covers: readonly Rect[]): string => {
     const type = floorTypeOf(layout, floorTypeId);
-    return JSON.stringify([item.rect, type.color, type.accentColor, type.pattern, type.patternScale, topY, covers]);
+    return JSON.stringify([item.rect, type.color, type.accentColor, type.pattern, type.patternScale, type.surface, topY, covers]);
   };
   const wallSignature = (wall: Wall): string => {
     const type = wallTypeOf(layout, wall.type);
     const room = wall.room ? layout.rooms.find((candidate) => candidate.id === wall.room) : undefined;
-    return JSON.stringify([wall.from, wall.to, type.color, type.topColor, type.baseColor, type.pattern, type.thickness,
+    return JSON.stringify([wall.from, wall.to, type.color, type.topColor, type.baseColor, type.pattern, type.surface, type.thickness,
       wall.height ?? room?.wallHeight ?? type.height, wall.openings ?? []]);
   };
 

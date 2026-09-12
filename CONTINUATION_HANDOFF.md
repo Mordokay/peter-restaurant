@@ -2568,3 +2568,35 @@ means an edit never pays it, only a cold build, but it is the number that decide
 the carpet everywhere or moves into the near-camera crust. To be settled when the ring is wired up.
 
 A test now fails any relief value below half a cell, so a groove can never again silently not happen.
+
+### Surfaces, phase 8: the materials go into the compound (2026-09-12)
+
+A floor or wall type now opts in by naming a material (`FloorType.surface` / `WallType.surface`); anything
+without one keeps the old pattern switch, so the two live side by side while the library fills in. Eight of
+ten floor types and two of six wall types are across. `levelBuilder` grew two adapters — `surfaceFloorCells`
+maps a material to XZ, `surfaceWallCells` to along/up with extrusion — and both ask the material about
+**world** metres, so coursing runs unbroken from one room into the next, which the old local-rect sampling
+could never do.
+
+Wiring it at full size produced the measurement the plan was waiting for, and it was brutal:
+
+| | cells | triangles | cold build | draw calls | fps |
+|---|---|---|---|---|---|
+| before any of this work | — | 303,936 | 482 ms | 221 | 60 |
+| after phase 0 | 405k | 173,626 | 378 ms | 138 | 60 |
+| **new materials, relief everywhere** | **11.7M** | 286,936 | **19,561 ms** | 138 | 120 |
+| new materials, as shipped | 1.40M | 205,148 | **1,340 ms** | 138 | **121** |
+
+**The runtime was never the problem — the mesher was.** 120 fps and 138 draw calls throughout; it was
+11.7 million cells taking 19.5 seconds to mesh. Two things fixed it:
+
+- **A wall is a shell.** Extruding one whole was costing **18,447 cells a square metre** — 8.07M for the
+  compound's walls, two thirds of the entire level, none of it ever seen. Only cells within two of either
+  face are built now and the core is reported solid, so no inner faces appear: 8.07M → 2.58M.
+- **The carpet is coarse and flat** (`CARPET_PITCH`, 5 cm). A material's own pitch is what the near-camera
+  ring will mesh it at; laying 1,600 m² of 2.5 cm cells with relief is what produced the 19.5 seconds.
+  Walls keep their relief — they are small in area and vertical, where it reads most.
+
+So the ring is no longer optional: it is where the relief and crust the last two phases built actually get
+to live. Floors in the compound are currently the flat-but-structured versions, which is still a large
+improvement on per-cell noise, and 205k triangles against 304k at the start.

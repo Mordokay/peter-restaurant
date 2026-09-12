@@ -25,6 +25,10 @@ export interface WallType {
   baseColor?: string;
   /** Surface treatment; the builder turns it into voxels. */
   pattern?: WallPattern;
+  /** Id of a material in `surfaceLibrary`. When set it replaces `pattern` entirely: the builder asks the
+   *  material what every cell looks like instead of running a hard-coded rule. Types without one keep the
+   *  old path, so the two can live side by side while the library is filled in. */
+  surface?: string;
   /** Metres. Default 0.2. */
   thickness?: number;
   /** Metres. Default 2.6. */
@@ -41,6 +45,8 @@ export interface FloorType {
   /** Seams, planks, checker squares, tufts. */
   accentColor?: string;
   pattern?: FloorPattern;
+  /** Id of a material in `surfaceLibrary`; see WallType.surface. */
+  surface?: string;
   /** Size of one pattern repeat, metres. Default 1. */
   patternScale?: number;
   /** Slab thickness, metres. Default 0.2. */
