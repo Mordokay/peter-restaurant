@@ -2703,3 +2703,32 @@ Crust 231,088 triangles in 21 meshes; draw calls 152 against 138 without it. Lev
 
 Draw calls are over the 120 the budget in `visual.ts` asks for, at 1.1 ms a frame. Bigger tiles would trade
 culling for draws if that becomes the binding constraint.
+
+### Instanced grass: the platform was never the limit (2026-09-12)
+
+`src/game/grassInstances.ts`. Every blade on the site as a GPU instance of a prototype column — one
+prototype per blade height, meshed once, one 4×4 matrix and one colour per blade. Full density (5 tufts a
+square metre at 2 cm) everywhere, restored from the thinned static layer, and the merged crust layer now
+carries stones and chips only.
+
+**Measured in the compound: 47,762 blades, 1,306,896 triangles, 12 draw calls, 86–94 fps, 0.6 ms of CPU a
+frame, zero frames over 50 ms while walking (worst 14.9 ms, median 11.8). Heap 115 MB.**
+
+This settles the standalone-versus-browser question as it was posed. The grass had been thinned to a fifth
+of its density and framed as a browser sacrifice; it was not. As unique merged geometry, ninety thousand
+blades are two million triangles and can only exist in a ring. As instances they are twelve draw calls and
+the GPU does not care. The right fix had not been built.
+
+Two shader facts it depends on, both verified in Babylon's source: `vertexColorMixing.fx` MULTIPLIES
+instance colour into vertex colour, so white prototypes take their tone per instance; and `colorUpdated`
+is set before `CUSTOM_VERTEX_UPDATE_WORLDPOS`, so the wind plugin still reads each prototype's baked sway
+and bends every instance in place. Prototypes are `alwaysSelectAsActiveMesh`, or the frustum would cull
+all forty-seven thousand blades by the prototype's own two-centimetre bounding box.
+
+What it costs, honestly: the GPU is now the frame's floor — 1.7M triangles a frame is why it is ~90 fps
+rather than 120, and an integrated GPU will feel it. The next optimisation is pure engineering and cuts
+nothing: bucket the instances by region as well as height, so the frustum drops the two thirds of the lawn
+that is behind the camera. Expected: back to 120 fps, ~30 draw calls.
+
+Standing rule, saved to memory: **no reductions in voxel detail for performance, ever again.** Engineering
+first — instancing, LOD, baking, workers, WebGPU — and the game runs on any machine.

@@ -5,11 +5,12 @@ import { createSurfaceCrustLayer, type RingSurface } from "./surfaceRing.ts";
 import { createVoxelMaterial } from "./voxelGeometry.ts";
 import { surfaceById } from "./surfaceLibrary.ts";
 
-/** A lawn with a farm plot and a yard laid on top of part of it, which is how the compound stacks. */
+/** A gravel court with a farm plot and a lawn laid over parts of it. The merged layer carries stones and
+ *  chips; blades are GPU instances and have their own tests, so the ground here is gravel. */
 const site = (): RingSurface[] => [
-  { id: "grounds", rect: [-30, -30, 60, 60], material: surfaceById("grass_lawn")!, topY: 0 },
+  { id: "court", rect: [-30, -30, 60, 60], material: surfaceById("gravel_path")!, topY: 0 },
   { id: "plot", rect: [0, 0, 12, 12], material: surfaceById("soil_tilled")!, topY: 0.02 },
-  { id: "yard", rect: [-20, 0, 8, 8], material: surfaceById("gravel_path")!, topY: 0.02 },
+  { id: "lawn", rect: [-20, 0, 8, 8], material: surfaceById("grass_lawn")!, topY: 0.02 },
 ];
 
 const withLayer = async (body: (layer: ReturnType<typeof createSurfaceCrustLayer>, scene: Scene) => Promise<void> | void,
@@ -20,11 +21,11 @@ const withLayer = async (body: (layer: ReturnType<typeof createSurfaceCrustLayer
   try { await body(layer, scene); } finally { layer.dispose(); scene.dispose(); engine.dispose(); }
 };
 
-test("the crust covers the whole site, not a ring around the camera", async () => {
+test("stones cover the whole site, not a ring around the camera", async () => {
   await withLayer(async (layer, scene) => {
     await layer.build();
     const stats = layer.stats();
-    assert.ok(stats.cells > 0, "something grew");
+    assert.ok(stats.cells > 0, "some stones were laid");
     assert.ok(stats.tiles >= 4, `the site should span several tiles, saw ${stats.tiles}`);
     // Grass exists in far-apart corners at once — the thing a camera-following ring could never do.
     const crust = scene.meshes.filter((mesh) => /^crust/.test(mesh.name));
@@ -48,11 +49,11 @@ test("nothing grows up through a floor laid on top of it", async () => {
   await withLayer(async (layer) => { await layer.build(); covered = layer.stats().cells; });
   let bare = 0;
   await withLayer(async (layer) => { await layer.build(); bare = layer.stats().cells; },
-    () => [{ id: "grounds", rect: [-30, -30, 60, 60], material: surfaceById("grass_lawn")!, topY: 0 }]);
-  assert.ok(covered < bare, `the plot and yard should suppress grass beneath them: ${covered} against ${bare}`);
+    () => [{ id: "court", rect: [-30, -30, 60, 60], material: surfaceById("gravel_path")!, topY: 0 }]);
+  assert.ok(covered < bare, `the plot and lawn should suppress stones beneath them: ${covered} against ${bare}`);
 });
 
-test("building twice grows exactly the same crust", async () => {
+test("building twice lays exactly the same stones", async () => {
   await withLayer(async (layer) => {
     await layer.build();
     const first = layer.stats().cells;

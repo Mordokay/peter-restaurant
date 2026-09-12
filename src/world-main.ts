@@ -25,6 +25,7 @@ import { createDayNight } from "./game/dayNight";
 import { createBuildMode } from "./buildMode";
 import { runStages, type LoadingStage } from "./game/loading";
 import { createSurfaceCrustLayer } from "./game/surfaceRing";
+import { createGrassInstances } from "./game/grassInstances";
 import { createWindMaterial } from "./game/voxelWind";
 import { sourceCacheKey, warmSourceCache } from "./game/sourceCache";
 
@@ -130,12 +131,19 @@ function applyProgress(): void {
   level.setProgress(progress);
   colliders.set("level", collidersOfMeshes(level.meshes()));
   crust?.clear();
+  grass?.clear();
 }
 
 // Grass, pebbles and clods, grown only where the camera is. On the wind material — a pebble carries no
 // sway weight, so it stands perfectly still while the blades beside it bend.
 const crustMaterial = createWindMaterial("level crust", scene);
 const crust = createSurfaceCrustLayer(scene, {
+  surfaces: () => level.surfaces(),
+  material: crustMaterial,
+  parent: level.root,
+});
+// Every blade on the site as a GPU instance — full density everywhere, a handful of draw calls.
+const grass = createGrassInstances(scene, {
   surfaces: () => level.surfaces(),
   material: crustMaterial,
   parent: level.root,
@@ -170,9 +178,14 @@ async function buildEverything(): Promise<void> {
       run() { colliders.set("level", collidersOfMeshes(level.meshes())); },
     },
     {
-      name: "Growing grass and gravel",
-      weight: 3,
+      name: "Scattering stones and chips",
+      weight: 2,
       async run({ slice }) { await crust.build(slice); },
+    },
+    {
+      name: "Growing the grass",
+      weight: 3,
+      async run({ slice }) { await grass.build(slice); },
     },
   ];
   const ms = await runStages(stages, ({ fraction, stage, index, total }) => {
@@ -200,6 +213,7 @@ async function relayLevel(title: string): Promise<void> {
       });
       colliders.set("level", collidersOfMeshes(level.meshes()));
       await crust.build(slice);
+      await grass.build(slice);
     },
   }], ({ fraction }) => { loadFill.style.width = `${(fraction * 100).toFixed(1)}%`; });
   loadingEl.classList.add("gone");
@@ -334,13 +348,15 @@ let frames = 0, fpsWindow = performance.now(), fps = 0;
 function updateHud(): void {
   const stats = level.stats();
   const crustStats = crust.stats();
+  const grassStats = grass.stats();
   const decorStats = decor.renderer.stats();
   const roomId = cutaway.room();
   const room = roomId ? levelLayout.rooms.find((candidate) => candidate.id === roomId) : null;
   roomEl.textContent = room ? room.name : "outside";
   statsEl.innerHTML = `<b>${fps.toFixed(0)} fps</b> · ${instrumentation.frameTimeCounter.lastSecAverage.toFixed(1)} ms/frame · draw calls ${fmt(instrumentation.drawCallsCounter.current)}`
     + ` · level: ${stats.floors} floors, ${stats.walls} walls, ${fmt(stats.triangles)} triangles, built in ${fmt(stats.buildMs)} ms`
-    + (crustStats.meshes ? ` · crust ${fmt(crustStats.triangles)} tris in ${crustStats.meshes}` : "")
+    + (crustStats.meshes ? ` · stones ${fmt(crustStats.triangles)} tris in ${crustStats.meshes}` : "")
+    + (grassStats.blades ? ` · grass ${fmt(grassStats.blades)} blades, ${fmt(grassStats.triangles)} tris in ${grassStats.prototypes} draws` : "")
     + ` · walls down ${cutaway.down().length}`
     + (decorStats.instances ? ` · props ${fmt(decorStats.instances)}` : "");
   clockEl.textContent = `${dayNight.hour >= 6.5 && dayNight.hour < 20 ? "☀" : "🌙"} ${dayNight.label()}`;

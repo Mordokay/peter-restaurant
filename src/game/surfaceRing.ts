@@ -88,7 +88,8 @@ export function createSurfaceCrustLayer(scene: Scene, options: {
             if (aw <= 0 || ad <= 0) continue;
             // Addressed from the world origin, so two tiles of the same material line up cell for cell,
             // and a tuft straddling their border is grown once by whichever tile reaches it first.
-            const grown = crustCells(surface.material, ax, az, aw, ad, { x: 0, z: 0 }, columns, covering(surface));
+            // Stones and chips only: blades are GPU instances (grassInstances.ts), not merged geometry.
+            const grown = crustCells(surface.material, ax, az, aw, ad, { x: 0, z: 0 }, columns, covering(surface), ["pebble", "chip"]);
             if (!grown.cells.length) continue;
             const lift = Math.round(surface.topY / grown.pitch);
             for (const cell of grown.cells) cell.y += lift;

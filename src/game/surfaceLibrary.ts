@@ -102,17 +102,16 @@ export const grassLawn: SurfaceMaterial = {
   // walked on, not a carpet. A blade that leans a long way is a staircase of isolated cells and costs
   // three times one that leans a little — 1,521 triangles a square metre against 427 — so they lean less
   // than they might, and the wind will do the rest of the work later.
-  // Thinner than a ring could afford, because this covers the whole site rather than nine metres of it.
-  // Measured: 5 tufts a square metre at 2 cm cells cost 408 triangles a square metre and two million over
-  // the lawn; these cost 73 and about 190,000, which is the difference between grass near the player and
-  // grass everywhere. Four families so no two clumps share a silhouette.
+  // Full density, everywhere. Blades are GPU instances of a few prototype columns (grassInstances.ts), so
+  // ninety thousand of them are a handful of draw calls and the density is no longer a budget question.
+  // Six silhouettes over four families so no two clumps share one.
   crust: {
-    density: 2, salt: 9, pitch: 0.04, drift: { scale: 2.2, swing: 1.8 },
+    density: 5, salt: 9, pitch: 0.02, drift: { scale: 1.8, swing: 1.7 },
     forms: [
-      { kind: "tuft", blades: [2, 3], height: [0.05, 0.1], lean: 0.06, tones: ["#87ae66", "#7aa25c", "#93b972"] },
-      { kind: "tuft", blades: [2, 4], height: [0.08, 0.15], lean: 0.07, tones: ["#7ea563", "#719757", "#8cb36c"] },
-      { kind: "tuft", blades: [2, 3], height: [0.12, 0.22], lean: 0.06, tones: ["#9db978", "#88a866", "#6f9455"] },
-      { kind: "tuft", blades: [3, 5], height: [0.04, 0.08], lean: 0.09, tones: ["#6d9053", "#7fa361"] },
+      { kind: "tuft", blades: [3, 6], height: [0.05, 0.1], lean: 0.05, tones: ["#87ae66", "#7aa25c", "#93b972"] },
+      { kind: "tuft", blades: [4, 8], height: [0.08, 0.16], lean: 0.07, tones: ["#7ea563", "#719757", "#8cb36c"] },
+      { kind: "tuft", blades: [3, 5], height: [0.13, 0.26], lean: 0.06, tones: ["#9db978", "#88a866", "#6f9455"] },
+      { kind: "tuft", blades: [5, 9], height: [0.04, 0.08], lean: 0.09, tones: ["#6d9053", "#7fa361"] },
     ],
   },
 };

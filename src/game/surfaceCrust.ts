@@ -76,6 +76,57 @@ export function crustSites(crust: Crust, x0: number, z0: number, width: number, 
   return sites;
 }
 
+/** One blade of a tuft: where it stands (in cells), how tall (in cells), and its tone. */
+export interface Blade { cx: number; cz: number; height: number; tone: string }
+
+/** Where a tuft's blades stand. Blades stand around a common root, each with its own height and tone,
+ *  and each is a STRAIGHT column. Leaning them looked obvious and was wrong twice over: stepping a blade
+ *  sideways cell by cell detaches it into a staircase of floating cubes, and it breaks the mesher's
+ *  merging — 1,521 triangles a square metre against 350 for the same grass standing up. A clump of
+ *  straight blades at different heights reads as grass; the wind is what bends them. */
+function tuftBlades(
+  form: Extract<CrustForm, { kind: "tuft" }>, cx: number, cz: number, seed: number, pitch: number,
+  rnd: (n: number) => number, columns: Set<string>,
+): Blade[] {
+  const blades = Math.round(lerp(form.blades, seed));
+  const spread = Math.max(1, Math.round(form.lean / pitch));   // how wide the clump sits, in cells
+  const out: Blade[] = [];
+  for (let b = 0; b < blades; b++) {
+    const height = Math.max(2, Math.round(lerp(form.height, rnd(b * 4)) / pitch));
+    const angle = rnd(b * 4 + 1) * Math.PI * 2;
+    const reach = spread * Math.sqrt(rnd(b * 4 + 2));           // even over the clump, not bunched
+    const tone = pick(form.tones, rnd(b * 4 + 3));
+    const bx = cx + Math.round(Math.cos(angle) * reach);
+    const bz = cz + Math.round(Math.sin(angle) * reach);
+    // One blade to a column. Two sharing one would interleave their wind weights up the same stack of
+    // cells, and the shader would bend the result into a corkscrew.
+    const column = `${bx},${bz}`;
+    if (columns.has(column)) continue;
+    columns.add(column);
+    out.push({ cx: bx, cz: bz, height, tone });
+  }
+  return out;
+}
+
+/** Every blade over a patch of ground, as placements rather than cells — what the instancer wants. */
+export function crustBlades(
+  material: SurfaceMaterial, originX: number, originZ: number, width: number, depth: number,
+  columns: Set<string> = new Set(), exclude?: (x: number, z: number) => boolean,
+): { blades: Blade[]; pitch: number } {
+  if (!material.crust) return { blades: [], pitch: material.pitch ?? 0.05 };
+  const pitch = material.crust.pitch ?? material.pitch ?? 0.05;
+  const blades: Blade[] = [];
+  for (const site of crustSites(material.crust, originX, originZ, width, depth)) {
+    if (site.form.kind !== "tuft") continue;
+    if (exclude?.(site.x, site.z)) continue;
+    // Addressed from the world origin, like the instancer's matrices.
+    const cx = Math.round(site.x / pitch), cz = Math.round(site.z / pitch);
+    const rnd = (n: number) => hash2(cx, cz, 900 + n);
+    blades.push(...tuftBlades(site.form, cx, cz, site.seed, pitch, rnd, columns));
+  }
+  return { blades, pitch };
+}
+
 /** Grow one site into cells, addressed in cells from the patch origin. */
 function growSite(
   form: CrustForm, x: number, z: number, seed: number, pitch: number, out: VoxelCell[], originX: number, originZ: number,
@@ -86,32 +137,14 @@ function growSite(
   const rnd = (n: number) => hash2(cx, cz, 900 + n);
   switch (form.kind) {
     case "tuft": {
-      // Blades stand around a common root, each with its own height and tone, and each is a STRAIGHT
-      // column. Leaning them looked obvious and was wrong twice over: stepping a blade sideways cell by
-      // cell detaches it into a staircase of floating cubes, and it breaks the mesher's merging — 1,521
-      // triangles a square metre against 350 for the same grass standing up. A clump of straight blades
-      // at different heights reads as grass; the wind will be what bends them.
-      const blades = Math.round(lerp(form.blades, seed));
-      const spread = Math.max(1, Math.round(form.lean / pitch));   // how wide the clump sits, in cells
-      for (let b = 0; b < blades; b++) {
-        const height = Math.max(2, Math.round(lerp(form.height, rnd(b * 4)) / pitch));
-        const angle = rnd(b * 4 + 1) * Math.PI * 2;
-        const reach = spread * Math.sqrt(rnd(b * 4 + 2));           // even over the clump, not bunched
-        const tone = pick(form.tones, rnd(b * 4 + 3));
-        const bx = cx + Math.round(Math.cos(angle) * reach);
-        const bz = cz + Math.round(Math.sin(angle) * reach);
-        // One blade to a column. Two blades sharing one would interleave their wind weights up the same
-        // stack of cells, and the shader would bend the result into a corkscrew.
-        const column = `${bx},${bz}`;
-        if (columns.has(column)) continue;
-        columns.add(column);
-        // Anchored at the root, free at the tip, in four steps rather than continuously. Sway is part
-        // of the mesher's merge key, so a distinct value per cell makes every cell of a blade its own
-        // quad: measured 1,360 triangles a square metre against 363. Four steps merge back into runs and
-        // still bend as a curve, because the shader squares the weight before it uses it.
-        for (let y = 0; y < height; y++) {
-          const along = height < 2 ? 0 : y / (height - 1);
-          out.push({ x: bx, y, z: bz, color: tone, sway: Math.round(along * SWAY_STEPS) / SWAY_STEPS });
+      for (const blade of tuftBlades(form, cx, cz, seed, pitch, rnd, columns)) {
+        // Anchored at the root, free at the tip, in steps rather than continuously. Sway is part of the
+        // mesher's merge key, so a distinct value per cell makes every cell of a blade its own quad:
+        // measured 1,360 triangles a square metre against 363. Steps merge back into runs and still bend
+        // as a curve, because the shader squares the weight before it uses it.
+        for (let y = 0; y < blade.height; y++) {
+          const along = blade.height < 2 ? 0 : y / (blade.height - 1);
+          out.push({ x: blade.cx, y, z: blade.cz, color: blade.tone, sway: Math.round(along * SWAY_STEPS) / SWAY_STEPS });
         }
       }
       return;
@@ -154,11 +187,14 @@ export function crustCells(
   columns: Set<string> = new Set(),
   /** Say no to a site — somewhere a higher floor covers this ground, so nothing grows there. */
   exclude?: (x: number, z: number) => boolean,
+  /** Only these kinds of form. Blades are instanced elsewhere; stones and chips are meshed here. */
+  kinds?: readonly CrustForm["kind"][],
 ): { cells: VoxelCell[]; pitch: number } {
   if (!material.crust) return { cells: [], pitch: material.pitch ?? 0.05 };
   const pitch = material.crust.pitch ?? material.pitch ?? 0.05;
   const cells: VoxelCell[] = [];
   for (const site of crustSites(material.crust, originX, originZ, width, depth)) {
+    if (kinds && !kinds.includes(site.form.kind)) continue;
     if (exclude?.(site.x, site.z)) continue;
     growSite(site.form, site.x, site.z, site.seed, pitch, cells, address.x, address.z, columns);
   }
