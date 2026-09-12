@@ -13,6 +13,7 @@ import {
 } from "@babylonjs/core";
 import { createVoxelMaterial, createVoxelMesh, type VoxelCell } from "./game/voxelGeometry";
 import { reliefFloor, sampleSurface } from "./game/surfaces";
+import { crustCells } from "./game/surfaceCrust";
 import { surfaceLibrary } from "./game/surfaceLibrary";
 import { createDayNight, type DayNight } from "./game/dayNight";
 
@@ -28,6 +29,7 @@ document.querySelector<HTMLElement>("#surfaces")!.innerHTML = `
     <span class="sf-group"><span class="sf-label">Cell</span><span id="sf-pitch"></span></span>
     <span class="sf-group"><span class="sf-label">Light</span><span id="sf-light"></span></span>
     <span class="sf-group"><span class="sf-label">View</span><span id="sf-view"></span></span>
+    <button id="sf-crust" title="The pebbles, tufts and chips that stand out of the surface. Gravel and grass are nothing without them; in the world they are built only near the camera.">Crust</button>
     <button id="sf-relief" title="Show the material's relief as real geometry. Realistic depths are sub-cell at these pitches, so this is how you tell whether a joint can ever read as a recess.">Relief</button>
   </div>
   <div class="sf-bar sf-stats" id="sf-stats">building…</div>
@@ -70,8 +72,10 @@ shadows.addShadowCaster(post);
 
 let dayNight: DayNight | null = null;
 let patch: Mesh | null = null;
+let crustMesh: Mesh | null = null;
+let crust = true;
 let materialId = params.get("material") ?? surfaceLibrary[0]!.id;
-let pitch = Number(params.get("pitch")) || 0.05;
+let pitch = Number(params.get("pitch")) || 0;
 let relief = false;
 let lightPreset = "day";
 let buildMs = 0;
@@ -82,7 +86,12 @@ function rebuild(): void {
   const started = performance.now();
   patch?.dispose(false, false);
   const spec = surfaceLibrary.find((candidate) => candidate.id === materialId)!;
+  // A material knows the cell size it wants: a 30 cm tile needs 2.5 cm before its grout stops aliasing,
+  // an oak board is happier at 5 cm. The buttons override it; switching material picks it up again.
+  if (!pitch) pitch = spec.pitch ?? 0.05;
   const n = Math.round(PATCH / pitch);
+  crustMesh?.dispose(false, false);
+  crustMesh = null;
   // Cells are addressed from the patch's corner, but the material is asked about WORLD metres, so the
   // pattern is the one the compound would show at this spot — not a fresh tile starting at the corner.
   const origin = -PATCH / 2;
@@ -109,6 +118,19 @@ function rebuild(): void {
   patch.position.set(origin + pitch / 2, -pitch / 2, origin + pitch / 2);
   patch.receiveShadows = true;
   cellTotal = cells.length;
+
+  // The crust: pebbles, tufts and chips standing on the carpet. In the world this is built only inside a
+  // radius of the camera; here it covers the patch so it can be judged at every distance.
+  if (crust && spec.crust) {
+    const grown = crustCells(spec, origin, origin, PATCH, PATCH);
+    if (grown.cells.length) {
+      crustMesh = createVoxelMesh(`crust ${spec.id}`, grown.cells, grown.pitch, scene, { material });
+      crustMesh.position.set(origin + grown.pitch / 2, grown.pitch / 2, origin + grown.pitch / 2);
+      crustMesh.receiveShadows = true;
+      shadows.addShadowCaster(crustMesh);
+      cellTotal += grown.cells.length;
+    }
+  }
   buildMs = performance.now() - started;
   render();
 }
@@ -162,7 +184,8 @@ function render(): void {
     .map(([name, view]) => button("view", name, name === "game" ? "Game 26 m" : `${view.radius} m`, name === viewpoint,
       name === "game" ? "The compound's own camera. If it does not read here, it does not read." : "")).join("");
   document.querySelector<HTMLElement>("#sf-relief")!.classList.toggle("on", relief);
-  const triangles = patch ? patch.getTotalIndices() / 3 : 0;
+  document.querySelector<HTMLElement>("#sf-crust")!.classList.toggle("on", crust);
+  const triangles = (patch ? patch.getTotalIndices() / 3 : 0) + (crustMesh ? crustMesh.getTotalIndices() / 3 : 0);
   document.querySelector<HTMLElement>("#sf-stats")!.textContent =
     `${cellTotal.toLocaleString()} cells · ${triangles.toLocaleString()} triangles · ${(triangles / (PATCH * PATCH)).toFixed(0)} per m² · built in ${buildMs.toFixed(0)} ms`;
 }
@@ -170,10 +193,11 @@ function render(): void {
 document.querySelector<HTMLElement>(".sf-top")!.addEventListener("click", (event) => {
   const target = (event.target as HTMLElement).closest<HTMLButtonElement>("button");
   if (!target) return;
-  if (target.dataset.material) { materialId = target.dataset.material; rebuild(); return; }
+  if (target.dataset.material) { materialId = target.dataset.material; pitch = 0; rebuild(); return; }
   if (target.dataset.pitch) { pitch = Number(target.dataset.pitch); rebuild(); return; }
   if (target.dataset.light) { setLight(target.dataset.light); return; }
   if (target.dataset.view) { setView(target.dataset.view); return; }
+  if (target.id === "sf-crust") { crust = !crust; rebuild(); return; }
   if (target.id === "sf-relief") { relief = !relief; rebuild(); }
 });
 
@@ -187,7 +211,7 @@ engine.runRenderLoop(() => {
   scene.render();
   if (++frames % 30 === 0) {
     const stats = document.querySelector<HTMLElement>("#sf-stats")!;
-    const triangles = patch ? patch.getTotalIndices() / 3 : 0;
+    const triangles = (patch ? patch.getTotalIndices() / 3 : 0) + (crustMesh ? crustMesh.getTotalIndices() / 3 : 0);
     stats.textContent = `${engine.getFps().toFixed(0)} fps · ${instrumentation.frameTimeCounter.lastSecAverage.toFixed(1)} ms · `
       + `${cellTotal.toLocaleString()} cells · ${triangles.toLocaleString()} triangles · ${(triangles / (PATCH * PATCH)).toFixed(0)} per m² · built in ${buildMs.toFixed(0)} ms`;
   }
@@ -195,8 +219,9 @@ engine.runRenderLoop(() => {
 window.addEventListener("resize", () => engine.resize());
 (window as unknown as { __surfaces: unknown }).__surfaces = {
   scene, camera,
-  set: (id: string, cell?: number) => { materialId = id; if (cell) pitch = cell; rebuild(); },
+  set: (id: string, cell?: number) => { materialId = id; pitch = cell ?? 0; rebuild(); },
   view: setView, light: setLight,
   relief: (on: boolean) => { relief = on; rebuild(); },
-  stats: () => ({ material: materialId, pitch, relief, cells: cellTotal, triangles: patch ? patch.getTotalIndices() / 3 : 0, buildMs }),
+  crustOn: (on: boolean) => { crust = on; rebuild(); },
+  stats: () => ({ material: materialId, pitch, relief, crust, cells: cellTotal, triangles: (patch ? patch.getTotalIndices() / 3 : 0) + (crustMesh ? crustMesh.getTotalIndices() / 3 : 0), buildMs }),
 };

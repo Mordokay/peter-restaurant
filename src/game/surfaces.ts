@@ -28,7 +28,15 @@ export type Lattice =
    *  that fraction of a feature's length — 0.5 is a running bond, 0 stacks the joints. */
   | { kind: "rows"; width: number; length: number; stagger?: number; along?: Axis }
   /** Parallel ridges with no joint: a tilled field, a corrugated sheet. */
-  | { kind: "corduroy"; pitch: number; along?: Axis };
+  | { kind: "corduroy"; pitch: number; along?: Axis }
+  /** Irregular cells packed edge to edge, each grown from a jittered seed — flagstones, cobble setts,
+   *  crazy paving, and gravel, which is the same thing at 5 cm instead of 40.
+   *
+   *  Gravel taught this one. Scattering pebbles ON a bed gives you boulders sitting on grey paint,
+   *  because a stone big enough to mesh is far bigger than a stone; but gravel is not stones on a
+   *  surface, it IS the surface — packed, touching, every one its own shape. A Voronoi cell is exactly
+   *  that, and it merges, because each stone is a single colour. `spacing` is the rough size of one. */
+  | { kind: "voronoi"; spacing: number; jitter?: number };
 
 /** A scatter layer: lichen on stone, knots in a board, grit between setts, wear on a walking line. */
 export interface Scatter {
@@ -46,6 +54,10 @@ export interface Scatter {
 export interface SurfaceMaterial {
   id: string;
   name: string;
+  /** The cell size this material wants to be meshed at, metres. Materials do not all want the same one:
+   *  a 30 cm quarry tile needs 2.5 cm cells before its grout stops aliasing away, while a 2 m oak board
+   *  is happier at 5 cm, where the mesher merges whole boards and the grain stays calm. Default 0.05. */
+  pitch?: number;
   /** Tones of the material itself. One is drawn per feature, so a floor of boards is a floor of boards
    *  that differ, not a floor of noise. */
   tones: string[];
@@ -67,6 +79,9 @@ export interface SurfaceMaterial {
   /** Broad, slow variation laid over everything: a lush corner, a sun-bleached patch, a damp strip.
    *  `scale` is the size of one patch in metres. */
   patch?: { scale: number; tones: string[] };
+  /** Things that stand up out of the surface — tufts, pebbles, chips. Built only near the camera, because
+   *  scattered geometry is what breaks the mesher's merging. See surfaceCrust.ts. */
+  crust?: import("./surfaceCrust.ts").Crust;
 }
 
 export interface SurfaceSample {
@@ -122,6 +137,27 @@ export function latticeAt(lattice: Lattice, u: number, v: number): LatticeHit {
       const inset = Math.min(da, length - da, db, width - db);
       const fromCentre = Math.max(Math.abs(da / length - 0.5), Math.abs(db / width - 0.5)) * 2;
       return { fu: column, fv: row, inset, fromCentre };
+    }
+    case "voronoi": {
+      // Nearest of the jittered seeds in the 3x3 lattice cells around this point. The runner-up gives
+      // the edge: where the two are equally close, you are on the boundary between two stones.
+      const spacing = Math.max(1e-6, lattice.spacing);
+      const jitter = lattice.jitter ?? 0.42;
+      const cu = Math.floor(u / spacing), cv = Math.floor(v / spacing);
+      let bestD = Infinity, nextD = Infinity, bu = cu, bv = cv;
+      for (let du = -1; du <= 1; du++) {
+        for (let dv = -1; dv <= 1; dv++) {
+          const su = cu + du, sv = cv + dv;
+          const px = (su + 0.5 + (hash2(su, sv, 5) - 0.5) * 2 * jitter) * spacing;
+          const pz = (sv + 0.5 + (hash2(su, sv, 6) - 0.5) * 2 * jitter) * spacing;
+          const d = Math.hypot(u - px, v - pz);
+          if (d < bestD) { nextD = bestD; bestD = d; bu = su; bv = sv; }
+          else if (d < nextD) nextD = d;
+        }
+      }
+      // Half the gap between nearest and runner-up is how far inside this stone you stand.
+      const inset = (nextD - bestD) / 2;
+      return { fu: bu, fv: bv, inset, fromCentre: Math.min(1, bestD / (spacing * 0.62)) };
     }
     case "corduroy": {
       const along = lattice.along ?? "u";

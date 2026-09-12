@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { surfaceById, surfaceLibrary } from "./surfaceLibrary.ts";
 import { reliefFloor, sampleSurface } from "./surfaces.ts";
+import { crustCells, crustSites } from "./surfaceCrust.ts";
 import { mergedVoxelQuads } from "./voxelGeometry.ts";
 import type { VoxelCell } from "./voxelGeometry.ts";
 
@@ -88,5 +89,40 @@ test("a floor slab is only as deep as the material cuts into it", () => {
     const floor = reliefFloor(material);
     assert.ok(floor <= 0, `${material.id} cuts upward?`);
     assert.ok(floor > -0.1, `${material.id} cuts ${floor} m deep, which is a trench`);
+  }
+});
+
+test("the crust stays inside its budget, and blades stand up", () => {
+  // Bounded by the detail radius, but not unbounded within it. Two measurements drove these numbers:
+  // 7 cm pebbles on a 1.5 cm crust cost 1,036 triangles a square metre where 3 cm ones cost 129, and
+  // blades that lean cell-by-cell cost 1,521 where straight ones cost 294 — and looked worse, because a
+  // stepped blade is a staircase of detached cubes rather than a blade.
+  const side = 8;
+  const budget: Record<string, number> = { gravel_path: 220, grass_lawn: 420 };
+  for (const material of surfaceLibrary) {
+    if (!material.crust) continue;
+    const { cells, pitch } = crustCells(material, 0, 0, side, side);
+    assert.ok(cells.length > 0, `${material.id} grew no crust`);
+    const perSquareMetre = (mergedVoxelQuads(cells).length * 2) / (side * side);
+    assert.ok(perSquareMetre <= budget[material.id]!, `${material.id} crust: ${perSquareMetre.toFixed(0)} triangles/m², budget ${budget[material.id]}`);
+    // The crust is meshed finer than the carpet, or a stone is the size of a paving slab.
+    assert.ok(pitch <= (material.pitch ?? 0.05), `${material.id}: crust cells should not be coarser than its carpet`);
+  }
+});
+
+test("no two crust sites are the same, and they stay put", () => {
+  const grass = surfaceById("grass_lawn")!;
+  const sites = crustSites(grass.crust!, 0, 0, 12, 12);
+  assert.ok(sites.length > 60, `a 12 m square should carry plenty of tufts, got ${sites.length}`);
+  // Forms vary — nothing is copy-pasted.
+  assert.ok(new Set(sites.map((site) => site.form)).size > 1, "every tuft drew the same form");
+  assert.ok(new Set(sites.map((site) => site.seed.toFixed(4))).size > sites.length * 0.9, "tufts share seeds");
+  // And they are a function of world position: ask again, or ask over a bigger area, and the tufts that
+  // fall in the overlap are in exactly the same places. That is what makes the detail ring seamless.
+  const wider = crustSites(grass.crust!, -6, -6, 24, 24);
+  const inside = wider.filter((site) => site.x >= 0 && site.x < 12 && site.z >= 0 && site.z < 12);
+  assert.equal(inside.length, sites.length, "a wider view finds the same tufts in the overlap");
+  for (const [index, site] of inside.entries()) {
+    assert.ok(Math.abs(site.x - sites[index]!.x) < 1e-9 && Math.abs(site.z - sites[index]!.z) < 1e-9, "a tuft moved");
   }
 });

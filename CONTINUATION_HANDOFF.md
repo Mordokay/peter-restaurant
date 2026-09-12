@@ -2480,3 +2480,31 @@ Against **~246/m² for the old per-cell noise**. Both lessons are now tests, not
 scatter cluster drops below three cells, one meshes every material with the real greedy mesher and fails if
 it exceeds its budget, and one checks every colour in the library is real hex — written after
 `#976displaced` went in as a board tone and rendered black.
+
+### Surfaces, phase 4–5: per-material pitch, and the crust (2026-09-12)
+
+Four of the six materials carry their identity in STRUCTURE — boards, tiles, furrows, courses — and
+structure reads as colour, which is why they work at twenty-six metres with no geometry. Gravel and grass
+have no structure: a gravel bed with no stones is mottled grey and a lawn with no blades is green paint.
+`src/game/surfaceCrust.ts` grows the things that stand up out of them — tufts, pebbles, chips — from
+families of forms picked per site by world position, so nothing is copy-pasted and nothing moves when you
+walk away and come back.
+
+**A material now declares its own cell size** (`SurfaceMaterial.pitch`). They do not want the same one: a
+30 cm quarry tile needs 2.5 cm before its grout stops aliasing away, a 2 m oak board is happier at 5 cm.
+
+Three measured lessons, all now tests:
+
+- **Scattering stones ON a bed gives boulders on grey paint.** A pebble big enough to mesh at 5 cm cells is
+  7–32 cm across — paving slabs. The crust gets its own, finer pitch.
+- **Gravel as a Voronoi carpet costs 1,200 triangles a square metre against 18 for a tiled floor.** The
+  reason generalises and is worth remembering: **triangles track features per square metre, and an
+  irregular cell costs roughly thirteen times a square one**, because a rectangle-greedy mesher covers a
+  tile with one quad and a Voronoi cell with a dozen. Even 22 cm stones cost 270/m², worse than the noise
+  being replaced. So stones live in the crust, where the detail radius bounds how many exist at once.
+- **A blade that leans cell by cell is a staircase of detached cubes.** It looked like scattered floating
+  boxes and cost 1,521 triangles a square metre; straight columns of varying height cost 294, a 5× cut,
+  and actually read as grass. Blades stand up; the wind will be what bends them.
+
+Crust cost now: gravel 148/m², grass 363/m², both bounded by the ring. The `voronoi` lattice stays in
+`surfaces.ts` — it is the right primitive for flagstones and cobbles, which are big enough to afford it.
