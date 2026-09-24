@@ -362,6 +362,18 @@ Do not distinguish two items using only hue. Tomato is a round cluster with a gr
 
 - Voxel styling does **not** impose one global cube resolution. Placement grid: 1 world unit.
   Architectural module: 0.25–0.5 units. Character detail pitch: 0.04–0.08 units.
+- **Game scale: produce ×1.8, crop plants ×1.5, everything built ×1.0.** Models are authored at life
+  size and scaled on the way into the catalog, because life size does not play. At the survey camera a
+  real 7.9 cm bell pepper is **six pixels** wide and a 3.3 cm strawberry is three — the player cannot see
+  ripeness, count, or that there is fruit at all. Scaled, they are 14.2 cm and 6.0 cm: large but plausible
+  beside an unscaled 1.88 m freezer, and legible from across a plot.
+
+  Scaling is applied by handing `voxels-to-model.mjs` a larger world height, so pitch grows with the
+  object and the **voxel count is unchanged** — the model keeps exactly as many voxels across its width
+  and therefore looks exactly as detailed, only bigger. `scripts/authored/build-crops.mjs` owns the
+  multipliers; do not scale at runtime, and do not scale architecture, or the readability being bought is
+  immediately given back.
+
 - **Food and hero props: 1.5–5 mm.** This supersedes the original 25–50 mm band. That band produced the
   project's early `cabbage` (18 mm, 11,910 voxels) and `tomato` (26 mm, 1,588 voxels); crops authored at
   1.5–2.5 mm carry roughly twenty times the voxels and are what the fine detail — leaf veins, pale
