@@ -18,6 +18,17 @@ const PROPS = [
   { id: "crate_harvest", script: "crate", pitch: 0.008, label: "Harvest crate",
     tags: ["farm", "storage"], folder: "authored/props", holder: "crate",
     merge: "^(post|slat|floor|crate)" },
+  // The farmer is authored at about a metre for convenience and stood up to
+  // 1.68 m on the way in, so the pitch works out at a round 2 cm.
+  { id: "farmer", script: "farmer", pitch: 0.0118, height: 1.68, label: "Farmer",
+    tags: ["character"], folder: "authored/characters", holder: "arm_r", merge: "^(hips|torso|head|hat|arm_l|arm_r|leg_l|leg_r)",
+    rig: true },
+  { id: "tool_hoe", script: "tools", variant: "hoe", pitch: 0.008, label: "Hoe",
+    tags: ["tool"], folder: "authored/tools", holder: "handle", merge: "^(handle|head|can|spout|pouch|strap)" },
+  { id: "tool_can", script: "tools", variant: "can", pitch: 0.008, label: "Watering can",
+    tags: ["tool"], folder: "authored/tools", holder: "can", merge: "^(handle|head|can|spout|pouch|strap)" },
+  { id: "tool_pouch", script: "tools", variant: "pouch", pitch: 0.007, label: "Seed pouch",
+    tags: ["tool"], folder: "authored/tools", holder: "pouch", merge: "^(handle|head|can|spout|pouch|strap)" },
   { id: "soil_bed", script: "soil_bed", pitch: 0.009, label: "Tilled bed",
     tags: ["farm", "ground"], folder: "authored/props", holder: "bed", merge: "^(bed)" },
   { id: "prep_table", script: "prep_table", pitch: 0.010, label: "Prep counter",
@@ -33,15 +44,18 @@ for (const spec of PROPS) {
   if (only.length && !only.includes(spec.id)) continue;
   const glb = `${SCRATCH}/${spec.id}.glb`;
   const vox = `${SCRATCH}/${spec.id}.vox.json`;
-  run("blender", ["--background", "--python", `scripts/authored/props/${spec.script}.py`, "--", glb]);
+  run("blender", ["--background", "--python", `scripts/authored/props/${spec.script}.py`, "--",
+                  ...(spec.variant ? [spec.variant] : []), glb]);
   run("python3", ["scripts/voxelize-mesh.py", glb, vox, "--pitch", String(spec.pitch),
                   "--lod", "off", "--maxShades", "6", "--shadeTolerance", "0.04"]);
   const grid = JSON.parse(readFileSync(vox, "utf8"));
-  run("node", ["scripts/voxels-to-model.mjs", vox, spec.id, (grid.size[1] * grid.worldPitch).toFixed(5),
+  const height = spec.height ?? grid.size[1] * grid.worldPitch;
+  run("node", ["scripts/voxels-to-model.mjs", vox, spec.id, height.toFixed(5),
                "--keepSourceParts", "--foldFragments", "0"]);
   run("node", ["scripts/authored/merge-parts.mjs", spec.id, spec.merge]);
   try { run("node", ["scripts/authored/extract-sockets.mjs", spec.id, spec.holder]); }
   catch { /* a prop with no sockets is fine; not every prop holds things */ }
+  if (spec.rig) run("node", ["scripts/authored/rig-parts.mjs", spec.id]);
   const model = readModel(spec.id);
   model.name = spec.label;
   model.folder = spec.folder;

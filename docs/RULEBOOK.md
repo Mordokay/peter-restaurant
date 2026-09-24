@@ -449,6 +449,13 @@ this loop and the player already knows it:
   throws the crop's own colour.
 - **Fed soil looks fed.** Compost flecks the bed dark and speeds growth by a third; mulch pales it with
   straw and makes a watering last half again as long. Both are read off the ground, never off a panel.
+- **An action is a commitment.** The work lands on the blow of the animation, not on the key press, and
+  the farmer cannot walk out of his own swing. A bar fills over the plot for as long as the action lasts —
+  the one kind of bar the rulebook allows, because it belongs to a focused interaction and disappears
+  with it.
+- **The tool is in the hand.** Each tool is modelled around its grip and hung on the farmer's hand
+  socket, so the swing is a hoe swinging and not an arm waving.
+
 - **Late game must not be a click grind.** The replanting phase is where farming sims break down — the
   answer is tools that work a line or a whole bed at once (a seed attachment, a tractor), not faster
   clicking. Anything added here is judged against that.
@@ -743,6 +750,7 @@ travels). Current sources:
 | `src/game/recipes.ts` | What the kitchen can make, what it needs, what it is worth | Active foundation |
 | `src/game/soil.ts`, `tools.ts` | Tilling, watering, fertiliser, and what the held tool does | Active foundation |
 | `src/game/soilPatches.ts` | Worked ground drawn: one bed model, recoloured per state | Active foundation |
+| `scripts/authored/props/farmer.py`, `clips/farmer.mjs` | The player: a rigged voxel farmer and his six clips | Active asset pipeline |
 | `src/game/prepStation.ts` | The prep counter: a board, a plate, and a dish being made | Active foundation |
 | `src/game/meshLibrary.ts` | One meshing per model, instances for the rest | Active foundation |
 | `src/game/stageRig.ts`, `stageTransition.ts` | Cross-scale between a prop's age stages, and its easing | Active foundation |

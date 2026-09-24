@@ -57,3 +57,7 @@ html, body, #world { margin: 0; height: 100%; overflow: hidden; background: #93a
   100% { opacity: 0; transform: translate(-50%, -190%) scale(1); }
 }
 .farm-warn { color: #f0b48a; }
+
+/* The work bar: only ever visible while an action is actually running. */
+.farm-work { position: absolute; width: 92px; height: 9px; transform: translate(-50%, -50%); border: 1px solid #ffffff44; border-radius: 999px; background: #10181580; overflow: hidden; pointer-events: none; }
+.farm-work i { display: block; height: 100%; width: 0; border-radius: 999px; transition: width .06s linear; }

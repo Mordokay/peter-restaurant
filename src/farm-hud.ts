@@ -30,6 +30,11 @@ export interface FarmHud {
   flash(message: string): void;
   /** A "+3 Strawberry" rising off the plot at these screen coordinates. */
   gain(text: string, x: number, y: number): void;
+  /** Show the work filling up, at these screen coordinates. `fraction` past 1
+   *  hides it. The bar exists because an action the player is committed to has
+   *  to say how long they are committed FOR — the rulebook allows a bar for a
+   *  focused interaction, and refuses one that hangs over the world for ever. */
+  progress(fraction: number, colour: string, x: number, y: number): void;
   dispose(): void;
 }
 
@@ -97,6 +102,13 @@ export function createFarmHud(mount: HTMLElement): FarmHud {
   gains.className = "farm-gains";
   mount.append(gains);
 
+  const work = document.createElement("div");
+  work.className = "farm-work";
+  work.innerHTML = `<i></i>`;
+  work.style.display = "none";
+  mount.append(work);
+  const fill = work.querySelector<HTMLElement>("i")!;
+
   let flashUntil = 0;
   let flashText = "";
 
@@ -115,6 +127,15 @@ export function createFarmHud(mount: HTMLElement): FarmHud {
       flashText = message;
       flashUntil = performance.now() + 1400;
       plotEl.innerHTML = `<b class="farm-warn">${message}</b>`;
+    },
+
+    progress(fraction, colour, x, y) {
+      if (fraction >= 1 || fraction < 0) { work.style.display = "none"; return; }
+      work.style.display = "block";
+      work.style.left = `${x}px`;
+      work.style.top = `${y}px`;
+      fill.style.width = `${Math.max(0, Math.min(1, fraction)) * 100}%`;
+      fill.style.background = colour;
     },
 
     gain(text, x, y) {
@@ -153,7 +174,7 @@ export function createFarmHud(mount: HTMLElement): FarmHud {
         ? entries.map(([id, count]) => `<span title="${catalog.models[id]?.name ?? id}"><i style="background:${itemColour(id)}"></i>${count}</span>`).join("")
         : "";
     },
-    dispose() { bar.remove(); gains.remove(); },
+    dispose() { bar.remove(); gains.remove(); work.remove(); },
   };
   return hud;
 }

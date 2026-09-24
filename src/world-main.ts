@@ -8,7 +8,7 @@
 import "./world.css";
 import {
   ArcRotateCamera, Color3, Color4, DirectionalLight, Engine, HemisphericLight, Matrix,
-  MeshBuilder, Plane, Scene, SceneInstrumentation, ShadowGenerator, StandardMaterial, TransformNode, Vector3,
+  Mesh, MeshBuilder, Plane, Scene, SceneInstrumentation, ShadowGenerator, StandardMaterial, TransformNode, Vector3,
 } from "@babylonjs/core";
 import { catalog, catalogIndex, ensureModels } from "./assets/catalog/index";
 import { decorLayout, levelLayout, levelProgress, onLevelChanged } from "./assets/scene/index";
@@ -27,6 +27,11 @@ import { cropDefinitions } from "./game/crops";
 import { createFarm } from "./game/farmPlots";
 import { createPrepStation, PREP_MODEL } from "./game/prepStation";
 import { BED_MODEL } from "./game/soilPatches";
+import { createClipPlayer, createVoxelRig, socketNode } from "./game/voxelRig";
+
+/** The player's own model, and the tools he carries. */
+const FARMER_MODEL = "farmer";
+const TOOL_MODELS_PRELOAD = { hoe: "tool_hoe", can: "tool_can", pouch: "tool_pouch" };
 import { recipes } from "./game/recipes";
 import { FARM_SAVE_KEY, FARM_SAVE_VERSION, type FarmSave } from "./game/farm";
 import { readSave, writeSave } from "./game/persistence";
@@ -110,22 +115,9 @@ const particles = createParticleWorld(scene, { colliders, shadows, capacity: 300
 // The player is a marker, not a character: the cutaway needs to know which room you are standing in.
 const player = new TransformNode("player", scene);
 player.position.set(0, ROOM_FLOOR_Y, -19.5);
-const playerMaterial = new StandardMaterial("player", scene);
-playerMaterial.diffuseColor = Color3.FromHexString("#4e7968");
-playerMaterial.specularColor.set(0.05, 0.05, 0.05);
-const playerBody = MeshBuilder.CreateBox("player body", { width: 0.5, height: 1.1, depth: 0.4 }, scene);
-playerBody.material = playerMaterial;
-playerBody.parent = player;
-playerBody.position.y = 0.55;
-shadows.addShadowCaster(playerBody);
-const playerHead = MeshBuilder.CreateBox("player head", { width: 0.44, height: 0.42, depth: 0.42 }, scene);
-const headMaterial = new StandardMaterial("player head", scene);
-headMaterial.diffuseColor = Color3.FromHexString("#d99c6b");
-headMaterial.specularColor.set(0.05, 0.05, 0.05);
-playerHead.material = headMaterial;
-playerHead.parent = player;
-playerHead.position.y = 1.32;
-shadows.addShadowCaster(playerHead);
+// The farmer stands in for the player: a rigged voxel figure, built below once
+// the catalog is loaded. Until then the player is still a node with a position,
+// which is all the camera and the cutaway ever needed from it.
 
 // The play range is deliberately tight: close enough to see a plant's fruit,
 // and not so far out that the farm becomes a texture. Framing the whole site is
@@ -262,7 +254,7 @@ const decor = createDecorScene(scene, catalog, decorLayout, { shadows, lightPool
 const cropModels = [...new Set([
   ...cropDefinitions.flatMap((crop) => [...Object.values(crop.stages), ...(crop.produce ? [crop.produce] : [])]),
   ...recipes.map((recipe) => recipe.yields),
-  "crate_harvest", PREP_MODEL, BED_MODEL,
+  "crate_harvest", PREP_MODEL, BED_MODEL, FARMER_MODEL, ...Object.values(TOOL_MODELS_PRELOAD),
 ])];
 await ensureModels(cropModels);
 const farmWind = createWindMaterial("farm wind", scene);
@@ -289,7 +281,65 @@ function saveEverything(): void {
   if (saved && prepStation) writeSave<FarmSave>(FARM_SAVE_KEY, { ...saved, prep: prepStation.state() });
 }
 
+// ── the farmer ────────────────────────────────────────────────────────────────
+// One rig, parented to the player node, with a clip per kind of work. The clips
+// all plant their blow at the same fraction of their length, so the game fires
+// dirt, water or chaff on one rule rather than six — and the action itself is
+// applied to the world at that same moment, which is why a swing feels like it
+// did something rather than announcing that something was done.
+const farmerModel = catalog.models[FARMER_MODEL];
+const farmer = farmerModel ? createVoxelRig(farmerModel, scene, { name: "farmer", shadows, cacheRevision: cacheRev(FARMER_MODEL) }) : null;
+if (farmer) farmer.root.parent = player;
+/** What the cue and the world change are waiting for: the blow itself. */
+let pendingBlow: (() => void) | null = null;
+const farmerClips = farmer
+  ? createClipPlayer(farmer, {
+      onEvent: (event) => {
+        if (event.name !== "impact") return;
+        const blow = pendingBlow;
+        pendingBlow = null;
+        blow?.();
+      },
+    })
+  : null;
+farmerClips?.play("idle", { loop: true });
+
+// The tool in the hand. One mesh per tool, hung on the hand socket by its own
+// grip marker: the pipeline recentres a model and stands it on its base, so
+// "the grip is at the origin" stops being true the moment it is voxelised.
+const TOOL_MODELS: Record<string, string> = { hoe: "tool_hoe", can: "tool_can", compost: "tool_pouch", mulch: "tool_pouch" };
+const handNode = farmer ? socketNode(farmer, "arm_r", "tool") : null;
+const heldTools = new Map<string, Mesh>();
+function heldToolMesh(id: string): Mesh | null {
+  const existing = heldTools.get(id);
+  if (existing) return existing;
+  const model = catalog.models[id];
+  if (!model || !handNode) return null;
+  const mesh = createVoxelMesh(`held ${id}`, cellsFromAuthoredModel(model), model.pitch, scene);
+  mesh.parent = handNode;
+  // Hang it by its grip: the marker's cell, in metres, is where the hand is.
+  const grip = model.parts.map((part) => part.sockets?.grip).find(Boolean);
+  if (grip) mesh.position.set(-grip[0] * model.pitch, -grip[1] * model.pitch, -grip[2] * model.pitch);
+  mesh.isPickable = false;
+  shadows.addShadowCaster(mesh);
+  heldTools.set(id, mesh);
+  return mesh;
+}
+function showHeldTool(): void {
+  if (!handNode) return;
+  const slot = farmHud.slot;
+  const wanted = slot.kind === "tool" ? TOOL_MODELS[slot.tool] : "tool_pouch";
+  for (const [id, mesh] of heldTools) mesh.setEnabled(id === wanted);
+  if (wanted) heldToolMesh(wanted)?.setEnabled(true);
+}
+
+/** Which clip a piece of work looks like. */
+const ACTION_CLIP: Record<string, string> = {
+  till: "swing", clear: "swing", water: "pour", feed: "scatter", sow: "scatter", harvest: "pick",
+};
+
 const farmHud = createFarmHud(document.querySelector<HTMLElement>("#world")!);
+showHeldTool();
 
 // The plot under the player's hand, marked on the ground. A world marker rather
 // than a floating label: the rulebook allows labels for selection, and this is
@@ -379,7 +429,7 @@ function showFarmCue(result: { action: string; site: { x: number; z: number }; c
 /** One key, whatever is under your hand: sow, harvest, clear — or, standing at
  *  the crate, tip in everything you are carrying. */
 function actOnPlot(): void {
-  if (build.active) return;
+  if (build.active || busy()) return;
   // One key, whatever you are standing at. The counter comes first because it
   // is indoors and nothing else is ever within reach of it.
   if (prepStation?.inReach(player.position.x, player.position.z)) {
@@ -425,15 +475,38 @@ function actOnPlot(): void {
     farmHud.flash("too far — walk closer");
     return;
   }
-  const result = farm.act(addressed.site, farmHud.slot);
-  if (result) {
+  const site = addressed.site;
+  const slot = farmHud.slot;
+  const action = addressed.action;
+  if (action === "nothing") return;
+
+  // Face the work. A farmer who tills the bed behind them is a farmer nobody
+  // believes, and the turn costs one line.
+  player.rotation.y = Math.atan2(site.x - player.position.x, site.z - player.position.z);
+
+  const land = (): void => {
+    const result = farm.act(site, slot);
+    if (!result) return;
     showFarmCue(result);
     if (result.items && result.crop) {
       floatGain(`+${result.items} ${catalog.models[result.crop]?.name ?? "crop"}`, result.site);
     }
+    saveEverything();
+    refreshFarm();
+  };
+
+  const clip = ACTION_CLIP[action];
+  if (farmerClips && clip) {
+    working = { site, colour: WORK_COLOURS[action] ?? "#9fd78a" };
+    // The work lands on the blow, not on the key press: the swing is the event.
+    pendingBlow = land;
+    // From the beginning, always. The player matches the pose it is leaving by
+    // default, which is right for walk-to-idle and wrong for a swing: it started
+    // the clip PAST its impact, so the ground broke before the hoe moved.
+    farmerClips.play(clip, { loop: false, from: 0, blend: 0.08 });
+  } else {
+    land();
   }
-  saveEverything();
-  refreshFarm();
 }
 
 /** A "+3 Strawberry" that rises off the plot and fades. Small, and the reason
@@ -518,8 +591,8 @@ window.addEventListener("keydown", (event) => {
   if (key === "b" && !event.repeat) { build.toggle(); keys.clear(); requestAnimationFrame(syncBuildButton); }
   // The farm: one key does the work, the digits pick what goes in the ground.
   if (key === " " && !event.repeat) { event.preventDefault(); actOnPlot(); }
-  if (key >= "1" && key <= "9") farmHud.select(Number(key) - 1);
-  if (key === "tab") { event.preventDefault(); farmHud.cycle(event.shiftKey ? -1 : 1); }
+  if (key >= "1" && key <= "9") { farmHud.select(Number(key) - 1); showHeldTool(); }
+  if (key === "tab") { event.preventDefault(); farmHud.cycle(event.shiftKey ? -1 : 1); showHeldTool(); }
 });
 window.addEventListener("keyup", (event) => keys.delete(event.key.toLowerCase()));
 window.addEventListener("blur", () => keys.clear());
@@ -529,7 +602,7 @@ canvas.addEventListener("wheel", (event) => {
   // an hour, but this game's camera is a thing the player moves constantly and
   // the tool is not: zooming is the gesture that wants the wheel. Shift+wheel
   // picks the tool, and 1-9 and tab do it without leaving the keyboard.
-  if (event.shiftKey) { farmHud.cycle(Math.sign(event.deltaY)); return; }
+  if (event.shiftKey) { farmHud.cycle(Math.sign(event.deltaY)); showHeldTool(); return; }
   targetRadius = Math.min(camera.upperRadiusLimit ?? PLAY_RADIUS.max, Math.max(camera.lowerRadiusLimit ?? PLAY_RADIUS.min, targetRadius * (1 + Math.sign(event.deltaY) * 0.12)));
   if (targetRadius <= PLAY_RADIUS.max) camera.upperRadiusLimit = PLAY_RADIUS.max;
 }, { passive: false });
@@ -595,6 +668,9 @@ function walk(dt: number): void {
   if (keys.has("a") || keys.has("arrowleft")) horizontal -= 1;
   if (keys.has("d") || keys.has("arrowright")) horizontal += 1;
   if (horizontal === 0 && vertical === 0) return;
+  // A swing is a commitment. Walking out of your own hoe stroke is what makes a
+  // farming game feel like a spreadsheet with legs.
+  if (busy()) return;
   const forward = camera.getForwardRay().direction;
   forward.y = 0;
   forward.normalize();
@@ -608,10 +684,47 @@ function walk(dt: number): void {
   }
   player.position.addInPlace(move);
   player.rotation.y = Math.atan2(move.x, move.z);
+  walking = true;
   // Step up onto a floor slab, or back down to the ground.
   const room = roomAt(levelLayout, player.position.x, player.position.z);
   player.position.y = room ? ROOM_FLOOR_Y : 0.02;
   framed = false;
+}
+
+/** Set by walk() each frame it actually moved the player. */
+let walking = false;
+/** The plot being worked and what the work looks like, while a clip runs. */
+let working: { site: { x: number; z: number }; colour: string } | null = null;
+
+/** Colour of the filling bar, by the work being done. */
+const WORK_COLOURS: Record<string, string> = {
+  till: "#c08a58", water: "#5b9fd6", feed: "#7d6b4a", sow: "#9fd78a", harvest: "#f3c55a", clear: "#d98b6b",
+};
+
+/** True while the farmer is committed to a swing, a pour or a pick. */
+function busy(): boolean {
+  return Boolean(farmerClips?.playing && farmerClips.clip && farmerClips.clip.loop !== true);
+}
+
+/** Idle, walking, or working — the rig's own little state machine. A work clip
+ *  owns the body until it finishes, so a step mid-swing does not cut the swing. */
+function driveFarmer(dt: number): void {
+  if (!farmerClips) return;
+  if (working && busy() && farmerClips.clip) {
+    const fraction = farmerClips.time / Math.max(1e-3, farmerClips.clip.duration);
+    const screen = Vector3.Project(
+      new Vector3(working.site.x, 0.85, working.site.z), Matrix.Identity(), scene.getTransformMatrix(),
+      camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight()));
+    farmHud.progress(fraction, working.colour, screen.x, screen.y);
+  } else if (working) {
+    working = null;
+    farmHud.progress(1, "#fff", 0, 0);
+  }
+  if (!busy()) {
+    const wanted = walking ? "walk" : "idle";
+    if (farmerClips.clip?.id !== wanted || !farmerClips.playing) farmerClips.play(wanted, { loop: true });
+  }
+  farmerClips.update(dt);
 }
 
 const fmt = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 0 });
@@ -644,7 +757,9 @@ function updateHud(): void {
 
 engine.runRenderLoop(() => {
   const dt = frameTimer.begin();
+  walking = false;
   walk(dt);
+  driveFarmer(dt);
   camera.alpha += (targetAlpha - camera.alpha) * Math.min(1, dt * 8);
   camera.radius += (targetRadius - camera.radius) * Math.min(1, dt * 8);
   if (!framed && !build.active) {
