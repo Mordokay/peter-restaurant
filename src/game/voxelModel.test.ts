@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readCatalog } from "../../scripts/catalog-io.mjs";
-import { cellsFromAuthoredModel, validateAuthoredVoxelCatalog, type AuthoredVoxelCatalog } from "./voxelModel.ts";
+import { cellsFromAuthoredModel, validateAuthoredVoxelCatalog, type AuthoredVoxelCatalog, type AuthoredVoxelModel } from "./voxelModel.ts";
 
 const catalog = readCatalog() as unknown as AuthoredVoxelCatalog;
 
@@ -90,4 +90,24 @@ test("clip validation checks opacity range and fade mode", () => {
   const errors = validateAuthoredVoxelCatalog({ version: 1, models: { m: model } });
   assert.ok(errors.some((e) => e.includes("opacity must be within 0..1")));
   assert.ok(errors.some((e) => e.includes("unknown fade mode blur")));
+});
+
+test("a part's sway weight is graded by height, so a plant bends and its roots do not", () => {
+  const model: AuthoredVoxelModel = {
+    id: "swaying", pitch: 0.01, palette: { g: "#4a7a38", s: "#6b4f2a" },
+    parts: [
+      { id: "soil", pivot: [0, 0, 0], boxes: [[0, 0, 0, 1, 0, 1, "s"]] },
+      { id: "stem", pivot: [0, 0, 0], sway: 1, runs: [[1, 0, 0, 0, "g"], [2, 0, 0, 0, "g"], [4, 0, 0, 0, "g"]] },
+    ],
+  };
+  const cells = cellsFromAuthoredModel(model);
+  const at = (y: number) => cells.find((cell) => cell.y === y)!;
+  assert.equal(at(0).sway, undefined, "a part with no sway is anchored, not merely still");
+  assert.equal(at(4).sway, 1, "the topmost voxel is free");
+  assert.ok(at(1).sway! > 0 && at(1).sway! < at(2).sway!, "weight climbs with height");
+
+  // The default is for parts that declare nothing, and never overrides one that does.
+  const defaulted = cellsFromAuthoredModel(model, undefined, { sway: 0.5 });
+  assert.equal(defaulted.find((cell) => cell.y === 0)!.sway, 0, "the soil's base sits at the bottom of the range");
+  assert.equal(defaulted.find((cell) => cell.y === 4)!.sway, 1, "an authored weight still wins");
 });

@@ -439,6 +439,13 @@ Crop silhouettes follow the recognizable structure of the real plant, simplified
 - Ripening earns one short 3–5 cube confirmation burst. Mature crops may emit at most one ambient glint at long irregular intervals.
 - Yield upgrades must visibly add plant bodies, branches, fruit sites, or fruit density. A numerical yield upgrade with no crop-model response is not acceptable.
 - Plant motion is deliberately quieter than harvesting, cooking, ready stations, and urgent service states.
+- **Idle life is the wind shader, never a looping clip.** A clip makes `decor.ts` promote the prop to an
+  uncached rig at roughly 305 ms per placement, so a forty-plot farm would pay twelve seconds of load to
+  get something the vertex shader does for nothing. A plant's sway weight is authored per part (or
+  defaulted per plant) and graded by height in the mesher, so the tips stream and the base stays in the
+  soil. Clips are for the things that ACT: harvesting, doors, machines.
+- Picking is a scale to nothing over about 0.45 s and regrowth is the same scale coming back with a
+  10–20% overshoot. Neither rebuilds geometry: one number drives every fruit on the plant.
 
 ### Palette
 
@@ -689,6 +696,9 @@ travels). Current sources:
 | `src/game/grassInstances.ts`, `voxelWind.ts` | Instanced grass and the wind vertex shader | Active foundation |
 | `src/game/decor.ts`, `worldRenderer.ts`, `sourceCache.ts` | Prop placement, instancing/LOD, IndexedDB geometry cache | Active foundation |
 | `src/game/cropFruit.ts` | Places N fruit at a plant's `fruit_*` sockets, with per-instance size and lean | Active foundation |
+| `src/game/crops.ts`, `hash.ts` | What grows, how long, what a harvest awards; deterministic yields | Active foundation |
+| `src/game/cropPlanting.ts` | A plot: stage changes, fruit, picking, regrowth, ripening burst | Active foundation |
+| `src/game/stageRig.ts`, `stageTransition.ts` | Cross-scale between a prop's age stages, and its easing | Active foundation |
 | `src/game/storageDisplay.ts` | Socket grids, footprint packing, `placementAttitude` | Active foundation |
 | `src/game/frameTimer.ts` | Honest sim/render split, gap distribution, long tasks | Active tooling |
 | `scripts/authored/` | Blender authoring: `lib/botany.py`, per-plant scripts, socket extraction, part merging | Active asset pipeline |

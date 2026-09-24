@@ -27,6 +27,7 @@ interface PartMeta {
   pivot: readonly [number, number, number];
   parent?: string;
   sockets?: AuthoredVoxelPart["sockets"];
+  sway?: number;
   transform?: AuthoredVoxelPart["transform"];
   /** State names in the order their geometry follows the base geometry. */
   states?: string[];
@@ -62,6 +63,7 @@ export function encodeVxm(model: AuthoredVoxelModel): Uint8Array {
       const entry: PartMeta = { id: part.id, pivot: part.pivot };
       if (part.parent !== undefined) entry.parent = part.parent;
       if (part.sockets) entry.sockets = part.sockets;
+      if (part.sway !== undefined) entry.sway = part.sway;
       if (part.transform) entry.transform = part.transform;
       if (part.states && Object.keys(part.states).length) entry.states = Object.keys(part.states);
       return entry;
@@ -145,6 +147,7 @@ export function decodeVxm(bytes: Uint8Array): AuthoredVoxelModel {
     const part: AuthoredVoxelPart & { states?: Record<string, PartGeometry> } = { id: partMeta.id, pivot: partMeta.pivot, ...base };
     if (partMeta.parent !== undefined) part.parent = partMeta.parent;
     if (partMeta.sockets) part.sockets = partMeta.sockets;
+    if (partMeta.sway !== undefined) part.sway = partMeta.sway;
     if (partMeta.transform) part.transform = partMeta.transform;
     if (partMeta.states?.length) {
       const states: Record<string, PartGeometry> = {};

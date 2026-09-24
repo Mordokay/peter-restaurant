@@ -355,6 +355,7 @@ const fmt = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 
 let hudWindow = performance.now();
 let rigTest: Awaited<ReturnType<typeof import("./rig-test.ts").mountRigTest>> | undefined;
 let cropTest: Awaited<ReturnType<typeof import("./crop-test.ts").mountCropTest>> | undefined;
+let cropPlots: Awaited<ReturnType<typeof import("./crop-plot-test.ts").mountCropPlots>> | undefined;
 function updateHud(): void {
   const stats = level.stats();
   const crustStats = crust.stats();
@@ -392,6 +393,7 @@ engine.runRenderLoop(() => {
   decor.update(dt);
   rigTest?.update(dt);
   cropTest?.update(dt);
+  cropPlots?.update(dt);
   particles.update(dt);
   dayNight.update(dt);
   // Everything above this line is the simulation half, and none of it is in Babylon's frameTime.
@@ -412,6 +414,13 @@ if (params.get("cropTest") === "1") {
     mountCropTest(scene, player.position.add(new Vector3(1.5, 0, 0)), shadows))
     .then((fixture) => { cropTest = fixture; Object.assign(window, { __cropTest: fixture }); })
     .catch((error) => console.error("Crop test failed", error));
+}
+
+if (params.get("cropPlot") === "1") {
+  void import("./crop-plot-test.ts").then(({ mountCropPlots }) =>
+    mountCropPlots(scene, player.position.add(new Vector3(1.5, 0, 1.5)), { shadows, particles }))
+    .then((fixture) => { cropPlots = fixture; Object.assign(window, { __cropPlots: fixture }); })
+    .catch((error) => console.error("Crop plots failed", error));
 }
 
 if (params.get("rigTest") === "1") {

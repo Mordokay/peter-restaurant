@@ -27,6 +27,10 @@ import { hash01 } from "./hash.ts";
 /** Socket names this reads. `fruit_12` sorts after `fruit_2`, hence the numeric sort. */
 const FRUIT_SOCKET = /^fruit_(\d+)$/;
 
+/** Ceiling on `setOpen`, sized for the regrow settle rather than for a clip
+ *  that wants to make fruit the size of the plant. */
+const MAX_OPEN = 1.5;
+
 export interface CropFruitOptions {
   scene: Scene;
   /** The plant model carrying the sockets. */
@@ -57,7 +61,9 @@ export interface CropFruitDisplay {
   /** Hang `count` fruit, clamped to capacity. */
   show(count: number): void;
   /** 0 = picked clean, 1 = fully grown. Multiplies each fruit's own size, so a
-   *  harvest clip can ease this to 0 and a regrow can ease it back. */
+   *  harvest clip can ease this to 0 and a regrow can ease it back. Values just
+   *  above 1 are allowed on purpose: regrowth overshoots and settles, and
+   *  clamping at 1 would quietly flatten that pop into a fade. */
   setOpen(fraction: number): void;
   clear(): void;
   dispose(): void;
@@ -141,7 +147,7 @@ export function createCropFruit(options: CropFruitOptions): CropFruitDisplay {
       applyScale();
     },
     setOpen(fraction) {
-      open = Math.max(0, Math.min(1, fraction));
+      open = Math.max(0, Math.min(MAX_OPEN, fraction));
       applyScale();
     },
     clear,

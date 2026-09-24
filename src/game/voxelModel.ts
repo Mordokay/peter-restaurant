@@ -12,6 +12,11 @@ export interface AuthoredVoxelPart {
   parent?: string;
   /** Named attachment cells (a knife on a hand, a lid handle), in cell units. */
   sockets?: Readonly<Record<string, readonly [number, number, number]>>;
+  /** How freely this part moves in the wind: 0 rooted, 1 a free leaf tip. It is a
+   * WEIGHT, not a displacement — the wind shader spends it, and it is graded by
+   * height so a stem's base never leaves the soil. Absent means perfectly still,
+   * which is what a plate or a wall wants. See voxelWind.ts. */
+  sway?: number;
   /** Stored rest transform around the pivot: rotation in degrees, position in
    * cells, scale factors. Non-destructive — the voxels stay on their grid and
    * clips animate relative to it. */
@@ -222,15 +227,37 @@ export function expandGeometry(geometry: PartGeometry, put: (x: number, y: numbe
   for (const [x, y, z, color] of geometry.voxels ?? []) put(x, y, z, color);
 }
 
-export function cellsFromAuthoredModel(model: AuthoredVoxelModel, partIds?: readonly string[]): VoxelCell[] {
+export interface CellOptions {
+  /** Wind weight for parts that declare none — how a whole plant is set moving
+   *  without re-authoring every model. A part's own `sway` still wins. */
+  sway?: number;
+}
+
+export function cellsFromAuthoredModel(model: AuthoredVoxelModel, partIds?: readonly string[], options: CellOptions = {}): VoxelCell[] {
   const selected = partIds ? new Set(partIds) : null;
   const cells = new Map<string, VoxelCell>();
+  let weight = 0;
+  let anyWeight = false;
   const put = (x: number, y: number, z: number, colorKey: string): void => {
-    cells.set(`${x},${y},${z}`, { x, y, z, color: colorFor(model, colorKey) });
+    const cell: VoxelCell = { x, y, z, color: colorFor(model, colorKey) };
+    if (weight > 0) cell.sway = weight;
+    cells.set(`${x},${y},${z}`, cell);
   };
   for (const part of model.parts) {
     if (selected && !selected.has(part.id)) continue;
+    weight = Math.max(0, Math.min(1, part.sway ?? options.sway ?? 0));
+    anyWeight ||= weight > 0;
     expandGeometry(part, put);
+  }
+  // Grade the weight by height across what was emitted, so the bottom of the
+  // model is pinned and the top is free. A flat weight would slide the whole
+  // plant sideways, pot and all, which is the one thing a plant never does.
+  if (anyWeight) {
+    let low = Infinity;
+    let high = -Infinity;
+    for (const cell of cells.values()) { if (cell.y < low) low = cell.y; if (cell.y > high) high = cell.y; }
+    const span = Math.max(1, high - low);
+    for (const cell of cells.values()) if (cell.sway) cell.sway *= (cell.y - low) / span;
   }
   return [...cells.values()];
 }
