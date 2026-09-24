@@ -10,6 +10,7 @@
 // Each distinct item is meshed once and every placement is a hardware instance of it, so a room full of
 // stocked shelves costs a handful of draw calls.
 import { Mesh, Scene, ShadowGenerator, StandardMaterial, TransformNode, Vector3, type AbstractMesh } from "@babylonjs/core";
+import { hash01 } from "./hash.ts";
 import { cellsFromAuthoredModel, type AuthoredVoxelCatalog, type AuthoredVoxelModel } from "./voxelModel.ts";
 import { createVoxelMaterial, createVoxelMesh } from "./voxelGeometry.ts";
 
@@ -176,14 +177,9 @@ export function packStock(
   return out;
 }
 
-/** Deterministic 0..1 from a name and an index — the same shelf always packs the same way. */
-export function placeHash(seed: string, index: number, salt = 0): number {
-  let h = 2166136261 ^ salt;
-  for (let i = 0; i < seed.length; i++) h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
-  h = Math.imul(h ^ index, 16777619);
-  h ^= h >>> 15;
-  return (h >>> 0) / 4294967296;
-}
+/** Deterministic 0..1 from a name and an index — the same shelf always packs the same way.
+ *  Re-exported from hash.ts so existing callers keep working. */
+export const placeHash = hash01;
 
 /** A turn and a small lean for something set down by hand.
  *

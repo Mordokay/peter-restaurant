@@ -22,6 +22,7 @@ import { type AbstractMesh, type Mesh, type Scene, type ShadowGenerator, type St
 import { cellsFromAuthoredModel, type AuthoredVoxelCatalog, type AuthoredVoxelModel } from "./voxelModel.ts";
 import { createVoxelMaterial, createVoxelMesh } from "./voxelGeometry.ts";
 import { modelBounds, placementAttitude } from "./storageDisplay.ts";
+import { hash01 } from "./hash.ts";
 
 /** Socket names this reads. `fruit_12` sorts after `fruit_2`, hence the numeric sort. */
 const FRUIT_SOCKET = /^fruit_(\d+)$/;
@@ -60,15 +61,6 @@ export interface CropFruitDisplay {
   setOpen(fraction: number): void;
   clear(): void;
   dispose(): void;
-}
-
-/** Deterministic 0..1 from a string and a number: the same plant always grows the same fruit. */
-function hash01(seed: string, index: number, salt = 0): number {
-  let h = 2166136261 ^ salt;
-  for (let i = 0; i < seed.length; i++) h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
-  h = Math.imul(h ^ index, 16777619);
-  h ^= h >>> 15;
-  return (h >>> 0) / 4294967296;
 }
 
 /** The `fruit_n` sockets of a model, in index order. */

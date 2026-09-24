@@ -54,6 +54,10 @@ test("no two fruit are the same size, and the same plant grows the same fruit tw
   assert.equal(first.sizes.length, 8);
   assert.ok(new Set(first.sizes.map((s) => s.toFixed(4))).size >= 7, "a plant of identical clones reads as a printed motif");
   for (const s of first.sizes) assert.ok(s > 0.8 && s < 1.2, `size ${s} strayed outside the band`);
+  // Distinctness is not enough: a weak hash once gave eight "different" sizes
+  // that spanned under one percent, which is invisible. Demand a real spread.
+  const spread = Math.max(...first.sizes) - Math.min(...first.sizes);
+  assert.ok(spread > 0.12, `sizes spanned only ${(spread * 100).toFixed(1)}% - too subtle to read as variation`);
   first.display.dispose();
 
   // Deterministic: reload the save, get the same plant.
