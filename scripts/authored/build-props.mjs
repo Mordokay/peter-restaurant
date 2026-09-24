@@ -16,7 +16,11 @@ mkdirSync(SCRATCH, { recursive: true });
 
 const PROPS = [
   { id: "crate_harvest", script: "crate", pitch: 0.008, label: "Harvest crate",
-    tags: ["farm", "storage"], folder: "authored/props", holder: "crate" },
+    tags: ["farm", "storage"], folder: "authored/props", holder: "crate",
+    merge: "^(post|slat|floor|crate)" },
+  { id: "prep_table", script: "prep_table", pitch: 0.010, label: "Prep counter",
+    tags: ["kitchen", "station"], folder: "authored/props", holder: "top",
+    merge: "^(top|leg|apron|apron_end|shelf|board)" },
 ];
 
 const run = (cmd, args) => execFileSync(cmd, args, { stdio: ["ignore", "pipe", "pipe"] }).toString();
@@ -33,7 +37,7 @@ for (const spec of PROPS) {
   const grid = JSON.parse(readFileSync(vox, "utf8"));
   run("node", ["scripts/voxels-to-model.mjs", vox, spec.id, (grid.size[1] * grid.worldPitch).toFixed(5),
                "--keepSourceParts", "--foldFragments", "0"]);
-  run("node", ["scripts/authored/merge-parts.mjs", spec.id, "^(post|slat|floor|crate)"]);
+  run("node", ["scripts/authored/merge-parts.mjs", spec.id, spec.merge]);
   run("node", ["scripts/authored/extract-sockets.mjs", spec.id, spec.holder]);
   const model = readModel(spec.id);
   model.name = spec.label;

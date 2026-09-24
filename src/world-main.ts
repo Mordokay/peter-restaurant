@@ -25,6 +25,10 @@ import { collidersOfMeshes, createColliderField } from "./game/gravity";
 import { createDayNight } from "./game/dayNight";
 import { cropDefinitions } from "./game/crops";
 import { createFarm } from "./game/farmPlots";
+import { createPrepStation, PREP_MODEL } from "./game/prepStation";
+import { recipes } from "./game/recipes";
+import { FARM_SAVE_KEY, FARM_SAVE_VERSION, type FarmSave } from "./game/farm";
+import { readSave, writeSave } from "./game/persistence";
 import { createFarmHud } from "./farm-hud";
 import { createBuildMode } from "./buildMode";
 import { runStages, type LoadingStage } from "./game/loading";
@@ -121,12 +125,17 @@ playerHead.parent = player;
 playerHead.position.y = 1.32;
 shadows.addShadowCaster(playerHead);
 
-const camera = new ArcRotateCamera("world camera", -Math.PI / 4, 0.92, 26, player.position.clone(), scene);
+// The play range is deliberately tight: close enough to see a plant's fruit,
+// and not so far out that the farm becomes a texture. Framing the whole site is
+// a separate act (F), and it lifts the ceiling for as long as it lasts.
+const PLAY_RADIUS = { min: 3.2, max: 34, start: 16 };
+const SURVEY_RADIUS = 78;
+const camera = new ArcRotateCamera("world camera", -Math.PI / 4, 0.92, PLAY_RADIUS.start, player.position.clone(), scene);
 camera.fov = 0.62;
 camera.lowerBetaLimit = 0.55;
 camera.upperBetaLimit = 1.15;
-camera.lowerRadiusLimit = 6;
-camera.upperRadiusLimit = 90;
+camera.lowerRadiusLimit = PLAY_RADIUS.min;
+camera.upperRadiusLimit = PLAY_RADIUS.max;
 camera.inputs.clear();
 scene.activeCamera = camera;
 
@@ -248,13 +257,36 @@ const decor = createDecorScene(scene, catalog, decorLayout, { shadows, lightPool
 // sow without anybody editing a list. Every crop's three stages and its produce
 // are loaded up front: a plot has to be sowable the moment the player reaches
 // it, and a hitch while a model streams in would land exactly on the keypress.
-const cropModels = [...new Set([...cropDefinitions.flatMap((crop) => [...Object.values(crop.stages), ...(crop.produce ? [crop.produce] : [])]), "crate_harvest"])];
+const cropModels = [...new Set([
+  ...cropDefinitions.flatMap((crop) => [...Object.values(crop.stages), ...(crop.produce ? [crop.produce] : [])]),
+  ...recipes.map((recipe) => recipe.yields),
+  "crate_harvest", PREP_MODEL,
+])];
 await ensureModels(cropModels);
 const farmWind = createWindMaterial("farm wind", scene);
 const farm = createFarm({
   scene, catalog, areas: levelLayout.areas, material: farmWind,
   shadows, particles, persist: true, parent: level.root,
 });
+// The kitchen end of the chain: one counter in the prep kitchen, where produce
+// becomes a dish. It stands where a prep island would, against the room's south
+// wall and a short walk from the farm gate.
+const prepRoom = levelLayout.rooms.find((room) => room.id === "prep_kitchen");
+const prepStation = prepRoom && catalog.models[PREP_MODEL]
+  ? createPrepStation({
+      scene, catalog, parent: level.root, shadows,
+      position: new Vector3(prepRoom.rect[0] + prepRoom.rect[2] / 2, ROOM_FLOOR_Y, prepRoom.rect[1] + prepRoom.rect[3] / 2 + 1.2),
+      spin: Math.PI,
+    })
+  : null;
+// The counter's own state rides in the farm save, so one file holds the day.
+prepStation?.restore((readSave<FarmSave>(FARM_SAVE_KEY, FARM_SAVE_VERSION)?.prep) ?? { ingredients: [], dish: null, working: null });
+function saveEverything(): void {
+  farm.save();
+  const saved = readSave<FarmSave>(FARM_SAVE_KEY, FARM_SAVE_VERSION);
+  if (saved && prepStation) writeSave<FarmSave>(FARM_SAVE_KEY, { ...saved, prep: prepStation.state() });
+}
+
 const farmHud = createFarmHud(document.querySelector<HTMLElement>("#world")!);
 
 // The plot under the player's hand, marked on the ground. A world marker rather
@@ -274,7 +306,9 @@ let addressed: ReturnType<typeof farm.addressed> = null;
 function refreshFarm(): void {
   addressed = farm.addressed(player.position.x, player.position.z);
   const atCrate = Boolean(farm.crate?.inReach(player.position.x, player.position.z));
-  farmHud.render(addressed, farm.inventory, atCrate ? farm.crate!.contents.length : null);
+  const atPrep = prepStation?.inReach(player.position.x, player.position.z) ? prepStation : null;
+  farmHud.render(addressed, farm.inventory, atCrate ? farm.crate!.contents.length : null,
+    atPrep ? { dish: atPrep.dish, working: atPrep.working, board: atPrep.ingredients } : null);
   plotMarker.setEnabled(Boolean(addressed));
   if (!addressed) return;
   plotMarker.position.set(addressed.site.x, 0.06, addressed.site.z);
@@ -285,9 +319,22 @@ function refreshFarm(): void {
  *  the crate, tip in everything you are carrying. */
 function actOnPlot(): void {
   if (build.active) return;
+  // One key, whatever you are standing at. The counter comes first because it
+  // is indoors and nothing else is ever within reach of it.
+  if (prepStation?.inReach(player.position.x, player.position.z)) {
+    const lifted = prepStation.take();
+    if (lifted) farm.give([lifted]);
+    else {
+      farm.remove(prepStation.put(farm.inventory));
+      prepStation.start();
+    }
+    saveEverything();
+    refreshFarm();
+    return;
+  }
   if (farm.crate?.inReach(player.position.x, player.position.z) && farm.inventory.length) {
     farm.unload();
-    farm.save();
+    saveEverything();
     refreshFarm();
     return;
   }
@@ -298,10 +345,10 @@ function actOnPlot(): void {
   refreshFarm();
   if (!addressed) return;
   farm.act(addressed.site, farmHud.selected);
-  farm.save();
+  saveEverything();
   refreshFarm();
 }
-window.addEventListener("beforeunload", () => farm.save());
+window.addEventListener("beforeunload", () => saveEverything());
 
 // A level save from the build editor swaps the plan under us; rebuild without reloading the page.
 onLevelChanged(() => {
@@ -337,7 +384,8 @@ window.addEventListener("keyup", (event) => keys.delete(event.key.toLowerCase())
 window.addEventListener("blur", () => keys.clear());
 canvas.addEventListener("wheel", (event) => {
   event.preventDefault();
-  targetRadius = Math.min(camera.upperRadiusLimit ?? 90, Math.max(camera.lowerRadiusLimit ?? 6, targetRadius * (1 + Math.sign(event.deltaY) * 0.12)));
+  targetRadius = Math.min(camera.upperRadiusLimit ?? PLAY_RADIUS.max, Math.max(camera.lowerRadiusLimit ?? PLAY_RADIUS.min, targetRadius * (1 + Math.sign(event.deltaY) * 0.12)));
+  if (targetRadius <= PLAY_RADIUS.max) camera.upperRadiusLimit = PLAY_RADIUS.max;
 }, { passive: false });
 
 let targetAlpha = camera.alpha;
@@ -347,7 +395,10 @@ function frameSite(): void {
   const site = levelLayout.areas.find((area) => area.id === "site_grounds");
   if (!site) return;
   camera.target.set(site.rect[0] + site.rect[2] / 2, 0, site.rect[1] + site.rect[3] / 2);
-  targetRadius = 78;
+  // Surveying needs the whole compound in frame, which is further out than play
+  // allows; the ceiling comes back down as soon as the player zooms back in.
+  camera.upperRadiusLimit = SURVEY_RADIUS;
+  targetRadius = SURVEY_RADIUS;
 }
 let framed = false;
 
@@ -459,6 +510,7 @@ engine.runRenderLoop(() => {
   if (cutawayOn) cutaway.update(dt);
   decor.update(dt);
   farm.update(dt, player.position);
+  prepStation?.update(dt);
   rigTest?.update(dt);
   cropTest?.update(dt);
   cropPlots?.update(dt);
@@ -475,6 +527,7 @@ window.addEventListener("resize", () => engine.resize());
 
 Object.assign(window as unknown as Record<string, unknown>, {
   __world: { scene, camera, player, level, cutaway, decor, particles, colliders, dayNight, build, layout: levelLayout, turn: turnCamera,
+    farm, prepStation, act: actOnPlot,
     catalog, ensureModels, decorLayout, setProgress: (next: LevelProgress) => { progress = next; applyProgress(); } },
 });
 

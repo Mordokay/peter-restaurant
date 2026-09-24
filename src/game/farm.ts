@@ -122,6 +122,10 @@ export interface FarmSave extends VersionedSave {
   inventory: string[];
   /** What has been tipped into the crate at the edge of the farm. */
   crate: string[];
+  /** The prep counter: what is on its board, what is on its plate, what is
+   *  half-made. Shaped by prepStation.ts; kept here because one save is easier
+   *  to reason about than three. */
+  prep?: { ingredients: string[]; dish: string | null; working: { recipe: string; left: number } | null };
 }
 
 /** Drop plots whose site no longer exists (a parcel was re-drawn) and plants of

@@ -74,6 +74,11 @@ export interface Farm {
   readonly crate: HarvestCrate | null;
   /** Tip everything carried into the crate. Returns how many went in. */
   unload(): number;
+  /** Put something in the player's hands — a dish lifted off the plate, a
+   *  delivery, anything the world hands over. Returns how many fitted. */
+  give(items: readonly string[]): number;
+  /** Take specific items back out, by id, one per entry. */
+  remove(items: readonly string[]): void;
   readonly inventory: readonly string[];
   /** Game seconds since this farm started, across sessions. */
   readonly clock: number;
@@ -235,6 +240,19 @@ export function createFarm(options: FarmOptions): Farm {
       const moved = crate.put(inventory);
       inventory.length = 0;
       return moved;
+    },
+
+    give(items) {
+      let added = 0;
+      for (const item of items) added += addItems(inventory, item, 1, CARRY_CAPACITY);
+      return added;
+    },
+
+    remove(items) {
+      for (const item of items) {
+        const at = inventory.lastIndexOf(item);
+        if (at >= 0) inventory.splice(at, 1);
+      }
     },
 
     update(dt, focus) {

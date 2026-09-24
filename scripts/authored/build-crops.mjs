@@ -25,7 +25,11 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, mkdirSync } from "node:fs";
 import { readModel, writeModel } from "./../catalog-io.mjs";
 
-const SCALE = { produce: 1.8, plant: 1.5 };
+// Plants went up another 45% on 2026-09-24 after walking the farm: at x1.5 a row
+// of crops read as ground cover rather than as plants you tend. Produce keeps
+// its own multiplier, which also brings the fruit hanging on a bush back to a
+// believable size against the bush.
+const SCALE = { produce: 1.8, plant: 2.2 };
 
 const SCRATCH = process.env.CROP_BUILD_DIR
   ?? "/private/tmp/claude-501/-Users-pedrosaldanha-Desktop-FarmingUnlimited/crop-build";
@@ -34,8 +38,8 @@ mkdirSync(SCRATCH, { recursive: true });
 /** pitch: the voxel size the model is AUTHORED at, before game scaling. */
 const CROPS = [
   { crop: "carrot",     stages: ["seedling", "growing", "ripe"], pitch: 0.0022, tags: ["farm", "vegetable"], label: "Carrot" },
-  { crop: "cabbage",    stages: ["seedling", "growing", "ripe"], pitch: 0.0022, tags: ["farm", "vegetable"], label: "Cabbage" },
-  { crop: "lettuce",    stages: ["seedling", "growing", "ripe"], pitch: 0.0022, tags: ["farm", "vegetable"], label: "Lettuce" },
+  { crop: "cabbage",    stages: ["seedling", "growing", "ripe"], pitch: 0.0020, tags: ["farm", "vegetable"], label: "Cabbage" },
+  { crop: "lettuce",    stages: ["seedling", "growing", "ripe"], pitch: 0.0021, tags: ["farm", "vegetable"], label: "Lettuce" },
   { crop: "strawberry", stages: ["seedling", "growing", "ripe"], pitch: 0.0018, tags: ["farm", "fruit"],     label: "Strawberry" },
   { crop: "pepper", pitch: 0.0022, tags: ["farm", "vegetable"], label: "Bell Pepper",
     stages: ["seedling", "growing", "ripe_green", "ripe_red", "ripe_yellow", "ripe_orange"] },
@@ -52,6 +56,12 @@ const ITEMS = [
   { kind: "pepper_red",    pitch: 0.0020, tags: ["food", "ingredient"], label: "Bell Pepper (red)" },
   { kind: "pepper_yellow", pitch: 0.0020, tags: ["food", "ingredient"], label: "Bell Pepper (yellow)" },
   { kind: "pepper_orange", pitch: 0.0020, tags: ["food", "ingredient"], label: "Bell Pepper (orange)" },
+];
+
+// Dishes: the other end of the chain, and scaled like produce because that is
+// what they are — food in the player's hands.
+const DISHES = [
+  { kind: "garden_salad", pitch: 0.0022, tags: ["food", "dish"], label: "Garden Salad" },
 ];
 
 const STAGE_LABEL = { seedling: "seedling", growing: "growing", ripe: "ready",
@@ -107,6 +117,18 @@ for (const spec of ITEMS) {
   toCatalog(glb, vox, id, spec.pitch, SCALE.produce);
   run("node", ["scripts/authored/merge-parts.mjs", id, "^(berry|pepper|sep|calyx|stalk|root|crown|stem|head|wrap|skirt|leaf)"]);
   const model = finish(id, spec.label, "authored/produce", spec.tags);
+  rows.push({ id, pitch: model.pitch, parts: model.parts.length, sockets: 0 });
+}
+
+for (const spec of DISHES) {
+  if (!wanted(spec.kind)) continue;
+  const glb = `${SCRATCH}/dish_${spec.kind}.glb`;
+  const vox = `${SCRATCH}/dish_${spec.kind}.vox.json`;
+  const id = `dish_${spec.kind}`;
+  run("blender", ["--background", "--python", "scripts/authored/items/dish.py", "--", spec.kind, glb]);
+  toCatalog(glb, vox, id, spec.pitch, SCALE.produce);
+  run("node", ["scripts/authored/merge-parts.mjs", id, "^(bowl|leaf|carrot|pepper)"]);
+  const model = finish(id, spec.label, "authored/dishes", spec.tags);
   rows.push({ id, pitch: model.pitch, parts: model.parts.length, sockets: 0 });
 }
 

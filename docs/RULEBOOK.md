@@ -362,11 +362,14 @@ Do not distinguish two items using only hue. Tomato is a round cluster with a gr
 
 - Voxel styling does **not** impose one global cube resolution. Placement grid: 1 world unit.
   Architectural module: 0.25–0.5 units. Character detail pitch: 0.04–0.08 units.
-- **Game scale: produce ×1.8, crop plants ×1.5, everything built ×1.0.** Models are authored at life
+- **Game scale: produce ×1.8, crop plants ×2.2, everything built ×1.0.** Models are authored at life
   size and scaled on the way into the catalog, because life size does not play. At the survey camera a
   real 7.9 cm bell pepper is **six pixels** wide and a 3.3 cm strawberry is three — the player cannot see
   ripeness, count, or that there is fruit at all. Scaled, they are 14.2 cm and 6.0 cm: large but plausible
-  beside an unscaled 1.88 m freezer, and legible from across a plot.
+  beside an unscaled 1.88 m freezer, and legible from across a plot. Plants went up again, from ×1.5 to
+  ×2.2, after walking the finished farm: a row of crops at ×1.5 read as ground cover rather than as
+  plants you tend. A ripe pepper bush is now 1.25 m and a cabbage 72 cm across, against a 1.2 m plot
+  spacing — a farm you walk between rather than over.
 
   Scaling is applied by handing `voxels-to-model.mjs` a larger world height, so pitch grows with the
   object and the **voxel count is unchanged** — the model keeps exactly as many voxels across its width
@@ -451,6 +454,10 @@ Crop silhouettes follow the recognizable structure of the real plant, simplified
   nine seconds. Plants, fruit and stored goods all draw as hardware instances of one hidden source
   (`meshLibrary.ts`). Nothing is cheapened to pay for it — a plot does not need its OWN cabbage, it needs
   a cabbage.
+- **The play camera is 3.2–34 m; surveying the site is a separate act.** Close enough to read a fruit,
+  never so far out that the farm becomes a texture. `F` lifts the ceiling to frame the whole compound and
+  zooming back in puts it down again.
+
 - **A plant far from the player is data, not meshes.** Plots keep growing on the clock wherever they are;
   they are built when the player comes within about 26 m and taken down past 32 m, a couple per frame.
 
@@ -707,6 +714,8 @@ travels). Current sources:
 | `src/game/cropPlanting.ts` | A plot: stage changes, fruit, picking, regrowth, ripening burst | Active foundation |
 | `src/game/farm.ts` | Plot sites from the plan, what the action key does, the farm save | Active foundation |
 | `src/game/farmPlots.ts`, `harvestCrate.ts` | The playable farm: sowing, harvesting, carrying, unloading | Active foundation |
+| `src/game/recipes.ts` | What the kitchen can make, what it needs, what it is worth | Active foundation |
+| `src/game/prepStation.ts` | The prep counter: a board, a plate, and a dish being made | Active foundation |
 | `src/game/meshLibrary.ts` | One meshing per model, instances for the rest | Active foundation |
 | `src/game/stageRig.ts`, `stageTransition.ts` | Cross-scale between a prop's age stages, and its easing | Active foundation |
 | `src/game/storageDisplay.ts` | Socket grids, footprint packing, `placementAttitude` | Active foundation |

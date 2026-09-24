@@ -6,10 +6,19 @@
 // state: the bar says what the plant cannot (a name, a countdown, a stock
 // tally) and nothing the plant already says.
 import { cropDefinitions, type CropDefinition } from "./game/crops";
+import { missingFor, recipes } from "./game/recipes";
 import { dominantColor } from "./game/cropPlanting";
 import { groupItems } from "./game/inventory";
 import { catalog } from "./assets/catalog/index";
 import type { PlotReading } from "./game/farmPlots";
+
+/** What the prep counter is doing, when the player is standing at it. */
+export interface PrepReading {
+  dish: string | null;
+  working: { recipe: { name: string }; left: number } | null;
+  /** What is standing on the board right now. */
+  board: readonly string[];
+}
 
 export interface FarmHud {
   readonly selected: CropDefinition;
@@ -17,8 +26,22 @@ export interface FarmHud {
   /** `crate` is how much the crate holds when the player is standing at it, and
    *  null when they are not — the one moment the crate has something to say that
    *  looking at it does not already tell you. */
-  render(reading: PlotReading | null, inventory: readonly string[], crate: number | null): void;
+  render(reading: PlotReading | null, inventory: readonly string[], crate: number | null, prep: PrepReading | null): void;
   dispose(): void;
+}
+
+/** What the counter is still short of, named in the player's terms. The counter
+ *  cannot say this itself — an ingredient that is missing has nothing to stand
+ *  on the board — so it is the one thing the bar has to spell out. */
+function missingLine(inventory: readonly string[], board: readonly string[]): string {
+  const recipe = recipes.find((candidate) => candidate.station === "prep");
+  if (!recipe) return "nothing to make here";
+  // What is on the board counts as much as what is in hand: the player has
+  // already carried it here, and asking for it twice would be a lie.
+  const short = missingFor(recipe, [...inventory, ...board]);
+  const names = Object.keys(short).map((id) => catalog.models[id]?.name ?? id);
+  if (!names.length) return `space to make the ${recipe.name}`;
+  return `${recipe.name} still wants ${names.join(", ")}`;
 }
 
 const ACTION_TEXT: Record<string, string> = {
@@ -73,12 +96,18 @@ export function createFarmHud(mount: HTMLElement): FarmHud {
       selected = index;
       paint();
     },
-    render(reading, inventory, crate) {
-      plotEl.innerHTML = crate !== null
-        ? `<b>crate · ${crate} in it</b> · ${inventory.length ? "space to unload" : "nothing to unload"}`
-        : reading
-          ? `<b>${reading.label}</b> · ${ACTION_TEXT[reading.action] ?? reading.action}`
-          : "walk onto the farm";
+    render(reading, inventory, crate, prep) {
+      plotEl.innerHTML = prep
+        ? prep.dish
+          ? `<b>${catalog.models[prep.dish]?.name ?? "dish"} is up</b> · space to take it`
+          : prep.working
+            ? `<b>${prep.working.recipe.name}</b> · ${prep.working.left.toFixed(0)}s`
+            : `<b>prep counter · ${prep.board.length} on the board</b> · ${missingLine(inventory, prep.board)}`
+        : crate !== null
+          ? `<b>crate · ${crate} in it</b> · ${inventory.length ? "space to unload" : "nothing to unload"}`
+          : reading
+            ? `<b>${reading.label}</b> · ${ACTION_TEXT[reading.action] ?? reading.action}`
+            : "walk onto the farm";
       const held = groupItems(inventory as string[]);
       const entries = Object.entries(held).sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0));
       carryEl.innerHTML = entries.length
