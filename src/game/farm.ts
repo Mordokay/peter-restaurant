@@ -8,7 +8,8 @@
 // buying another parcel adds plots without anybody editing a list, and a plot's
 // id stays stable as long as the area does — which is what lets a save name a
 // plot and find it again.
-import { cropById, harvestsLeft, isReady, isSpent, type CropDefinition, type PlantedCrop } from "./crops.ts";
+import { cropById, growthLeft, harvestsLeft, isReady, isSpent, type CropDefinition, type PlantedCrop } from "./crops.ts";
+import { describeSoil, isWet, type Soil } from "./soil.ts";
 import type { VersionedSave } from "./persistence.ts";
 
 /** One place a plant can stand. */
@@ -82,23 +83,24 @@ export function nearestSite(sites: readonly PlotSite[], x: number, z: number, ma
  *  the last one, so replanting is just sowing again rather than a chore. What is
  *  left for clearing is the leftovers — a plant whose crop no longer exists in
  *  the game, and later anything that dies in the ground. */
-export type PlotAction = "sow" | "harvest" | "clear" | "growing";
+export type PlotAction = "till" | "sow" | "harvest" | "clear" | "growing";
 
-export function actionFor(planted: PlantedCrop | null, now: number): PlotAction {
-  if (!planted) return "sow";
+export function actionFor(planted: PlantedCrop | null, soil: Soil): PlotAction {
+  if (!planted) return soil.tilled ? "sow" : "till";
   const crop = cropById(planted.crop);
   if (!crop) return "clear";
   if (isSpent(crop, planted)) return "clear";
-  return isReady(crop, planted, now) ? "harvest" : "growing";
+  return isReady(crop, planted) ? "harvest" : "growing";
 }
 
-/** Seconds until this plot is worth visiting again, or null when it is ready or
- *  empty. Drives nothing yet; the HUD and, later, the farmhand will both want it. */
-export function secondsUntilReady(planted: PlantedCrop | null, now: number): number | null {
+/** Seconds of WATERED growing this plot still needs, or null when it is ready or
+ *  empty. In dry ground that is a distance, not a countdown, which is exactly
+ *  what the player should feel when they forget the watering can. */
+export function growthRemaining(planted: PlantedCrop | null): number | null {
   if (!planted) return null;
   const crop = cropById(planted.crop);
-  if (!crop || isSpent(crop, planted) || isReady(crop, planted, now)) return null;
-  return Math.max(0, planted.readyAt - now);
+  if (!crop || isSpent(crop, planted) || isReady(crop, planted)) return null;
+  return growthLeft(crop, planted);
 }
 
 /** How many plants of this crop are in the ground, spent ones included. */
@@ -118,6 +120,8 @@ export interface FarmSave extends VersionedSave {
   version: typeof FARM_SAVE_VERSION;
   clock: number;
   plots: Record<string, PlantedCrop>;
+  /** Ground state per plot: broken, wet, fed. */
+  soils?: Record<string, Soil>;
   /** What the player is carrying. */
   inventory: string[];
   /** What has been tipped into the crate at the edge of the farm. */
@@ -129,23 +133,35 @@ export interface FarmSave extends VersionedSave {
 }
 
 /** Drop plots whose site no longer exists (a parcel was re-drawn) and plants of
- *  crops that no longer exist, rather than letting either resurrect as a ghost. */
+ *  crops that no longer exist, rather than letting either resurrect as a ghost.
+ *
+ *  Also repairs plants saved by an older build. Growth used to be a pair of
+ *  timestamps and is now banked seconds; a record from before that change has no
+ *  `grown` at all, and reading one straight through put `NaN` on the HUD. Such a
+ *  plant is restarted rather than discarded — losing a plot's progress is a far
+ *  smaller betrayal than losing the plot. */
 export function restorePlots(saved: Readonly<Record<string, PlantedCrop>>, sites: readonly PlotSite[]): Record<string, PlantedCrop> {
   const known = new Set(sites.map((site) => site.id));
   const restored: Record<string, PlantedCrop> = {};
+  const number = (value: unknown): number => (typeof value === "number" && Number.isFinite(value) ? value : 0);
   for (const [id, planted] of Object.entries(saved)) {
     if (!known.has(id) || !cropById(planted.crop)) continue;
-    restored[id] = planted;
+    restored[id] = {
+      crop: planted.crop,
+      grown: number(planted.grown),
+      regrown: number(planted.regrown),
+      harvested: number(planted.harvested),
+    };
   }
   return restored;
 }
 
 /** A one-line reading of a plot for the HUD: what it is and how it is doing. */
-export function describePlot(planted: PlantedCrop | null, now: number): string {
-  if (!planted) return "bare soil";
+export function describePlot(planted: PlantedCrop | null, soil: Soil): string {
+  if (!planted) return describeSoil(soil);
   const crop = cropById(planted.crop) as CropDefinition | undefined;
   if (!crop) return "unknown crop";
-  const action = actionFor(planted, now);
+  const action = actionFor(planted, soil);
   if (action === "clear") return `${crop.name} · spent`;
   if (action === "harvest") {
     // The count is only worth showing where it can go down: a lettuce is cut
@@ -154,6 +170,7 @@ export function describePlot(planted: PlantedCrop | null, now: number): string {
     const countable = crop.harvests > 1 && Number.isFinite(crop.harvests);
     return `${crop.name} · ready${countable ? ` (${left} left)` : ""}`;
   }
-  const wait = secondsUntilReady(planted, now) ?? 0;
-  return `${crop.name} · ${Math.ceil(wait)}s`;
+  // A dry plot says so rather than counting down a clock that is not running.
+  const wait = growthRemaining(planted) ?? 0;
+  return isWet(soil) ? `${crop.name} · ${Math.ceil(wait)}s` : `${crop.name} · dry, not growing`;
 }

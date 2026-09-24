@@ -20,7 +20,7 @@
 // while the player is looking somewhere else has to be able to say so.
 import { TransformNode, Vector3, type Scene, type ShadowGenerator, type StandardMaterial } from "@babylonjs/core";
 import {
-  cropById, fruitProgress, harvest as harvestCrop, isReady, isSpent, plant as plantCrop, stageOf,
+  advance, cropById, fruitProgress, harvest as harvestCrop, isReady, isSpent, plant as plantCrop, stageOf,
   CROP_STAGES, type CropDefinition, type HarvestResult, type PlantedCrop,
 } from "./crops.ts";
 import { createCropFruit, type CropFruitDisplay } from "./cropFruit.ts";
@@ -66,15 +66,17 @@ export interface CropPlot {
   readonly root: TransformNode;
   /** Fruit hanging right now — what the player can see, not what a pick awards. */
   readonly shown: number;
-  ready(now: number): boolean;
+  ready(): boolean;
   /** Sow (or re-sow) this plot. */
-  sow(now: number, crop?: CropDefinition): void;
+  sow(crop?: CropDefinition): void;
   /** Adopt a plant that already exists — a save coming back, or a plot handed
    *  over. The state is taken as given, including its age, rather than restarted. */
   restore(planted: PlantedCrop): void;
-  /** Pick it. Returns what crops.ts decided; the animation follows. */
-  harvest(now: number): HarvestResult;
-  update(now: number, dt: number): void;
+  /** Pick it. Returns what crops.ts decided; the animation follows.
+   *  `bonus` is the soil's extra chance at a better picking. */
+  harvest(bonus?: number): HarvestResult;
+  /** `rate` is how fast this soil lets the plant grow: 0 in dry ground. */
+  update(dt: number, rate?: number): void;
   dispose(): void;
 }
 
@@ -166,13 +168,13 @@ export function createCropPlot(options: CropPlotOptions): CropPlot {
     get state() { return state; },
     root,
     get shown() { return fruit?.shown ?? 0; },
-    ready(now) { return state !== null && isReady(crop, state, now); },
+    ready() { return state !== null && isReady(crop, state); },
 
-    sow(now, next) {
+    sow(next) {
       const wanted = next ?? crop;
       if (!rig || wanted.id !== crop.id) { crop = wanted; build(); }
       reset();
-      state = plantCrop(crop, now);
+      state = plantCrop(crop);
       requestStage(rig!, 0);
     },
 
@@ -186,9 +188,9 @@ export function createCropPlot(options: CropPlotOptions): CropPlot {
       // instead of sprouting again in front of the player.
     },
 
-    harvest(now) {
+    harvest(bonus = 0) {
       if (!state) return { planted: null, items: 0, spent: false };
-      const result = harvestCrop(crop, state, now, seed);
+      const result = harvestCrop(crop, state, seed, bonus);
       if (!result.items) return result;
       // The plant is pulled or the fruit is picked; either way the model reacts
       // now and crops.ts has already decided what the player got.
@@ -199,7 +201,7 @@ export function createCropPlot(options: CropPlotOptions): CropPlot {
       return result;
     },
 
-    update(now, dt) {
+    update(dt, rate = 1) {
       if (!rig) return;
       animateStages(rig, dt);
 
@@ -211,17 +213,19 @@ export function createCropPlot(options: CropPlotOptions): CropPlot {
         return;
       }
       if (!state) return;
+      // The plant only ages as fast as the ground lets it.
+      state = advance(crop, state, dt, rate);
 
-      requestStage(rig, CROP_STAGES.indexOf(stageOf(crop, state, now)));
-
-      const ripe = stageOf(crop, state, now) === "ripe" && !isSpent(crop, state);
+      const stage = stageOf(crop, state);
+      requestStage(rig, CROP_STAGES.indexOf(stage));
+      const ripe = stage === "ripe" && !isSpent(crop, state);
       if (picking !== Infinity) {
         picking += dt;
         const t = Math.min(1, picking / HARVEST_SECONDS);
         open = 1 - easeInOutCubic(t);
         if (t >= 1) { picking = Infinity; open = 0; fruit?.clear(); }
       } else {
-        open = ripe ? growWithOvershoot(fruitProgress(crop, state, now), FRUIT_REGROW_SETTLE) : 0;
+        open = ripe ? growWithOvershoot(fruitProgress(crop, state), FRUIT_REGROW_SETTLE) : 0;
       }
 
       // Hanging fruit is capacity, not yield: the model shows a plausible plant,
@@ -230,7 +234,7 @@ export function createCropPlot(options: CropPlotOptions): CropPlot {
       if (fruit && fruit.shown !== Math.min(wanted, fruit.capacity)) show(wanted);
       else fruit?.setOpen(open);
 
-      const readyNow = isReady(crop, state, now);
+      const readyNow = isReady(crop, state);
       if (readyNow && !wasReady) burst();
       wasReady = readyNow;
     },

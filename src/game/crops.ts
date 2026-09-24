@@ -18,7 +18,7 @@
 // real minutes (four of prep, four to five of dinner), so a crop that cannot be
 // sown and picked inside that window is a crop the player never sees finish.
 
-import { hashRange } from "./hash.ts";
+import { hash01, hashRange } from "./hash.ts";
 
 /** Which model a plant is currently showing. */
 export type CropStage = "seedling" | "growing" | "ripe";
@@ -100,13 +100,19 @@ export function cropById(id: string): CropDefinition | undefined {
   return byId.get(id);
 }
 
-/** A plant in the ground. Everything else is derived from this and the clock. */
+/** A plant in the ground.
+ *
+ *  Growth is BANKED TIME, not a date. A plant records how many seconds of
+ *  growing it has actually had, and the farm adds to that only while the soil
+ *  under it is wet — so a plot nobody waters is a plot that does not move, and
+ *  compost makes the same real second worth more. A `readyAt` timestamp could
+ *  not express either without lying about when the plant was sown. */
 export interface PlantedCrop {
   crop: string;
-  /** Game seconds when it was sown. */
-  plantedAt: number;
-  /** Game seconds when the CURRENT fruit set finishes — first ripening, or a regrow. */
-  readyAt: number;
+  /** Seconds of effective growth banked since sowing. */
+  grown: number;
+  /** Seconds of effective regrowth banked since the last picking. */
+  regrown: number;
   /** Harvests taken so far.
    *
    *  This counts UP rather than storing "harvests remaining", because a
@@ -116,8 +122,22 @@ export interface PlantedCrop {
   harvested: number;
 }
 
-export function plant(crop: CropDefinition, now: number): PlantedCrop {
-  return { crop: crop.id, plantedAt: now, readyAt: now + crop.growthSeconds, harvested: 0 };
+export function plant(crop: CropDefinition): PlantedCrop {
+  return { crop: crop.id, grown: 0, regrown: 0, harvested: 0 };
+}
+
+/** Time passing over this plant, at whatever rate the soil allows. A rate of
+ *  zero — dry ground — leaves it exactly as it was. */
+export function advance(crop: CropDefinition, planted: PlantedCrop, dt: number, rate: number): PlantedCrop {
+  const banked = Math.max(0, dt) * Math.max(0, rate);
+  if (!banked) return planted;
+  // Growth is capped at what the plant can use: banking a week of surplus would
+  // make the next regrow finish the instant it was picked.
+  return {
+    ...planted,
+    grown: Math.min(crop.growthSeconds, planted.grown + banked),
+    regrown: Math.min(Math.max(crop.regrowSeconds, 1), planted.regrown + banked),
+  };
 }
 
 /** Harvests still available. `Infinity` for a perennial. */
@@ -127,29 +147,29 @@ export function harvestsLeft(crop: CropDefinition, planted: PlantedCrop): number
 
 /** Which model to show. Note this is the PLANT's maturity, not the fruit's: a
  *  picked pepper bush is still "ripe" — a full-grown bush with nothing on it. */
-export function stageOf(crop: CropDefinition, planted: PlantedCrop, now: number): CropStage {
-  const grown = (now - planted.plantedAt) / Math.max(1e-6, crop.growthSeconds);
+export function stageOf(crop: CropDefinition, planted: PlantedCrop): CropStage {
+  const grown = planted.grown / Math.max(1e-6, crop.growthSeconds);
   if (grown >= 1) return "ripe";
   return grown < SEEDLING_UNTIL ? "seedling" : "growing";
 }
 
-export function stageModel(crop: CropDefinition, planted: PlantedCrop, now: number): string {
-  return crop.stages[stageOf(crop, planted, now)];
+export function stageModel(crop: CropDefinition, planted: PlantedCrop): string {
+  return crop.stages[stageOf(crop, planted)];
 }
 
 /** How far along the current fruit set is, 0..1. Drives the regrow animation;
  *  the renderer eases it and adds the overshoot. */
-export function fruitProgress(crop: CropDefinition, planted: PlantedCrop, now: number): number {
+export function fruitProgress(crop: CropDefinition, planted: PlantedCrop): number {
   if (harvestsLeft(crop, planted) <= 0) return 0;
-  // Before the first harvest the fruit grows with the plant; afterwards it is
+  // Before the first harvest the fruit comes on with the plant; afterwards it is
   // the regrow window that matters.
-  const span = planted.harvested === 0 ? crop.growthSeconds : Math.max(1e-6, crop.regrowSeconds);
-  return Math.max(0, Math.min(1, 1 - (planted.readyAt - now) / span));
+  if (planted.harvested === 0) return Math.max(0, Math.min(1, planted.grown / Math.max(1e-6, crop.growthSeconds)));
+  return Math.max(0, Math.min(1, planted.regrown / Math.max(1e-6, crop.regrowSeconds)));
 }
 
 /** Ripe, fruit grown, and something left to give. */
-export function isReady(crop: CropDefinition, planted: PlantedCrop, now: number): boolean {
-  return harvestsLeft(crop, planted) > 0 && now >= planted.readyAt && stageOf(crop, planted, now) === "ripe";
+export function isReady(crop: CropDefinition, planted: PlantedCrop): boolean {
+  return harvestsLeft(crop, planted) > 0 && stageOf(crop, planted) === "ripe" && fruitProgress(crop, planted) >= 1;
 }
 
 /** Whether the plant is finished and the soil should be turned over. */
@@ -157,12 +177,25 @@ export function isSpent(crop: CropDefinition, planted: PlantedCrop): boolean {
   return harvestsLeft(crop, planted) <= 0;
 }
 
+/** Seconds of WATERED growing still to come, which is not the same as seconds
+ *  on the clock: a dry plot never gets there at all. */
+export function growthLeft(crop: CropDefinition, planted: PlantedCrop): number {
+  if (harvestsLeft(crop, planted) <= 0) return 0;
+  if (planted.harvested === 0) return Math.max(0, crop.growthSeconds - planted.grown);
+  return Math.max(0, crop.regrowSeconds - planted.regrown);
+}
+
 /** How many items this particular harvest gives. Stable across saves: the same
  *  plot picked the same number of times always yields the same amount, so a
  *  reload cannot be used to reroll a poor harvest. */
-export function yieldOf(crop: CropDefinition, seed: string, harvestIndex: number): number {
+export function yieldOf(crop: CropDefinition, seed: string, harvestIndex: number, bonus = 0): number {
   const [low, high] = crop.yield;
-  return hashRange(`${crop.id}:${seed}`, harvestIndex, low, high);
+  const picked = hashRange(`${crop.id}:${seed}`, harvestIndex, low, high);
+  // A soil bonus is a second, better roll — composted ground gives more without
+  // ever giving a different crop or breaking the range the model can show.
+  if (bonus <= 0) return picked;
+  const again = hashRange(`${crop.id}:${seed}:fed`, harvestIndex, low, high);
+  return Math.min(high, hash01(`${crop.id}:${seed}:luck`, harvestIndex) < bonus ? Math.max(picked, again) : picked);
 }
 
 export interface HarvestResult {
@@ -175,11 +208,11 @@ export interface HarvestResult {
 }
 
 /** Pick it. Returns the next state rather than mutating, so callers can preview. */
-export function harvest(crop: CropDefinition, planted: PlantedCrop, now: number, seed: string): HarvestResult {
-  if (!isReady(crop, planted, now)) return { planted, items: 0, spent: false };
+export function harvest(crop: CropDefinition, planted: PlantedCrop, seed: string, bonus = 0): HarvestResult {
+  if (!isReady(crop, planted)) return { planted, items: 0, spent: false };
 
-  const items = yieldOf(crop, seed, planted.harvested);
-  const taken = { ...planted, harvested: planted.harvested + 1, readyAt: now + crop.regrowSeconds };
+  const items = yieldOf(crop, seed, planted.harvested, bonus);
+  const taken = { ...planted, harvested: planted.harvested + 1, regrown: 0 };
 
   // A whole-plant crop leaves bare soil; a picked one keeps standing and regrows.
   if (crop.wholePlant || harvestsLeft(crop, taken) <= 0) return { planted: null, items, spent: true };

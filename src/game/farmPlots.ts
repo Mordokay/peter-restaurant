@@ -16,15 +16,18 @@
 // the storage grids already expect, so the crate that shows them is a renderer
 // over the same data rather than a second source of truth.
 import { TransformNode, Vector3, type Scene, type ShadowGenerator, type StandardMaterial } from "@babylonjs/core";
-import { cropById, type CropDefinition, type PlantedCrop } from "./crops.ts";
+import { advance, cropById, type CropDefinition, type PlantedCrop } from "./crops.ts";
 import { createCropPlot, type CropPlot } from "./cropPlanting.ts";
 import {
-  FARM_SAVE_KEY, FARM_SAVE_VERSION, actionFor, describePlot, nearestSite, plotSites, restorePlots,
-  type AreaRect, type FarmSave, type PlotAction, type PlotSite,
+  FARM_SAVE_KEY, FARM_SAVE_VERSION, describePlot, nearestSite, plotSites, restorePlots,
+  type AreaRect, type FarmSave, type PlotSite,
 } from "./farm.ts";
+import { bareSoil, dry, fertilise, growthRate, till, waterSoil, yieldBonus, lookOf, type Soil, type SoilLook } from "./soil.ts";
+import { actionOf, refusalFor, type FarmAction, type Slot } from "./tools.ts";
 import { addItems } from "./inventory.ts";
 import { createMeshLibrary } from "./meshLibrary.ts";
 import { createHarvestCrate, type HarvestCrate } from "./harvestCrate.ts";
+import { createSoilPatches } from "./soilPatches.ts";
 import { readSave, writeSave } from "./persistence.ts";
 import type { AuthoredVoxelCatalog } from "./voxelModel.ts";
 import type { ParticleWorld } from "./voxelParticles.ts";
@@ -63,9 +66,25 @@ export interface FarmOptions {
 export interface PlotReading {
   site: PlotSite;
   planted: PlantedCrop | null;
-  action: PlotAction;
-  /** One line for the HUD. */
+  soil: Soil;
+  /** What the held slot would do here. */
+  action: FarmAction;
+  /** One line for the HUD: the plant, or the state of the ground. */
   label: string;
+  /** Why the key would do nothing, when it would. */
+  refusal: string;
+}
+
+/** What actually happened, so the world can throw the right dirt in the air. */
+export interface ActResult {
+  action: FarmAction;
+  site: PlotSite;
+  /** Items handed over by a harvest. */
+  items: number;
+  /** Catalog id of what was harvested, where anything was. */
+  crop: string | null;
+  /** How the ground looks now, for the soil renderer. */
+  look: SoilLook;
 }
 
 export interface Farm {
@@ -82,11 +101,12 @@ export interface Farm {
   readonly inventory: readonly string[];
   /** Game seconds since this farm started, across sessions. */
   readonly clock: number;
-  /** The plot the player is addressing, with what the action key would do. */
-  addressed(x: number, z: number): PlotReading | null;
-  /** Sow, harvest or clear that plot. Returns what happened. */
-  act(site: PlotSite, crop: CropDefinition): { action: PlotAction; items: number; crop: string | null };
-  /** `focus` is the player: plots near them are built, far ones are taken down. */
+  /** The plot the player is addressing, read with whatever is in their hand. */
+  addressed(x: number, z: number, slot: Slot): PlotReading | null;
+  /** Use what is in hand on that plot. */
+  act(site: PlotSite, slot: Slot): ActResult | null;
+  /** The ground's state at a plot, for the soil renderer. */
+  soilAt(id: string): Soil;
   update(dt: number, focus?: { x: number; z: number }): void;
   save(): void;
   dispose(): void;
@@ -101,10 +121,15 @@ export function createFarm(options: FarmOptions): Farm {
   const sites = plotSites(options.areas);
   const byId = new Map(sites.map((site) => [site.id, site]));
   const plots: Record<string, PlantedCrop> = {};
+  /** Ground state per plot. Only plots that have been worked appear here; the
+   *  rest are bare, which costs nothing to represent. */
+  const soils: Record<string, Soil> = {};
   const rendered = new Map<string, CropPlot>();
   // One meshing of each crop stage and each fruit for the whole farm; every
   // plant standing in the soil is an instance of it.
   const library = createMeshLibrary();
+  // Worked ground, drawn near the player the same way the plants are.
+  const patches = createSoilPatches({ scene, catalog, parent: root, shadows: options.shadows, material: options.material, groundY });
   const inventory: string[] = [];
   let clock = 0;
 
@@ -124,6 +149,7 @@ export function createFarm(options: FarmOptions): Farm {
     if (saved) {
       clock = Math.max(0, saved.clock);
       Object.assign(plots, restorePlots(saved.plots, sites));
+      for (const [id, soil] of Object.entries(saved.soils ?? {})) if (byId.has(id)) soils[id] = { ...soil };
       inventory.push(...saved.inventory);
       crate?.set(saved.crate ?? []);
     }
@@ -165,9 +191,15 @@ export function createFarm(options: FarmOptions): Farm {
     return dx * dx + dz * dz <= range * range;
   };
 
-  /** Build the plants near the player and take down the ones that are not. */
+  /** Build the plants and beds near the player and take down the ones that are not. */
   const admit = (focus: { x: number; z: number }): void => {
     let budget = BUILDS_PER_FRAME;
+    for (const [id, soil] of Object.entries(soils)) {
+      const site = byId.get(id);
+      if (!site) continue;
+      if (near(site, focus, RENDER_DISTANCE)) patches.set(id, lookOf(soil), site);
+      else if (!near(site, focus, RETIRE_DISTANCE)) patches.remove(id);
+    }
     for (const [id, planted] of Object.entries(plots)) {
       const site = byId.get(id);
       if (!site) continue;
@@ -188,50 +220,6 @@ export function createFarm(options: FarmOptions): Farm {
     get sites() { return sites; },
     get inventory() { return inventory; },
     get clock() { return clock; },
-
-    addressed(x, z) {
-      const site = nearestSite(sites, x, z, REACH);
-      if (!site) return null;
-      const planted = plots[site.id] ?? null;
-      return { site, planted, action: actionFor(planted, clock), label: describePlot(planted, clock) };
-    },
-
-    act(site, crop) {
-      if (!byId.has(site.id)) return { action: "growing", items: 0, crop: null };
-      const planted = plots[site.id] ?? null;
-      const action = actionFor(planted, clock);
-
-      if (action === "sow") {
-        retiring.delete(site.id);
-        const plot = rendererFor(site, crop);
-        plot.sow(clock);
-        plots[site.id] = plot.state!;
-        return { action, items: 0, crop: crop.id };
-      }
-      if (action === "clear") {
-        const cleared = planted?.crop ?? null;
-        drop(site.id);
-        retiring.delete(site.id);
-        return { action, items: 0, crop: cleared };
-      }
-      if (action === "harvest" && planted) {
-        const grown = cropById(planted.crop)!;
-        const plot = rendererFor(site, grown);
-        const result = plot.harvest(clock);
-        if (result.items && grown.produce) addItems(inventory, grown.produce, result.items, CARRY_CAPACITY);
-        if (result.planted) {
-          plots[site.id] = result.planted;
-        } else {
-          // Pulled up: the plot is empty from this instant, but the plant is
-          // still shrinking into the soil, so its renderer is retired rather
-          // than deleted out from under the animation.
-          delete plots[site.id];
-          retiring.set(site.id, RETIRE_SECONDS);
-        }
-        return { action, items: result.items, crop: grown.produce };
-      }
-      return { action, items: 0, crop: planted?.crop ?? null };
-    },
 
     get crate() { return crate; },
 
@@ -255,10 +243,113 @@ export function createFarm(options: FarmOptions): Farm {
       }
     },
 
+    soilAt(id) { return soils[id] ?? bareSoil(); },
+
+    addressed(x, z, slot) {
+      const site = nearestSite(sites, x, z, REACH);
+      if (!site) return null;
+      const planted = plots[site.id] ?? null;
+      const soil = soils[site.id] ?? bareSoil();
+      return {
+        site, planted, soil,
+        action: actionOf(slot, soil, planted),
+        label: describePlot(planted, soil),
+        refusal: refusalFor(slot, soil, planted),
+      };
+    },
+
+    act(site, slot) {
+      if (!byId.has(site.id)) return null;
+      const planted = plots[site.id] ?? null;
+      const soil = soils[site.id] ?? bareSoil();
+      const action = actionOf(slot, soil, planted);
+      const done = (items = 0, crop: string | null = null): ActResult => {
+        const look = lookOf(soils[site.id] ?? bareSoil());
+        patches.set(site.id, look, site);
+        return { action, site, items, crop, look };
+      };
+
+      switch (action) {
+        case "till":
+          soils[site.id] = till(soil);
+          return done();
+        case "water":
+          soils[site.id] = waterSoil(soil);
+          return done();
+        case "feed":
+          soils[site.id] = fertilise(soil, slot.kind === "tool" && slot.tool === "mulch" ? "mulch" : "compost");
+          return done();
+        case "sow": {
+          if (slot.kind !== "seed") return done();
+          const crop = cropById(slot.crop);
+          if (!crop) return done();
+          retiring.delete(site.id);
+          const plot = rendererFor(site, crop);
+          plot.sow();
+          plots[site.id] = plot.state!;
+          return done(0, crop.id);
+        }
+        case "clear": {
+          const cleared = planted?.crop ?? null;
+          drop(site.id);
+          retiring.delete(site.id);
+          return done(0, cleared);
+        }
+        case "harvest": {
+          if (!planted) return done();
+          const grown = cropById(planted.crop)!;
+          const plot = rendererFor(site, grown);
+          // The ground's own contribution: composted soil gets a second roll at
+          // the top of the crop's range.
+          const result = plot.harvest(yieldBonus(soil));
+          if (result.items && grown.produce) addItems(inventory, grown.produce, result.items, CARRY_CAPACITY);
+          if (result.planted) {
+            plots[site.id] = result.planted;
+          } else {
+            // Pulled up: the plot is empty from this instant, but the plant is
+            // still shrinking into the soil, so its renderer is retired rather
+            // than deleted out from under the animation.
+            delete plots[site.id];
+            retiring.set(site.id, RETIRE_SECONDS);
+          }
+          return done(result.items, grown.produce);
+        }
+        default:
+          return done();
+      }
+    },
+
     update(dt, focus) {
       clock += dt;
       if (focus) admit(focus);
-      for (const plot of rendered.values()) plot.update(clock, dt);
+
+      // The whole farm ages, not just the part the player can see: soil dries
+      // and plants bank growth wherever they are. Only the MESHES are near.
+      for (const id of Object.keys(soils)) {
+        const before = soils[id]!;
+        const dried = dry(before, dt);
+        if (dried.wet === 0 && !dried.tilled && dried.fertiliser === "none") { delete soils[id]; patches.remove(id); continue; }
+        soils[id] = dried;
+        // Ground drying out is a visible event, not a number: the bed lightens
+        // the moment the last of the water goes.
+        const site = byId.get(id);
+        if (site && lookOf(before) !== lookOf(dried)) patches.set(id, lookOf(dried), site);
+      }
+      for (const [id, planted] of Object.entries(plots)) {
+        const rate = growthRate(soils[id] ?? bareSoil());
+        const plot = rendered.get(id);
+        if (!plot) {
+          const crop = cropById(planted.crop);
+          if (crop) plots[id] = advance(crop, planted, dt, rate);
+          continue;
+        }
+        plot.update(dt, rate);
+        // The renderer is the authority while it exists; the farm keeps the
+        // snapshot in step so the save and the distant plots agree with it.
+        if (plot.state) plots[id] = plot.state;
+      }
+      for (const [id, plot] of rendered) if (!plots[id] && plot.state) plots[id] = plot.state;
+
       for (const [id, left] of retiring) {
         const remaining = left - dt;
         if (remaining > 0) { retiring.set(id, remaining); continue; }
@@ -273,12 +364,13 @@ export function createFarm(options: FarmOptions): Farm {
       if (!options.persist) return;
       writeSave<FarmSave>(FARM_SAVE_KEY, {
         version: FARM_SAVE_VERSION, savedAt: Date.now(), clock,
-        plots: { ...plots }, inventory: [...inventory], crate: [...(crate?.contents ?? [])],
+        plots: { ...plots }, soils: { ...soils }, inventory: [...inventory], crate: [...(crate?.contents ?? [])],
       });
     },
 
     dispose() {
       crate?.dispose();
+      patches.dispose();
       for (const plot of rendered.values()) plot.dispose();
       rendered.clear();
       library.dispose();

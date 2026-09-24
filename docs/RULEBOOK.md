@@ -432,6 +432,27 @@ No recognizable real-world asset is approved from memory or after a single model
 
 The author—not the player—is responsible for completing these iterations. Model Lab supports the process; it is not evidence by itself that an asset has passed.
 
+#### The farming loop
+
+Copied deliberately from Stardew Valley, because it is the best-solved version of
+this loop and the player already knows it:
+
+- **Break, water, sow, tend, pick.** Unbroken ground takes nothing. A sown plot in dry soil does not
+  grow at all — growth is banked watered time, not elapsed time, so a plot nobody waters is a plot that
+  has not moved. Watering lasts about half a day and the bed visibly dries out.
+- **One key, and the tool decides.** The player picks a tool, not a verb, and the ground answers. The one
+  deliberate difference from Stardew: a ripe crop is picked whatever is in hand, because swapping to bare
+  hands to pick a plant you are standing over is a step that exists only because of how tools were
+  modelled.
+- **Every action throws something in the air.** A hoe that makes no dirt fly reads as a key press; a
+  watering can that changes only a number reads as a menu. Each verb has its own burst, and a harvest
+  throws the crop's own colour.
+- **Fed soil looks fed.** Compost flecks the bed dark and speeds growth by a third; mulch pales it with
+  straw and makes a watering last half again as long. Both are read off the ground, never off a panel.
+- **Late game must not be a click grind.** The replanting phase is where farming sims break down — the
+  answer is tools that work a line or a whole bed at once (a seed attachment, a tractor), not faster
+  clicking. Anything added here is judged against that.
+
 #### Living crop rule
 
 Crop silhouettes follow the recognizable structure of the real plant, simplified for the camera. A tomato plot uses upright vines, alternating branches and leaves, fruit stems, and distinct fruit sites; it is not a row of red objects placed directly on soil.
@@ -720,6 +741,8 @@ travels). Current sources:
 | `src/game/farm.ts` | Plot sites from the plan, what the action key does, the farm save | Active foundation |
 | `src/game/farmPlots.ts`, `harvestCrate.ts` | The playable farm: sowing, harvesting, carrying, unloading | Active foundation |
 | `src/game/recipes.ts` | What the kitchen can make, what it needs, what it is worth | Active foundation |
+| `src/game/soil.ts`, `tools.ts` | Tilling, watering, fertiliser, and what the held tool does | Active foundation |
+| `src/game/soilPatches.ts` | Worked ground drawn: one bed model, recoloured per state | Active foundation |
 | `src/game/prepStation.ts` | The prep counter: a board, a plate, and a dish being made | Active foundation |
 | `src/game/meshLibrary.ts` | One meshing per model, instances for the rest | Active foundation |
 | `src/game/stageRig.ts`, `stageTransition.ts` | Cross-scale between a prop's age stages, and its easing | Active foundation |

@@ -1,8 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { cropById, harvest, plant, type PlantedCrop } from "./crops.ts";
+import { advance, cropById, harvest, plant, type PlantedCrop } from "./crops.ts";
+import { bareSoil, till, waterSoil } from "./soil.ts";
 import {
-  PLOT_SPACING, actionFor, countPlanted, describePlot, nearestSite, plotSites, restorePlots, secondsUntilReady,
+  PLOT_SPACING, actionFor, countPlanted, describePlot, growthRemaining, nearestSite, plotSites, restorePlots,
   type AreaRect,
 } from "./farm.ts";
 
@@ -51,50 +52,64 @@ test("the plot you address is the nearest one in reach, and nothing when out of 
 
 test("one action key covers the whole life of a plot", () => {
   const lettuce = cropById("lettuce")!;
-  assert.equal(actionFor(null, 0), "sow");
+  const wet = waterSoil(till(bareSoil()));
+  // Unbroken ground is not sowable: the hoe comes first.
+  assert.equal(actionFor(null, bareSoil()), "till");
+  assert.equal(actionFor(null, wet), "sow");
 
-  const sown = plant(lettuce, 100);
-  assert.equal(actionFor(sown, 100), "growing");
-  assert.equal(actionFor(sown, 100 + lettuce.growthSeconds), "harvest");
+  const sown = plant(lettuce);
+  assert.equal(actionFor(sown, wet), "growing");
+  assert.equal(actionFor(advance(lettuce, sown, lettuce.growthSeconds, 1), wet), "harvest");
 
   // A pepper gives four flushes; the fourth takes the bush with it, so the plot
   // goes back to bare soil rather than standing there asking to be tidied up.
   const pepper = cropById("pepper")!;
-  let bush: PlantedCrop | null = plant(pepper, 0);
+  let bush: PlantedCrop | null = advance(pepper, plant(pepper), pepper.growthSeconds, 1);
   for (let taken = 0; taken < pepper.harvests; taken++) {
-    const at = bush!.readyAt;
-    assert.equal(actionFor(bush, at), "harvest", `harvest ${taken + 1} is available`);
-    bush = harvest(pepper, bush!, at, "plot").planted;
+    assert.equal(actionFor(bush, wet), "harvest", `harvest ${taken + 1} is available`);
+    const next = harvest(pepper, bush!, "plot").planted;
+    bush = next && advance(pepper, next, pepper.regrowSeconds, 1);
   }
   assert.equal(bush, null, "the last harvest empties the plot");
-  assert.equal(actionFor(bush, 10_000), "sow");
+  assert.equal(actionFor(bush, wet), "sow", "and the bed it leaves is still broken ground");
 
   // A plant whose crop was removed from the game is cleared, not crashed on.
-  assert.equal(actionFor({ crop: "moonfruit", plantedAt: 0, readyAt: 0, harvested: 0 }, 10), "clear");
+  assert.equal(actionFor({ crop: "moonfruit", grown: 0, regrown: 0, harvested: 0 }, wet), "clear");
 });
 
 test("a save only brings back plants that still have a plot and a crop", () => {
   const sites = plotSites(areas);
   const saved: Record<string, PlantedCrop> = {
-    [sites[0]!.id]: plant(cropById("carrot")!, 5),
-    "farm_gone:2,2": plant(cropById("carrot")!, 5),
-    [sites[1]!.id]: { crop: "moonfruit", plantedAt: 0, readyAt: 10, harvested: 0 },
+    [sites[0]!.id]: plant(cropById("carrot")!),
+    "farm_gone:2,2": plant(cropById("carrot")!),
+    [sites[1]!.id]: { crop: "moonfruit", grown: 0, regrown: 0, harvested: 0 },
   };
   const restored = restorePlots(saved, sites);
   assert.deepEqual(Object.keys(restored), [sites[0]!.id]);
   assert.equal(countPlanted(restored, "carrot"), 1);
+
+  // A plant saved by an older build — growth was a pair of timestamps then —
+  // comes back restarted rather than as NaN on the HUD or as a lost plot.
+  const legacy = { [sites[2]!.id]: { crop: "carrot", plantedAt: 10, readyAt: 80, harvested: 1 } as unknown as PlantedCrop };
+  const repaired = restorePlots(legacy, sites)[sites[2]!.id]!;
+  assert.deepEqual(repaired, { crop: "carrot", grown: 0, regrown: 0, harvested: 1 });
 });
 
 test("a plot describes itself without the player having to open anything", () => {
   const carrot = cropById("carrot")!;
-  const sown = plant(carrot, 0);
-  assert.equal(describePlot(null, 0), "bare soil");
-  assert.match(describePlot(sown, 10), /^Carrot · \d+s$/);
-  assert.equal(secondsUntilReady(sown, 10), carrot.growthSeconds - 10);
-  assert.equal(describePlot(sown, carrot.growthSeconds), "Carrot · ready");
-  assert.equal(secondsUntilReady(sown, carrot.growthSeconds), null);
+  const wet = waterSoil(till(bareSoil()));
+  const sown = plant(carrot);
+  assert.equal(describePlot(null, bareSoil()), "unbroken ground");
+  assert.equal(describePlot(null, till(bareSoil())), "dry");
+  assert.equal(describePlot(null, wet), "watered");
 
-  // A perennial says how many pickings are left; an annual has nothing to say.
-  const berry = plant(cropById("strawberry")!, 0);
-  assert.equal(describePlot(berry, cropById("strawberry")!.growthSeconds), "Strawberry · ready");
+  const going = advance(carrot, sown, 10, 1);
+  assert.match(describePlot(going, wet), /^Carrot · \d+s$/);
+  assert.equal(growthRemaining(going), carrot.growthSeconds - 10);
+  // Dry ground says so instead of counting down a clock that is not running.
+  assert.equal(describePlot(going, till(bareSoil())), "Carrot · dry, not growing");
+
+  const ready = advance(carrot, sown, carrot.growthSeconds, 1);
+  assert.equal(describePlot(ready, wet), "Carrot · ready");
+  assert.equal(growthRemaining(ready), null);
 });

@@ -26,10 +26,12 @@ import { createDayNight } from "./game/dayNight";
 import { cropDefinitions } from "./game/crops";
 import { createFarm } from "./game/farmPlots";
 import { createPrepStation, PREP_MODEL } from "./game/prepStation";
+import { BED_MODEL } from "./game/soilPatches";
 import { recipes } from "./game/recipes";
 import { FARM_SAVE_KEY, FARM_SAVE_VERSION, type FarmSave } from "./game/farm";
 import { readSave, writeSave } from "./game/persistence";
 import { createFarmHud } from "./farm-hud";
+import { dominantColor } from "./game/cropPlanting";
 import { createBuildMode } from "./buildMode";
 import { runStages, type LoadingStage } from "./game/loading";
 import { createSurfaceCrustLayer } from "./game/surfaceRing";
@@ -56,7 +58,7 @@ document.querySelector<HTMLElement>("#world")!.innerHTML = `
       <button data-act="night" id="world-night" title="Jump the clock to evening">🌙 Evening</button>
       <button data-act="frame" title="Look at the whole site">🖼 Frame all</button>
     </div>
-    <div class="world-hint">W A S D walk · Q / E turn the camera · wheel zooms · F frames the site · 1-5 pick a seed · space sows and harvests</div>
+    <div class="world-hint">W A S D walk · Q / E turn the camera · wheel zooms · F frames the site · 1-9 pick a tool or seed (tab cycles) · space works the plot</div>
   </div>
   <div class="world-loading" id="world-loading">
     <h1>🍅 Building the compound</h1>
@@ -260,7 +262,7 @@ const decor = createDecorScene(scene, catalog, decorLayout, { shadows, lightPool
 const cropModels = [...new Set([
   ...cropDefinitions.flatMap((crop) => [...Object.values(crop.stages), ...(crop.produce ? [crop.produce] : [])]),
   ...recipes.map((recipe) => recipe.yields),
-  "crate_harvest", PREP_MODEL,
+  "crate_harvest", PREP_MODEL, BED_MODEL,
 ])];
 await ensureModels(cropModels);
 const farmWind = createWindMaterial("farm wind", scene);
@@ -301,10 +303,16 @@ plotMarker.material = plotMarkerMaterial;
 plotMarker.isPickable = false;
 plotMarker.setEnabled(false);
 
-const MARKER_COLOURS: Record<string, string> = { sow: "#9fd78a", harvest: "#f3c55a", clear: "#d98b6b", growing: "#6f8377" };
+// The ring takes the colour of the work: earth for tilling, water for watering,
+// compost dark for feeding, green for sowing, gold for a ripe plant, grey when
+// the key would do nothing here.
+const MARKER_COLOURS: Record<string, string> = {
+  till: "#c08a58", water: "#5b9fd6", feed: "#7d6b4a", sow: "#9fd78a",
+  harvest: "#f3c55a", clear: "#d98b6b", nothing: "#6f8377",
+};
 let addressed: ReturnType<typeof farm.addressed> = null;
 function refreshFarm(): void {
-  addressed = farm.addressed(player.position.x, player.position.z);
+  addressed = farm.addressed(player.position.x, player.position.z, farmHud.slot);
   const atCrate = Boolean(farm.crate?.inReach(player.position.x, player.position.z));
   const atPrep = prepStation?.inReach(player.position.x, player.position.z) ? prepStation : null;
   farmHud.render(addressed, farm.inventory, atCrate ? farm.crate!.contents.length : null,
@@ -313,6 +321,35 @@ function refreshFarm(): void {
   if (!addressed) return;
   plotMarker.position.set(addressed.site.x, 0.06, addressed.site.z);
   plotMarkerMaterial.emissiveColor = Color3.FromHexString(MARKER_COLOURS[addressed.action] ?? "#9fd78a");
+}
+
+// ── the feel of the work ──────────────────────────────────────────────────────
+// Every action throws something in the air. This is not decoration: a hoe that
+// makes no dirt fly reads as a key press, and a watering can that changes only a
+// number reads as a menu. The cue is what tells the player the work happened,
+// before they have even looked at the ground.
+const CUE_SPECS: Record<string, { colours: string[]; count: number; speed: [number, number]; life: [number, number]; spread: number; gravity: number; size: number; up: number }> = {
+  till:    { colours: ["#6f4f32", "#5a3f28", "#8a6540"], count: 14, speed: [1.1, 2.3], life: [0.5, 0.9], spread: 62, gravity: 1, size: 0.05, up: 0.10 },
+  water:   { colours: ["#7fc4f0", "#a9dbf7", "#5b9fd6"], count: 12, speed: [0.5, 1.2], life: [0.4, 0.8], spread: 48, gravity: 1.4, size: 0.035, up: 0.85 },
+  feed:    { colours: ["#4a3a27", "#6d5a3a", "#3c3324"], count: 10, speed: [0.5, 1.3], life: [0.5, 1.0], spread: 70, gravity: 1, size: 0.04, up: 0.55 },
+  sow:     { colours: ["#c9b57a", "#e0d2a0"], count: 5, speed: [0.5, 1.0], life: [0.4, 0.7], spread: 55, gravity: 1, size: 0.03, up: 0.35 },
+  harvest: { colours: ["#8fbf5a", "#c9dd8a"], count: 8, speed: [0.9, 1.8], life: [0.5, 0.9], spread: 65, gravity: 1, size: 0.045, up: 0.5 },
+  clear:   { colours: ["#6f4f32", "#7d8a5a"], count: 8, speed: [0.8, 1.6], life: [0.4, 0.8], spread: 70, gravity: 1, size: 0.045, up: 0.3 },
+};
+
+function showFarmCue(result: { action: string; site: { x: number; z: number }; crop: string | null }): void {
+  const spec = CUE_SPECS[result.action];
+  if (!spec) return;
+  // A harvested crop throws its OWN colour, so picking strawberries and picking
+  // lettuce do not look like the same event.
+  const produce = result.action === "harvest" && result.crop ? catalog.models[result.crop] : undefined;
+  const colours = produce ? [dominantColor(produce), ...spec.colours] : spec.colours;
+  particles.emitAt({
+    id: `farm-${result.action}`, position: [0, 0, 0], colors: colours, size: spec.size,
+    mode: "burst", count: spec.count, rate: spec.count, direction: [0, 1, 0], spread: spec.spread,
+    speed: spec.speed, life: spec.life, gravity: spec.gravity, bounce: 0.15, friction: 0.6,
+    stick: false, fade: true, spin: true,
+  }, new Vector3(result.site.x, spec.up, result.site.z), Vector3.Up(), spec.size);
 }
 
 /** One key, whatever is under your hand: sow, harvest, clear — or, standing at
@@ -358,7 +395,8 @@ function actOnPlot(): void {
   // left behind.
   refreshFarm();
   if (!addressed) return;
-  farm.act(addressed.site, farmHud.selected);
+  const result = farm.act(addressed.site, farmHud.slot);
+  if (result) showFarmCue(result);
   saveEverything();
   refreshFarm();
 }
@@ -393,6 +431,7 @@ window.addEventListener("keydown", (event) => {
   // The farm: one key does the work, the digits pick what goes in the ground.
   if (key === " " && !event.repeat) { event.preventDefault(); actOnPlot(); }
   if (key >= "1" && key <= "9") farmHud.select(Number(key) - 1);
+  if (key === "tab") { event.preventDefault(); farmHud.cycle(event.shiftKey ? -1 : 1); }
 });
 window.addEventListener("keyup", (event) => keys.delete(event.key.toLowerCase()));
 window.addEventListener("blur", () => keys.clear());
@@ -487,7 +526,6 @@ let hudWindow = performance.now();
 let farmWindow = performance.now();
 let rigTest: Awaited<ReturnType<typeof import("./rig-test.ts").mountRigTest>> | undefined;
 let cropTest: Awaited<ReturnType<typeof import("./crop-test.ts").mountCropTest>> | undefined;
-let cropPlots: Awaited<ReturnType<typeof import("./crop-plot-test.ts").mountCropPlots>> | undefined;
 function updateHud(): void {
   const stats = level.stats();
   const crustStats = crust.stats();
@@ -527,7 +565,6 @@ engine.runRenderLoop(() => {
   prepStation?.update(dt);
   rigTest?.update(dt);
   cropTest?.update(dt);
-  cropPlots?.update(dt);
   particles.update(dt);
   dayNight.update(dt);
   // Everything above this line is the simulation half, and none of it is in Babylon's frameTime.
@@ -550,13 +587,6 @@ if (params.get("cropTest") === "1") {
     mountCropTest(scene, player.position.add(new Vector3(1.5, 0, 0)), shadows))
     .then((fixture) => { cropTest = fixture; Object.assign(window, { __cropTest: fixture }); })
     .catch((error) => console.error("Crop test failed", error));
-}
-
-if (params.get("cropPlot") === "1") {
-  void import("./crop-plot-test.ts").then(({ mountCropPlots }) =>
-    mountCropPlots(scene, player.position.add(new Vector3(1.5, 0, 1.5)), { shadows, particles }))
-    .then((fixture) => { cropPlots = fixture; Object.assign(window, { __cropPlots: fixture }); })
-    .catch((error) => console.error("Crop plots failed", error));
 }
 
 if (params.get("rigTest") === "1") {

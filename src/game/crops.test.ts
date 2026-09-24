@@ -1,9 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  CROP_STAGES, cropById, cropDefinitions, fruitProgress, harvest, harvestsLeft,
-  isReady, isSpent, plant, stageOf, validateCrops, yieldOf,
+  CROP_STAGES, advance, cropById, cropDefinitions, fruitProgress, harvest, harvestsLeft,
+  isReady, isSpent, plant, stageOf, validateCrops, yieldOf, type CropDefinition, type PlantedCrop,
 } from "./crops.ts";
+
+/** A plant that has had `fraction` of its growth watered through. */
+const grown = (crop: CropDefinition, fraction: number): PlantedCrop =>
+  advance(crop, plant(crop), crop.growthSeconds * fraction, 1);
+/** …and `fraction` of its regrow window since the last picking. */
+const regrown = (crop: CropDefinition, from: PlantedCrop, fraction: number): PlantedCrop =>
+  advance(crop, from, crop.regrowSeconds * fraction, 1);
 import idx from "../assets/catalog/index.json" with { type: "json" };
 
 const lettuce = cropById("lettuce")!;      // whole plant, one harvest
@@ -20,8 +27,7 @@ test("every stage model a crop names actually exists in the catalog", () => {
 });
 
 test("stages follow the plant, and the boundaries land where they should", () => {
-  const sown = plant(lettuce, 1000);
-  const at = (t: number) => stageOf(lettuce, sown, 1000 + t * lettuce.growthSeconds);
+  const at = (t: number) => stageOf(lettuce, grown(lettuce, t));
   assert.equal(at(0), "seedling");
   assert.equal(at(0.29), "seedling");
   assert.equal(at(0.31), "growing");
@@ -33,29 +39,24 @@ test("stages follow the plant, and the boundaries land where they should", () =>
 test("a picked bush is still a full-grown bush", () => {
   // The plant's maturity and the fruit's are different things: harvesting a
   // pepper must not send the model back to a seedling.
-  const sown = plant(pepper, 0);
-  const ripe = pepper.growthSeconds;
-  const after = harvest(pepper, sown, ripe, "plot_a").planted!;
-  assert.equal(stageOf(pepper, after, ripe + 1), "ripe");
-  assert.ok(fruitProgress(pepper, after, ripe + 1) < 0.05, "but it carries essentially no fruit yet");
-  assert.equal(fruitProgress(pepper, after, ripe), 0, "and none at all the instant it was picked");
+  const after = harvest(pepper, grown(pepper, 1), "plot_a").planted!;
+  assert.equal(stageOf(pepper, after), "ripe");
+  assert.equal(fruitProgress(pepper, after), 0, "and no fruit at all the instant it was picked");
+  assert.ok(fruitProgress(pepper, regrown(pepper, after, 0.02), 0) < 0.05, "and essentially none a moment later");
 });
 
 test("fruit regrows over the regrow window, not the growth window", () => {
-  const sown = plant(strawberry, 0);
-  const ripe = strawberry.growthSeconds;
-  assert.equal(fruitProgress(strawberry, sown, ripe), 1);
+  const ripe = grown(strawberry, 1);
+  assert.equal(fruitProgress(strawberry, ripe), 1);
 
-  const after = harvest(strawberry, sown, ripe, "plot_a").planted!;
-  const half = ripe + strawberry.regrowSeconds / 2;
-  assert.ok(Math.abs(fruitProgress(strawberry, after, half) - 0.5) < 1e-6,
+  const after = harvest(strawberry, ripe, "plot_a").planted!;
+  assert.ok(Math.abs(fruitProgress(strawberry, regrown(strawberry, after, 0.5)) - 0.5) < 1e-6,
     "halfway through the REGROW window should read as half, not as a fraction of growthSeconds");
-  assert.equal(fruitProgress(strawberry, after, ripe + strawberry.regrowSeconds), 1);
+  assert.equal(fruitProgress(strawberry, regrown(strawberry, after, 1)), 1);
 });
 
 test("a whole-plant crop is taken once and leaves bare soil", () => {
-  const sown = plant(lettuce, 0);
-  const result = harvest(lettuce, sown, lettuce.growthSeconds, "plot_a");
+  const result = harvest(lettuce, grown(lettuce, 1), "plot_a");
   assert.equal(result.planted, null, "the lettuce came out of the ground");
   assert.equal(result.spent, true);
   assert.equal(result.items, 1);
@@ -65,31 +66,27 @@ test("a perennial is never used up, however many times it is picked", () => {
   // The trap this guards: harvests remaining used to COUNT DOWN, and a
   // perennial has Infinity of them — `Infinity - 1 === Infinity`, so the
   // counter never moved and the plant looked permanently unpicked.
-  let state = plant(strawberry, 0);
-  let clock = strawberry.growthSeconds;
+  let state = grown(strawberry, 1);
   for (let pick = 0; pick < 25; pick++) {
-    assert.ok(isReady(strawberry, state, clock), `pick ${pick} should be ready`);
-    const result = harvest(strawberry, state, clock, "plot_a");
+    assert.ok(isReady(strawberry, state), `pick ${pick} should be ready`);
+    const result = harvest(strawberry, state, "plot_a");
     assert.ok(result.items >= 4 && result.items <= 8);
     assert.equal(result.spent, false, "a strawberry plant is never spent");
-    state = result.planted!;
+    state = regrown(strawberry, result.planted!, 1);
     assert.equal(state.harvested, pick + 1, "the harvest counter has to actually move");
-    clock += strawberry.regrowSeconds;
   }
   assert.equal(harvestsLeft(strawberry, state), Infinity);
   assert.equal(isSpent(strawberry, state), false);
 });
 
 test("a bush with a fixed number of flushes runs out and then leaves soil", () => {
-  let state = plant(pepper, 0);
-  let clock = pepper.growthSeconds;
+  let state = grown(pepper, 1);
   for (let pick = 1; pick <= pepper.harvests; pick++) {
-    const result = harvest(pepper, state, clock, "plot_b");
+    const result = harvest(pepper, state, "plot_b");
     assert.ok(result.items >= 3 && result.items <= 10);
     if (pick < pepper.harvests) {
       assert.equal(result.spent, false, `pick ${pick} of ${pepper.harvests} should leave the bush standing`);
-      state = result.planted!;
-      clock += pepper.regrowSeconds;
+      state = regrown(pepper, result.planted!, 1);
     } else {
       assert.equal(result.spent, true, "the last flush uses the bush up");
       assert.equal(result.planted, null);
@@ -98,11 +95,11 @@ test("a bush with a fixed number of flushes runs out and then leaves soil", () =
 });
 
 test("harvesting early gives nothing and changes nothing", () => {
-  const sown = plant(pepper, 0);
-  const early = harvest(pepper, sown, pepper.growthSeconds - 1, "plot_a");
+  const almost = grown(pepper, 0.99);
+  const early = harvest(pepper, almost, "plot_a");
   assert.equal(early.items, 0);
   assert.equal(early.spent, false);
-  assert.deepEqual(early.planted, sown, "an early grab must not consume a harvest");
+  assert.deepEqual(early.planted, almost, "an early grab must not consume a harvest");
 });
 
 test("yield is stable across reloads but differs between plots", () => {

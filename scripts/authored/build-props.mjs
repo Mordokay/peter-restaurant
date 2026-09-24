@@ -18,6 +18,8 @@ const PROPS = [
   { id: "crate_harvest", script: "crate", pitch: 0.008, label: "Harvest crate",
     tags: ["farm", "storage"], folder: "authored/props", holder: "crate",
     merge: "^(post|slat|floor|crate)" },
+  { id: "soil_bed", script: "soil_bed", pitch: 0.009, label: "Tilled bed",
+    tags: ["farm", "ground"], folder: "authored/props", holder: "bed", merge: "^(bed)" },
   { id: "prep_table", script: "prep_table", pitch: 0.010, label: "Prep counter",
     tags: ["kitchen", "station"], folder: "authored/props", holder: "top",
     merge: "^(top|leg|apron|apron_end|shelf|board)" },
@@ -38,7 +40,8 @@ for (const spec of PROPS) {
   run("node", ["scripts/voxels-to-model.mjs", vox, spec.id, (grid.size[1] * grid.worldPitch).toFixed(5),
                "--keepSourceParts", "--foldFragments", "0"]);
   run("node", ["scripts/authored/merge-parts.mjs", spec.id, spec.merge]);
-  run("node", ["scripts/authored/extract-sockets.mjs", spec.id, spec.holder]);
+  try { run("node", ["scripts/authored/extract-sockets.mjs", spec.id, spec.holder]); }
+  catch { /* a prop with no sockets is fine; not every prop holds things */ }
   const model = readModel(spec.id);
   model.name = spec.label;
   model.folder = spec.folder;
