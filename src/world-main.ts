@@ -23,6 +23,9 @@ import { cellsFromAuthoredModel } from "./game/voxelModel";
 import { createVoxelMesh } from "./game/voxelGeometry";
 import { collidersOfMeshes, createColliderField } from "./game/gravity";
 import { createDayNight } from "./game/dayNight";
+import { cropDefinitions } from "./game/crops";
+import { createFarm } from "./game/farmPlots";
+import { createFarmHud } from "./farm-hud";
 import { createBuildMode } from "./buildMode";
 import { runStages, type LoadingStage } from "./game/loading";
 import { createSurfaceCrustLayer } from "./game/surfaceRing";
@@ -49,7 +52,7 @@ document.querySelector<HTMLElement>("#world")!.innerHTML = `
       <button data-act="night" id="world-night" title="Jump the clock to evening">🌙 Evening</button>
       <button data-act="frame" title="Look at the whole site">🖼 Frame all</button>
     </div>
-    <div class="world-hint">W A S D walk · Q / E turn the camera · wheel zooms · F frames the site</div>
+    <div class="world-hint">W A S D walk · Q / E turn the camera · wheel zooms · F frames the site · 1-5 pick a seed · space sows and harvests</div>
   </div>
   <div class="world-loading" id="world-loading">
     <h1>🍅 Building the compound</h1>
@@ -240,6 +243,66 @@ if (decorModels.length) {
 }
 const decor = createDecorScene(scene, catalog, decorLayout, { shadows, lightPool, cacheRev, colliders, particles });
 
+// ── the farm ──────────────────────────────────────────────────────────────────
+// Plots are derived from the plan's farm parcels, so buying land adds soil to
+// sow without anybody editing a list. Every crop's three stages and its produce
+// are loaded up front: a plot has to be sowable the moment the player reaches
+// it, and a hitch while a model streams in would land exactly on the keypress.
+const cropModels = [...new Set([...cropDefinitions.flatMap((crop) => [...Object.values(crop.stages), ...(crop.produce ? [crop.produce] : [])]), "crate_harvest"])];
+await ensureModels(cropModels);
+const farmWind = createWindMaterial("farm wind", scene);
+const farm = createFarm({
+  scene, catalog, areas: levelLayout.areas, material: farmWind,
+  shadows, particles, persist: true, parent: level.root,
+});
+const farmHud = createFarmHud(document.querySelector<HTMLElement>("#world")!);
+
+// The plot under the player's hand, marked on the ground. A world marker rather
+// than a floating label: the rulebook allows labels for selection, and this is
+// the selection — the bar only says what the soil cannot.
+const plotMarker = MeshBuilder.CreateTorus("plot marker", { diameter: 0.86, thickness: 0.05, tessellation: 20 }, scene);
+const plotMarkerMaterial = new StandardMaterial("plot marker", scene);
+plotMarkerMaterial.disableLighting = true;
+plotMarkerMaterial.emissiveColor = Color3.FromHexString("#9fd78a");
+plotMarkerMaterial.alpha = 0.7;
+plotMarker.material = plotMarkerMaterial;
+plotMarker.isPickable = false;
+plotMarker.setEnabled(false);
+
+const MARKER_COLOURS: Record<string, string> = { sow: "#9fd78a", harvest: "#f3c55a", clear: "#d98b6b", growing: "#6f8377" };
+let addressed: ReturnType<typeof farm.addressed> = null;
+function refreshFarm(): void {
+  addressed = farm.addressed(player.position.x, player.position.z);
+  const atCrate = Boolean(farm.crate?.inReach(player.position.x, player.position.z));
+  farmHud.render(addressed, farm.inventory, atCrate ? farm.crate!.contents.length : null);
+  plotMarker.setEnabled(Boolean(addressed));
+  if (!addressed) return;
+  plotMarker.position.set(addressed.site.x, 0.06, addressed.site.z);
+  plotMarkerMaterial.emissiveColor = Color3.FromHexString(MARKER_COLOURS[addressed.action] ?? "#9fd78a");
+}
+
+/** One key, whatever is under your hand: sow, harvest, clear — or, standing at
+ *  the crate, tip in everything you are carrying. */
+function actOnPlot(): void {
+  if (build.active) return;
+  if (farm.crate?.inReach(player.position.x, player.position.z) && farm.inventory.length) {
+    farm.unload();
+    farm.save();
+    refreshFarm();
+    return;
+  }
+  // Work out the plot at the moment of the keypress rather than trusting the
+  // one cached for the HUD: that is refreshed a few times a second, and acting
+  // the instant after stepping across a row would otherwise hit the plot just
+  // left behind.
+  refreshFarm();
+  if (!addressed) return;
+  farm.act(addressed.site, farmHud.selected);
+  farm.save();
+  refreshFarm();
+}
+window.addEventListener("beforeunload", () => farm.save());
+
 // A level save from the build editor swaps the plan under us; rebuild without reloading the page.
 onLevelChanged(() => {
   if (!startingProgress) progress = fullProgress(levelLayout);
@@ -266,6 +329,9 @@ window.addEventListener("keydown", (event) => {
   if (key === "e") turnCamera(1);
   if (key === "f") frameSite();
   if (key === "b" && !event.repeat) { build.toggle(); keys.clear(); requestAnimationFrame(syncBuildButton); }
+  // The farm: one key does the work, the digits pick what goes in the ground.
+  if (key === " " && !event.repeat) { event.preventDefault(); actOnPlot(); }
+  if (key >= "1" && key <= "9") farmHud.select(Number(key) - 1);
 });
 window.addEventListener("keyup", (event) => keys.delete(event.key.toLowerCase()));
 window.addEventListener("blur", () => keys.clear());
@@ -353,6 +419,7 @@ function walk(dt: number): void {
 
 const fmt = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 0 });
 let hudWindow = performance.now();
+let farmWindow = performance.now();
 let rigTest: Awaited<ReturnType<typeof import("./rig-test.ts").mountRigTest>> | undefined;
 let cropTest: Awaited<ReturnType<typeof import("./crop-test.ts").mountCropTest>> | undefined;
 let cropPlots: Awaited<ReturnType<typeof import("./crop-plot-test.ts").mountCropPlots>> | undefined;
@@ -391,6 +458,7 @@ engine.runRenderLoop(() => {
   grass.update(player.position);
   if (cutawayOn) cutaway.update(dt);
   decor.update(dt);
+  farm.update(dt, player.position);
   rigTest?.update(dt);
   cropTest?.update(dt);
   cropPlots?.update(dt);
@@ -401,6 +469,7 @@ engine.runRenderLoop(() => {
   scene.render();
   frameTimer.end();
   if (performance.now() - hudWindow >= 500) { hudWindow = performance.now(); updateHud(); }
+  if (performance.now() - farmWindow >= 150) { farmWindow = performance.now(); refreshFarm(); }
 });
 window.addEventListener("resize", () => engine.resize());
 

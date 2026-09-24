@@ -28,6 +28,7 @@ import { animateStages, createStageRig, disposeStageRig, requestStage, type Stag
 import { FRUIT_REGROW_SETTLE, easeInOutCubic, growWithOvershoot } from "./stageTransition.ts";
 import { cellsFromAuthoredModel, type AuthoredVoxelCatalog, type AuthoredVoxelModel, type ParticleEmitter } from "./voxelModel.ts";
 import type { ParticleWorld } from "./voxelParticles.ts";
+import type { MeshLibrary } from "./meshLibrary.ts";
 
 /** Seconds the picking animation takes — long enough to see the fruit go, short
  *  enough that a player working down a row is never waiting for it. */
@@ -54,6 +55,8 @@ export interface CropPlotOptions {
   particles?: ParticleWorld;
   sway?: number;
   name?: string;
+  /** Shared meshing for the stages and the fruit; see meshLibrary.ts. */
+  library?: MeshLibrary;
 }
 
 export interface CropPlot {
@@ -66,6 +69,9 @@ export interface CropPlot {
   ready(now: number): boolean;
   /** Sow (or re-sow) this plot. */
   sow(now: number, crop?: CropDefinition): void;
+  /** Adopt a plant that already exists — a save coming back, or a plot handed
+   *  over. The state is taken as given, including its age, rather than restarted. */
+  restore(planted: PlantedCrop): void;
   /** Pick it. Returns what crops.ts decided; the animation follows. */
   harvest(now: number): HarvestResult;
   update(now: number, dt: number): void;
@@ -118,6 +124,7 @@ export function createCropPlot(options: CropPlotOptions): CropPlot {
       scene, catalog, models: CROP_STAGES.map((stage) => crop.stages[stage]),
       parent: root, spin: options.spin, initialStage: 0, shadows: options.shadows,
       material: options.material, sway: options.sway ?? PLANT_SWAY, name: `${crop.id} plant`,
+      library: options.library,
     });
     const ripe = rig.stages[rig.stages.length - 1]!;
     // Whole-plant crops carry no fruit: the plant IS the produce, and pulling it
@@ -125,9 +132,20 @@ export function createCropPlot(options: CropPlotOptions): CropPlot {
     if (!crop.wholePlant && crop.produce) {
       fruit = createCropFruit({
         scene, model: ripe.model, node: ripe.mesh, catalog, fruit: crop.produce,
-        seed, shadows: options.shadows, material: options.material,
+        seed, shadows: options.shadows, material: options.material, library: options.library,
       });
     }
+  };
+
+  /** Back to a clean, visible, empty plot. */
+  const reset = (): void => {
+    open = 0;
+    picking = Infinity;
+    pulled = Infinity;
+    wasReady = false;
+    root.setEnabled(true);
+    root.scaling.setAll(1);
+    fruit?.clear();
   };
 
   const show = (count: number): void => {
@@ -153,15 +171,19 @@ export function createCropPlot(options: CropPlotOptions): CropPlot {
     sow(now, next) {
       const wanted = next ?? crop;
       if (!rig || wanted.id !== crop.id) { crop = wanted; build(); }
+      reset();
       state = plantCrop(crop, now);
-      open = 0;
-      picking = Infinity;
-      pulled = Infinity;
-      wasReady = false;
-      root.setEnabled(true);
-      root.scaling.setAll(1);
       requestStage(rig!, 0);
-      fruit?.clear();
+    },
+
+    restore(planted) {
+      const wanted = cropById(planted.crop) ?? crop;
+      if (!rig || wanted.id !== crop.id) { crop = wanted; build(); }
+      reset();
+      state = planted;
+      // No stage request here: the next update reads the plant's age and asks
+      // for the stage it has actually reached, so a grown plant comes back grown
+      // instead of sprouting again in front of the player.
     },
 
     harvest(now) {

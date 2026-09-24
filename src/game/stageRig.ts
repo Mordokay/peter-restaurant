@@ -9,18 +9,20 @@
 //
 // This was written for tomatoes and is now general: the stage models are just a
 // list of catalog ids, so lettuce, a compost heap or a sapling all use it.
-import { Mesh, Scene, ShadowGenerator, StandardMaterial, TransformNode, Vector3 } from "@babylonjs/core";
+import { AbstractMesh, Mesh, Scene, ShadowGenerator, StandardMaterial, TransformNode, Vector3 } from "@babylonjs/core";
 import { cellsFromAuthoredModel, type AuthoredVoxelCatalog, type AuthoredVoxelModel } from "./voxelModel.ts";
 import { createVoxelMesh } from "./voxelGeometry.ts";
 import { TOMATO_STAGE_SECONDS, stageScales } from "./stageTransition.ts";
+import type { MeshLibrary } from "./meshLibrary.ts";
 
 /** Seconds one stage takes to become the next. */
 export const STAGE_SECONDS = TOMATO_STAGE_SECONDS;
 
 export interface StageRig {
   root: TransformNode;
-  /** One per stage model, in the order given. */
-  stages: { id: string; mesh: Mesh; model: AuthoredVoxelModel }[];
+  /** One per stage model, in the order given. `mesh` is an instance when the rig
+   *  was given a library, and a mesh of its own when it was not. */
+  stages: { id: string; mesh: AbstractMesh; model: AuthoredVoxelModel }[];
   stage: number;
   /** Stage index being left, equal to `stage` when idle. */
   outgoing: number;
@@ -42,6 +44,10 @@ export interface StageRigOptions {
   material?: StandardMaterial;
   /** Wind weight for parts that declare none; graded by height in the mesher. */
   sway?: number;
+  /** Share one meshing of each stage across every rig that asks — the difference
+   *  between a farm that opens and a farm that freezes. Without it each rig
+   *  meshes its own copy, which is what the model lab wants. */
+  library?: MeshLibrary;
   name?: string;
 }
 
@@ -52,13 +58,24 @@ export function createStageRig(options: StageRigOptions): StageRig {
   if (position) root.position.copyFrom(position);
   root.rotation.y = spin ?? 0;
 
+  const build = (id: string, model: AuthoredVoxelModel): Mesh => {
+    const mesh = createVoxelMesh(
+      `stage ${id}`, cellsFromAuthoredModel(model, undefined, { sway: options.sway }), model.pitch, scene,
+      options.material ? { material: options.material } : {});
+    mesh.receiveShadows = true;
+    return mesh;
+  };
+
   const stages = models.map((id, index) => {
     const model = catalog.models[id];
     if (!model) throw new Error(`${id} is not in the catalog`);
-    const cells = cellsFromAuthoredModel(model, undefined, { sway: options.sway });
-    const mesh = createVoxelMesh(`stage ${id}`, cells, model.pitch, scene, options.material ? { material: options.material } : {});
+    const mesh: AbstractMesh = options.library
+      ? options.library.source(`${id}|${options.sway ?? 0}`, () => build(id, model)).createInstance(`${root.name} ${id}`)
+      : build(id, model);
     mesh.parent = root;
-    mesh.receiveShadows = true;
+    // An instance inherits its source's shadow settings; setting it on the
+    // instance does nothing but warn, so it is set where it means something.
+    if (mesh instanceof Mesh) mesh.receiveShadows = true;
     shadows?.addShadowCaster(mesh);
     mesh.setEnabled(index === initialStage);
     mesh.scaling.setAll(index === initialStage ? 1 : 0);

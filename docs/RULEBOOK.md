@@ -446,6 +446,13 @@ Crop silhouettes follow the recognizable structure of the real plant, simplified
   soil. Clips are for the things that ACT: harvesting, doors, machines.
 - Picking is a scale to nothing over about 0.45 s and regrowth is the same scale coming back with a
   10–20% overshoot. Neither rebuilds geometry: one number drives every fruit on the plant.
+- **One meshing per model, however many are standing.** A ripe cabbage is 277,000 voxels and costs a few
+  hundred milliseconds to mesh; twenty-five plots that each meshed their own plants froze the page for
+  nine seconds. Plants, fruit and stored goods all draw as hardware instances of one hidden source
+  (`meshLibrary.ts`). Nothing is cheapened to pay for it — a plot does not need its OWN cabbage, it needs
+  a cabbage.
+- **A plant far from the player is data, not meshes.** Plots keep growing on the clock wherever they are;
+  they are built when the player comes within about 26 m and taken down past 32 m, a couple per frame.
 
 ### Palette
 
@@ -698,6 +705,9 @@ travels). Current sources:
 | `src/game/cropFruit.ts` | Places N fruit at a plant's `fruit_*` sockets, with per-instance size and lean | Active foundation |
 | `src/game/crops.ts`, `hash.ts` | What grows, how long, what a harvest awards; deterministic yields | Active foundation |
 | `src/game/cropPlanting.ts` | A plot: stage changes, fruit, picking, regrowth, ripening burst | Active foundation |
+| `src/game/farm.ts` | Plot sites from the plan, what the action key does, the farm save | Active foundation |
+| `src/game/farmPlots.ts`, `harvestCrate.ts` | The playable farm: sowing, harvesting, carrying, unloading | Active foundation |
+| `src/game/meshLibrary.ts` | One meshing per model, instances for the rest | Active foundation |
 | `src/game/stageRig.ts`, `stageTransition.ts` | Cross-scale between a prop's age stages, and its easing | Active foundation |
 | `src/game/storageDisplay.ts` | Socket grids, footprint packing, `placementAttitude` | Active foundation |
 | `src/game/frameTimer.ts` | Honest sim/render split, gap distribution, long tasks | Active tooling |

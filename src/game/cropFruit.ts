@@ -23,6 +23,7 @@ import { cellsFromAuthoredModel, type AuthoredVoxelCatalog, type AuthoredVoxelMo
 import { createVoxelMaterial, createVoxelMesh } from "./voxelGeometry.ts";
 import { modelBounds, placementAttitude } from "./storageDisplay.ts";
 import { hash01 } from "./hash.ts";
+import type { MeshLibrary } from "./meshLibrary.ts";
 
 /** Socket names this reads. `fruit_12` sorts after `fruit_2`, hence the numeric sort. */
 const FRUIT_SOCKET = /^fruit_(\d+)$/;
@@ -51,6 +52,8 @@ export interface CropFruitOptions {
   tiltDegrees?: number;
   shadows?: ShadowGenerator;
   material?: StandardMaterial;
+  /** Share one meshing of the fruit across every plant carrying it. */
+  library?: MeshLibrary;
 }
 
 export interface CropFruitDisplay {
@@ -89,19 +92,24 @@ export function createCropFruit(options: CropFruitOptions): CropFruitDisplay {
   const material = options.material ?? createVoxelMaterial("crop fruit", scene);
   const sockets = fruitSocketsOf(model, options.part);
 
-  let source: { mesh: Mesh; lift: number } | null = null;
+  let source: { mesh: Mesh; lift: number; owned: boolean } | null = null;
   const sourceMesh = (): { mesh: Mesh; lift: number } | null => {
     if (source) return source;
     const item = catalog.models[fruit];
     if (!item) return null;
     const cells = cellsFromAuthoredModel(item);
     if (!cells.length) return null;
-    const mesh = createVoxelMesh(`fruit ${fruit}`, cells, item.pitch, scene, { material });
-    mesh.isVisible = false;
-    mesh.isPickable = false;
+    const build = (): Mesh => {
+      const built = createVoxelMesh(`fruit ${fruit}`, cells, item.pitch, scene, { material });
+      built.isVisible = false;
+      built.isPickable = false;
+      return built;
+    };
     const bounds = modelBounds(item);
     // Stand it on its own base, so the socket can mean "where the fruit sits".
-    source = { mesh, lift: -(bounds.min.y - 0.5) * item.pitch };
+    source = options.library
+      ? { mesh: options.library.source(`fruit ${fruit}`, build), lift: -(bounds.min.y - 0.5) * item.pitch, owned: false }
+      : { mesh: build(), lift: -(bounds.min.y - 0.5) * item.pitch, owned: true };
     return source;
   };
 
@@ -153,7 +161,8 @@ export function createCropFruit(options: CropFruitOptions): CropFruitDisplay {
     clear,
     dispose() {
       clear();
-      source?.mesh.dispose(false, false);
+      // A library's source belongs to the library; only a private one is ours to throw away.
+      if (source?.owned) source.mesh.dispose(false, false);
       source = null;
       if (!options.material) material.dispose();
     },

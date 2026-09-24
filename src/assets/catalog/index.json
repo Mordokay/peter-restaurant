@@ -157,6 +157,7 @@
     "crate_cartoon_2": {"name":"Crate Cartoon 2","folder":"farm/cartoon_wood","tags":["farm","outdoor","storage"],"size":[1.216,1.235,1.216],"voxels":261632,"parts":1,"thumb":1788686467,"rev":1789076669},
     "crate_cartoon_small": {"name":"Crate Cartoon Small","folder":"farm/cartoon_wood","tags":["farm","outdoor","storage"],"size":[0.827,0.73,0.827],"voxels":260718,"parts":1,"thumb":1788686469,"rev":1789076669},
     "crate_corner": {"name":"Crate Corner","folder":"farm/crates","tags":["farm","outdoor","storage"],"size":[0.184,0.801,0.184],"voxels":117302,"parts":1,"thumb":1788657405,"rev":1789076669},
+    "crate_harvest": {"name":"Harvest crate","folder":"authored/props","tags":["farm","storage"],"size":[0.585,0.288,0.395],"voxels":13100,"parts":1,"rev":1790262289},
     "crate_rustic": {"name":"Crate Rustic","folder":"outdoor/rustic_props","tags":["kitchen","storage"],"size":[0.615,0.204,0.577],"voxels":248910,"parts":13,"thumb":1788686470,"rev":1789076669},
     "crate_rustic_open": {"name":"Crate Rustic Open","folder":"outdoor/rustic_props","tags":["kitchen","storage"],"size":[0.599,0.426,0.591],"voxels":272382,"parts":28,"thumb":1788686471,"rev":1789076669},
     "crate_side_long": {"name":"Crate Side Long","folder":"farm/crates","tags":["farm","outdoor","storage"],"size":[2,0.237,0.066],"voxels":267408,"parts":1,"thumb":1788657406,"rev":1789076669},
