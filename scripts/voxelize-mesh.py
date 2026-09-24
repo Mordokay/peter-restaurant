@@ -292,7 +292,14 @@ def make_color_source(mesh, material_name_hint):
         attribute = getattr(visual, "vertex_attributes", {}).get("color") if hasattr(visual, "vertex_attributes") else None
         if attribute is not None and len(attribute) == len(mesh.vertices):
             vertex_colors = numpy.asarray(attribute, dtype=numpy.float64)
-            if vertex_colors.max() > 1.0:
+            # glTF allows COLOR_0 as float, unsigned byte or unsigned SHORT, and
+            # Blender writes ushort. Dividing those by 255 gave ~257 per channel,
+            # which srgb_to_linear then clipped to white - every painted mesh came
+            # out blank. Normalise by what the range actually is.
+            peak = vertex_colors.max()
+            if peak > 255.0:
+                vertex_colors = vertex_colors / 65535.0
+            elif peak > 1.0:
                 vertex_colors = vertex_colors / 255.0
     if vertex_colors is not None:
         if vertex_colors.shape[1] == 3:

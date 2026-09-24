@@ -9,7 +9,7 @@
 // per tile, per block — never per cell, because `createVoxelMesh` merges coplanar faces of equal colour
 // and per-cell variation defeats the merger completely: the old noise floors cost 2.46 triangles a cell
 // and were 70% of the compound's geometry for 26% of its cells. And texture is **sparse salted clusters**,
-// never static, which is what ART_DIRECTION.md asks for in as many words: "never a noisy texture".
+// never static, which is what docs/RULEBOOK.md asks for in as many words: "never a noisy texture".
 //
 // Everything is measured in METRES and point-sampled at a cell's centre, never in cells. That is what lets
 // one material serve a room meshed at 5 cm and the site grounds meshed at 50 cm: the big features survive

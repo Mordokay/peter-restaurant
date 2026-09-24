@@ -4,12 +4,13 @@ import { emissiveByHex, glowInfoOf, glowMaterialFor, splitGlowCells, tagGlow } f
 import type { StandardMaterial } from "@babylonjs/core";
 import { cellsOfPartState, partStateNames, type AuthoredClip, type AuthoredVoxelModel, type ClipEvent } from "./voxelModel.ts";
 import { applyPoseOffsets, blendWeight, ease, eventsBetween, matchClipTime, poseOffsets, REST_POSE, sampleClip, type PartPose, type PoseOffset, type StateTransitionSample } from "./voxelClips.ts";
+import { peekRigState, restoreMesh, rigStateCacheKey, serializeMesh, storeSource, warmSourceCache } from "./sourceCache.ts";
 
 // Rigged voxel model at runtime: one rigid mesh per part, each hanging from a
 // TransformNode placed at the part's pivot (its joint) and parented to its
 // parent part's node. Rotating a node turns the whole subtree around that
 // joint — an upper arm carries forearm, hand and knife — while every part
-// stays a crisp block. No skinning, no stretched voxels (ART_DIRECTION).
+// stays a crisp block. No skinning, no stretched voxels (docs/RULEBOOK.md).
 
 export interface RigPart {
   id: string;
@@ -77,7 +78,42 @@ export interface VoxelRig {
   dispose(options?: { keepMaterial?: boolean }): void;
 }
 
-export function createVoxelRig(model: AuthoredVoxelModel, scene: Scene, options: { name?: string; shadows?: ShadowGenerator; receiveShadows?: boolean; material?: StandardMaterial; stateCells?: (part: string, state: string) => VoxelCell[]; lights?: boolean } = {}): VoxelRig {
+/** All state buffers needed to promote this model without remeshing. */
+export function rigCacheKeys(model: AuthoredVoxelModel, revision: number): string[] {
+  return model.parts.flatMap((part) => partStateNames(part).map((state) => rigStateCacheKey(model.id, revision, part.id, state)));
+}
+
+// Runtime clones share immutable geometry, while their nodes, materials and state
+// switches remain independent. Editor and merged-source rigs keep private buffers.
+const rigSources = new WeakMap<Scene, Map<string, Mesh[]>>();
+function sourcesFor(scene: Scene): Map<string, Mesh[]> {
+  let sources = rigSources.get(scene);
+  if (!sources) { sources = new Map(); rigSources.set(scene, sources); }
+  return sources;
+}
+
+function shareRigMesh(source: Mesh, name: string, scene: Scene): Mesh {
+  // Mesh.clone() refreshes bounds by traversing every vertex. Geometry already
+  // owns those bounds; applying it directly keeps promotion proportional to parts.
+  const mesh = new Mesh(name, scene);
+  source.geometry!.applyToMesh(mesh);
+  mesh.material = source.material;
+  mesh.useVertexColors = true;
+  return mesh;
+}
+
+/** Run during loading, so the first interaction restores buffers even when the merged source was warm. */
+export async function warmRigCache(models: readonly AuthoredVoxelModel[], scene: Scene, revision: (id: string) => number | undefined): Promise<void> {
+  await warmSourceCache(models.flatMap((model) => rigCacheKeys(model, revision(model.id) ?? 0)));
+  for (const model of models) {
+    const rev = revision(model.id) ?? 0;
+    if (rigCacheKeys(model, rev).every((key) => sourcesFor(scene).has(key))) continue;
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    createVoxelRig(model, scene, { cacheRevision: rev, shareGeometry: true }).dispose();
+  }
+}
+
+export function createVoxelRig(model: AuthoredVoxelModel, scene: Scene, options: { name?: string; shadows?: ShadowGenerator; receiveShadows?: boolean; material?: StandardMaterial; stateCells?: (part: string, state: string) => VoxelCell[]; lights?: boolean; cacheRevision?: number; shareGeometry?: boolean; onCache?: (hit: boolean) => void } = {}): VoxelRig {
   const name = options.name ?? `rig ${model.id}`;
   // Palette colours that glow: meshed apart, unlit, bloomed by the scene's GlowLayer.
   const glow = emissiveByHex(model);
@@ -117,8 +153,38 @@ export function createVoxelRig(model: AuthoredVoxelModel, scene: Scene, options:
       const stateMeshes = new Map<string, Mesh[]>();
       const own: Mesh[] = [];
       for (const state of partStateNames(part)) {
+        // Editor rigs omit cacheRevision: unsaved voxel edits must always remesh.
+        const key = options.cacheRevision === undefined ? undefined : rigStateCacheKey(model.id, options.cacheRevision, part.id, state);
+        const cached = key ? peekRigState(key) : undefined;
+        if (key) options.onCache?.(Boolean(cached));
+        if (cached) {
+          let templates = options.shareGeometry ? sourcesFor(scene).get(key!) : undefined;
+          if (options.shareGeometry && !templates) {
+            templates = cached.meshes.map(({ data }, index) => {
+              const mesh = restoreMesh(`rig source ${key}.${index}`, data, scene, material, glowMaterialFor(scene));
+              mesh.setEnabled(false); mesh.isPickable = false;
+              return mesh;
+            });
+            sourcesFor(scene).set(key!, templates);
+          }
+          const built = cached.meshes.map(({ data, glow: info }, index) => {
+            const meshName = `${name}.${part.id}@${state}.${index}`;
+            const mesh = templates ? shareRigMesh(templates[index]!, meshName, scene) : restoreMesh(meshName, data, scene, material, glowMaterialFor(scene));
+            mesh.material = info ? glowMaterialFor(scene) : material;
+            mesh.isPickable = true;
+            mesh.parent = node;
+            mesh.receiveShadows = info ? false : options.receiveShadows ?? true;
+            mesh.metadata = { rigPart: part.id, state };
+            if (info) tagGlow(mesh, info); else options.shadows?.addShadowCaster(mesh);
+            mesh.setEnabled(state === "base");
+            own.push(mesh); meshes.push(mesh);
+            return mesh;
+          });
+          stateMeshes.set(state, built);
+          continue;
+        }
         const cells = cellsOfPartState(model, part, state);
-        if (!cells.length) { stateMeshes.set(state, []); continue; }
+        if (!cells.length) { stateMeshes.set(state, []); if (key) { storeSource(key, { meshes: [] }); if (options.shareGeometry) sourcesFor(scene).set(key, []); } continue; }
         const local = cells.map((cell) => ({ x: cell.x - part.pivot[0], y: cell.y - part.pivot[1], z: cell.z - part.pivot[2], color: cell.color }));
         const { lit, glowing } = splitGlowCells(local, glow);
         const built: Mesh[] = [];
@@ -138,6 +204,16 @@ export function createVoxelRig(model: AuthoredVoxelModel, scene: Scene, options:
           tagGlow(glowMesh, glowInfoOf(glowing, glow));
           built.push(glowMesh);
         }
+        if (key) storeSource(key, { meshes: built.map((mesh) => ({
+          data: serializeMesh(mesh, (candidate) => candidate === glowMaterialFor(scene)),
+          glow: (mesh.metadata as { glow?: { r: number; g: number; b: number; intensity: number } }).glow,
+        })) });
+        if (key && options.shareGeometry) sourcesFor(scene).set(key, built.map((mesh, index) => {
+          const template = shareRigMesh(mesh, `rig source ${key}.${index}`, scene);
+          template.parent = null;
+          template.setEnabled(false); template.isPickable = false;
+          return template;
+        }));
         for (const mesh of built) { mesh.setEnabled(state === "base"); own.push(mesh); meshes.push(mesh); }
         stateMeshes.set(state, built);
       }

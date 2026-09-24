@@ -1,6 +1,7 @@
 import { TransformNode, type AbstractMesh, type Scene, type ShadowGenerator } from "@babylonjs/core";
 import type { AuthoredVoxelCatalog, AuthoredVoxelModel } from "./voxelModel.ts";
-import { createClipPlayer, createVoxelRig, type ClipPlayer, type VoxelRig } from "./voxelRig.ts";
+import { createClipPlayer, createVoxelRig, rigPose, type ClipPlayer, type VoxelRig } from "./voxelRig.ts";
+import { poseDistance, type PartPose } from "./voxelClips.ts";
 import { modelLightPositions, type LightPool } from "./lighting.ts";
 import { createWorldRenderer, type WorldInstance, type WorldRenderer } from "./worldRenderer.ts";
 import { collidersOfMeshes, GRAVITY, modelColliders, type ColliderField } from "./gravity.ts";
@@ -37,6 +38,8 @@ export interface PlacedProp {
   reacting: boolean;
   /** Decorate mode holds this prop as a rig (gizmos, highlight, drag). */
   pinned: boolean;
+  /** A completed interaction left a persistent pose (for example, an open door). */
+  heldPose?: Map<string, PartPose>;
   /** Particle emitters of the model, following this placement. */
   emitters?: EmitterHandle;
   /** Goods standing in the model's sockets, when the prop carries stock. */
@@ -73,11 +76,8 @@ export interface DecorScene {
   onDropped: ((id: string, y: number) => void) | null;
   /** The world renderer behind the static props (stats, tuning). */
   readonly renderer: WorldRenderer;
-  /** What the decor is actually costing. `rigs` is the one that matters: a rig is an individually
-   *  meshed prop with its own draw calls and a clip sampled every frame, and props become rigs on
-   *  their own — any model carrying a looping clip is promoted the moment it is placed. `rigBuildMs`
-   *  is cumulative, because those promotions are uncached remeshes on the main thread. */
-  stats(): { props: number; rigs: number; instances: number; tracksSampled: number; rigBuildMs: number; rigBuilds: number };
+  /** Ambient rigs are bounded; interactions, persistent poses and editor selections are protected. */
+  stats(): { props: number; rigs: number; instances: number; tracksSampled: number; rigBuildMs: number; rigBuilds: number; rigCacheHits: number; rigCacheMisses: number; protectedRigs: number; ambientRigs: number };
   dispose(): void;
 }
 
@@ -97,7 +97,17 @@ function toInstance(prop: DecorProp): WorldInstance {
   return { id: prop.id, model: prop.model, position: prop.position, rotation: propRotation(prop), scale: sx === sy && sy === sz ? sx : [sx, sy, sz] };
 }
 
-export function createDecorScene(scene: Scene, catalog: AuthoredVoxelCatalog, layout: DecorLayout, options: { shadows?: ShadowGenerator; lightPool?: LightPool; cacheRev?: (modelId: string) => number | undefined; colliders?: ColliderField; particles?: ParticleWorld } = {}): DecorScene {
+export interface DecorOptions {
+  shadows?: ShadowGenerator;
+  lightPool?: LightPool;
+  cacheRev?: (modelId: string) => number | undefined;
+  colliders?: ColliderField;
+  particles?: ParticleWorld;
+  /** Defaults: camera target, 18 m entry / 22 m exit, 32 ambient rigs, one promotion per frame. */
+  animation?: { focus?: () => { x: number; z: number }; distance?: number; exitDistance?: number; maxRigs?: number; promotionsPerFrame?: number };
+}
+
+export function createDecorScene(scene: Scene, catalog: AuthoredVoxelCatalog, layout: DecorLayout, options: DecorOptions = {}): DecorScene {
   const placed = new Map<string, PlacedProp>();
   const falling = new Map<string, { vy: number }>();
   const bottomOffsets = new Map<string, number>();
@@ -147,15 +157,28 @@ export function createDecorScene(scene: Scene, catalog: AuthoredVoxelCatalog, la
     entry.storage.show(entry.prop.stock);
   };
   const renderer = createWorldRenderer(scene, { name: "decor", shadows: options.shadows, lightPool: options.lightPool, receiveShadows: true, cacheRev: options.cacheRev });
-  /** Cumulative cost of promoting props to rigs. Every one of these is a full remesh of every part in
-   *  every state, on the main thread, uncached — see `asRig`. */
+  /** Cumulative buffer-restoration / cold-meshing cost of promotions. */
   let rigBuildMs = 0;
   let rigBuilds = 0;
+  let rigCacheHits = 0, rigCacheMisses = 0;
+  let elapsed = 0;
+  const admitted = new Set<string>();
+  const radius = Math.max(0, options.animation?.distance ?? 18);
+  const exitRadius = Math.max(radius, options.animation?.exitDistance ?? 22);
+  const maxRigs = Math.max(0, Math.floor(options.animation?.maxRigs ?? 32));
+  const promotionsPerFrame = Math.max(0, Math.floor(options.animation?.promotionsPerFrame ?? 1));
+  const protectedRig = (entry: PlacedProp): boolean => entry.pinned || entry.reacting || Boolean(entry.heldPose) || entry.prop.id.startsWith("__");
+  const idleStart = (entry: PlacedProp, model: AuthoredVoxelModel): number => {
+    let hash = 2166136261;
+    for (let i = 0; i < entry.prop.id.length; i++) hash = Math.imul(hash ^ entry.prop.id.charCodeAt(i), 16777619);
+    const duration = model.clips?.find((clip) => clip.id === entry.idleClip)?.duration ?? 1;
+    return (elapsed + (hash >>> 0) / 4294967296 * duration) % Math.max(duration, 0.001);
+  };
   /** Clip tracks sampled in the last update; `sampleClip` allocates several arrays per track per frame. */
   let tracksSampled = 0;
 
   /** A prop needs a rig while it animates, reacts, is pinned, or is the editor's ghost. */
-  const wantsRig = (entry: PlacedProp): boolean => entry.pinned || entry.reacting || entry.idleClip !== undefined || entry.prop.id.startsWith("__");
+  const wantsRig = (entry: PlacedProp): boolean => protectedRig(entry) || admitted.has(entry.prop.id);
 
   /** (Re)register a rig prop's point lights at its current world position. */
   const syncLights = (entry: PlacedProp): void => {
@@ -200,14 +223,18 @@ export function createDecorScene(scene: Scene, catalog: AuthoredVoxelCatalog, la
       entry.emitters?.dispose(); entry.emitters = undefined;
       entry.root.dispose();
       const promotionStarted = performance.now();
-      const rig = createVoxelRig(model, scene, { name: `decor ${entry.prop.id}`, shadows: options.shadows });
+      const rig = createVoxelRig(model, scene, { name: `decor ${entry.prop.id}`, shadows: options.shadows,
+        cacheRevision: options.cacheRev ? options.cacheRev(model.id) ?? 0 : undefined,
+        shareGeometry: true,
+        onCache: (hit) => { if (hit) rigCacheHits++; else rigCacheMisses++; },
+      });
       rigBuildMs += performance.now() - promotionStarted;
       rigBuilds++;
       for (const mesh of rig.meshes) mesh.metadata = { ...((mesh.metadata as Record<string, unknown> | null) ?? {}), decorId: entry.prop.id };
       entry.rig = rig;
       entry.player = createClipPlayer(rig, { onEvent: (event) => entry.emitters?.handleEvent(event) });
       entry.root = rig.anchor;
-      if (entry.idleClip && !entry.reacting) entry.player.play(entry.idleClip, { loop: true });
+      if (entry.idleClip && !entry.reacting) entry.player.play(entry.idleClip, { loop: true, from: idleStart(entry, model) });
     }
     applyPropTransform(entry);
     entry.root.setEnabled(propVisible(entry.prop, layout));
@@ -219,7 +246,44 @@ export function createDecorScene(scene: Scene, catalog: AuthoredVoxelCatalog, la
   const sync = (entry: PlacedProp): void => {
     const model = catalog.models[entry.prop.model];
     if (!model) return;
+    const previousRoot = entry.root;
     if (wantsRig(entry)) asRig(entry, model); else asInstance(entry, model);
+    if (entry.prop.stock?.length && (!entry.storage || previousRoot !== entry.root)) syncStorage(entry, model);
+  };
+
+  const scheduleAmbient = (): void => {
+    const camera = scene.activeCamera;
+    const focus = options.animation?.focus?.() ?? (camera && "getTarget" in camera ? (camera as unknown as { getTarget(): { x: number; z: number } }).getTarget() : camera?.position);
+    const candidates: { entry: PlacedProp; distance: number }[] = [];
+    for (const entry of placed.values()) {
+      if (!focus || !entry.idleClip || protectedRig(entry) || !propVisible(entry.prop, layout)) continue;
+      const dx = entry.prop.position[0] - focus.x, dz = entry.prop.position[2] - focus.z;
+      const distance = dx * dx + dz * dz;
+      const limit = admitted.has(entry.prop.id) ? exitRadius : radius;
+      if (distance > limit * limit) continue;
+      // Bounded nearest selection; existing rigs get a small hysteresis preference.
+      const score = distance * (admitted.has(entry.prop.id) ? 0.8 : 1);
+      let index = 0;
+      while (index < candidates.length && candidates[index]!.distance <= score) index++;
+      if (index < maxRigs) { candidates.splice(index, 0, { entry, distance: score }); if (candidates.length > maxRigs) candidates.pop(); }
+    }
+    const selected = new Set(candidates.map(({ entry }) => entry.prop.id));
+    for (const id of admitted) if (!selected.has(id)) {
+      admitted.delete(id);
+      const entry = placed.get(id);
+      if (entry && !protectedRig(entry)) sync(entry);
+    }
+    // A completed interaction may never have occupied an ambient slot (for
+    // example, it was triggered outside the radius). Release that rig too.
+    for (const entry of placed.values()) if (entry.rig && !protectedRig(entry) && !selected.has(entry.prop.id)) sync(entry);
+    let built = 0;
+    for (const { entry } of candidates) {
+      if (admitted.has(entry.prop.id)) continue;
+      if (!entry.rig && built >= promotionsPerFrame) continue;
+      if (!entry.rig) built++;
+      admitted.add(entry.prop.id);
+      sync(entry);
+    }
   };
 
   const place = (prop: DecorProp): PlacedProp | null => {
@@ -241,7 +305,7 @@ export function createDecorScene(scene: Scene, catalog: AuthoredVoxelCatalog, la
     placed,
     renderer,
     add: place,
-    remove(id) { const entry = placed.get(id); if (!entry) return; dropLights(entry); dropPhysics(entry); falling.delete(id); entry.rig?.dispose(); entry.root.dispose(); renderer.remove(id); placed.delete(id); },
+    remove(id) { const entry = placed.get(id); if (!entry) return; admitted.delete(id); dropLights(entry); dropPhysics(entry); falling.delete(id); entry.rig?.dispose(); entry.root.dispose(); renderer.remove(id); placed.delete(id); },
     refresh(id) {
       const entry = placed.get(id);
       if (!entry) return;
@@ -279,6 +343,8 @@ export function createDecorScene(scene: Scene, catalog: AuthoredVoxelCatalog, la
       return best;
     },
     update(dt) {
+      elapsed += Math.max(0, dt);
+      scheduleAmbient();
       // Dropped props: free fall onto the highest surface under them (never their own), a small bounce, then settle.
       for (const [id, fall] of falling) {
         const entry = placed.get(id);
@@ -308,8 +374,8 @@ export function createDecorScene(scene: Scene, catalog: AuthoredVoxelCatalog, la
       }
       tracksSampled = 0;
       for (const entry of placed.values()) {
-        if (!entry.player) continue;
-        tracksSampled += entry.player.clip?.tracks.length ?? 0;
+        if (!entry.player || !entry.root.isEnabled()) continue;
+        if (entry.player.playing) tracksSampled += entry.player.clip?.tracks.length ?? 0;
         entry.player.update(dt);
         // A clip that switches a gated part's state turns its light on or off with it.
         if (entry.rig?.model.lights?.some((light) => light.whenState)) {
@@ -318,15 +384,26 @@ export function createDecorScene(scene: Scene, catalog: AuthoredVoxelCatalog, la
         }
         if (entry.reacting && entry.player.finished) {
           entry.reacting = false;
+          const idle = entry.rig?.model.clips?.find((clip) => clip.id === entry.idleClip);
+          const driven = new Set(idle?.tracks.map((track) => track.part));
+          const held = rigPose(entry.rig!);
+          for (const [id, part] of entry.rig!.parts) {
+            const pose = held.get(id);
+            if (pose) pose.opacity = part.restOpacity > 0 ? part.opacity / part.restOpacity : 1;
+          }
+          // Partial idles leave doors and other undriven parts where the interaction put them.
+          const persistent = [...held].some(([id, pose]) => (!idle || idle.partial && !driven.has(id)) && (poseDistance(pose, undefined) > 1e-5 || pose.state !== undefined && pose.state !== "base" || Math.abs((pose.opacity ?? 1) - 1) > 1e-5));
+          entry.heldPose = persistent ? held : undefined;
           if (entry.idleClip) entry.player.play(entry.idleClip, { loop: true });
-          else { entry.player.stop(); sync(entry); } // back to an instance unless pinned
+          else { if (entry.heldPose) entry.player.pause(); else entry.player.stop(); sync(entry); }
         }
       }
     },
     stats() {
       let rigs = 0;
-      for (const entry of placed.values()) if (entry.rig) rigs++;
-      return { props: placed.size, rigs, instances: placed.size - rigs, tracksSampled, rigBuildMs, rigBuilds };
+      let protectedRigs = 0;
+      for (const entry of placed.values()) if (entry.rig) { rigs++; if (protectedRig(entry)) protectedRigs++; }
+      return { props: placed.size, rigs, instances: placed.size - rigs, tracksSampled, rigBuildMs, rigBuilds, rigCacheHits, rigCacheMisses, protectedRigs, ambientRigs: rigs - protectedRigs };
     },
     dispose() { for (const entry of placed.values()) { dropLights(entry); dropPhysics(entry); entry.rig?.dispose(); entry.root.dispose(); } placed.clear(); falling.clear(); renderer.dispose(); },
   };

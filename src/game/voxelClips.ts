@@ -42,7 +42,7 @@ export function ease(kind: ClipEase | undefined, t: number): number {
     case "out": return 1 - (1 - x) ** 3;
     case "back": {
       // Overshoot a little past the target, then settle: the house style for
-      // pops and pose changes (10-20% overshoot from ART_DIRECTION).
+      // pops and pose changes (10-20% overshoot from the rulebook).
       const c1 = 1.70158, c3 = c1 + 1;
       return 1 + c3 * (x - 1) ** 3 + c1 * (x - 1) ** 2;
     }

@@ -21,8 +21,11 @@ export interface SerializedMesh {
   subMeshes: { kind: "lit" | "glow"; verticesStart: number; verticesCount: number; indexStart: number; indexCount: number }[];
 }
 export interface SerializedSource { full: SerializedMesh; coarse: SerializedMesh | null }
+export interface SerializedRigState {
+  meshes: { data: SerializedMesh; glow?: { r: number; g: number; b: number; intensity: number } }[];
+}
 
-const memory = new Map<string, SerializedSource>();
+const memory = new Map<string, SerializedSource | SerializedRigState>();
 let dbPromise: Promise<IDBDatabase | null> | null = null;
 
 function openDb(): Promise<IDBDatabase | null> {
@@ -45,22 +48,40 @@ export function sourceCacheKey(modelId: string, rev: number | undefined, lodPitc
   return `${modelId}@${rev ?? 0}|lod:${lodPitch}|f${SOURCE_CACHE_FORMAT}`;
 }
 
+export function rigStateCacheKey(modelId: string, rev: number, part: string, state: string): string {
+  return `${modelId}@${rev}|part:${encodeURIComponent(part)}|state:${encodeURIComponent(state)}|f${SOURCE_CACHE_FORMAT}`;
+}
+
+/** Evict only older revisions/formats, never sibling LODs or rig parts. Unknown namespaces are safe. */
+export function staleSourceKeys(existing: readonly string[], requested: readonly string[]): string[] {
+  const parse = (key: string) => /^(.*)@(\d+)\|.*\|f(\d+)$/.exec(key);
+  const versions = new Map<string, Set<string>>();
+  for (const key of requested) {
+    const match = parse(key);
+    if (!match) continue;
+    const set = versions.get(match[1]!) ?? new Set<string>();
+    set.add(`${match[2]}|${match[3]}`);
+    versions.set(match[1]!, set);
+  }
+  return existing.filter((key) => {
+    const match = parse(key);
+    const wanted = match && versions.get(match[1]!);
+    return Boolean(match && wanted && !wanted.has(`${match[2]}|${match[3]}`));
+  });
+}
+
 /** Load the given keys into memory (and drop stale revisions of the same models). Returns the number found. */
 export async function warmSourceCache(keys: readonly string[]): Promise<number> {
   const db = await openDb();
-  if (!db) return 0;
+  if (!db) return keys.filter((key) => memory.has(key)).length;
   const wanted = new Set(keys.filter((key) => !memory.has(key)));
   if (!wanted.size) return keys.filter((key) => memory.has(key)).length;
-  const prefixes = new Set([...wanted].map((key) => key.slice(0, key.indexOf("@") + 1)));
   await new Promise<void>((resolve) => {
     const tx = db.transaction(STORE, "readwrite");
     const store = tx.objectStore(STORE);
     const all = store.getAllKeys();
     all.onsuccess = () => {
-      for (const existing of all.result as string[]) {
-        const prefix = existing.slice(0, existing.indexOf("@") + 1);
-        if (prefixes.has(prefix) && !wanted.has(existing) && !memory.has(existing)) store.delete(existing); // an older revision or LOD of a model we are loading
-      }
+      for (const key of staleSourceKeys(all.result.filter((key): key is string => typeof key === "string"), keys)) store.delete(key);
       for (const key of wanted) {
         const get = store.get(key);
         get.onsuccess = () => { if (get.result) memory.set(key, get.result as SerializedSource); };
@@ -73,10 +94,11 @@ export async function warmSourceCache(keys: readonly string[]): Promise<number> 
   return keys.filter((key) => memory.has(key)).length;
 }
 
-export function peekSource(key: string): SerializedSource | undefined { return memory.get(key); }
+export function peekSource(key: string): SerializedSource | undefined { return memory.get(key) as SerializedSource | undefined; }
+export function peekRigState(key: string): SerializedRigState | undefined { return memory.get(key) as SerializedRigState | undefined; }
 
 /** Remember a freshly meshed source (in memory now, on disk soon). */
-export function storeSource(key: string, source: SerializedSource): void {
+export function storeSource(key: string, source: SerializedSource | SerializedRigState): void {
   memory.set(key, source);
   void openDb().then((db) => {
     if (!db) return;
@@ -109,10 +131,12 @@ export function serializeMesh(mesh: Mesh, isGlow: (material: unknown) => boolean
 export function restoreMesh(name: string, data: SerializedMesh, scene: Scene, material: StandardMaterial, glowMaterial: StandardMaterial): Mesh {
   const mesh = new Mesh(name, scene);
   const vertexData = new VertexData();
-  vertexData.positions = data.positions;
-  vertexData.normals = data.normals;
-  vertexData.colors = data.colors;
-  vertexData.indices = data.indices;
+  // Babylon baking and colour animation mutate CPU buffers in place. Each restored
+  // mesh must own them, or baking a source corrupts every later rig promotion.
+  vertexData.positions = data.positions.slice();
+  vertexData.normals = data.normals.slice();
+  vertexData.colors = data.colors.slice();
+  vertexData.indices = data.indices.slice();
   vertexData.applyToMesh(mesh);
   const kinds = new Set(data.subMeshes.map((sub) => sub.kind));
   if (kinds.size <= 1) {

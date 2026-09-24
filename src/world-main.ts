@@ -29,6 +29,7 @@ import { createSurfaceCrustLayer } from "./game/surfaceRing";
 import { createGrassInstances } from "./game/grassInstances";
 import { createWindMaterial } from "./game/voxelWind";
 import { sourceCacheKey, warmSourceCache } from "./game/sourceCache";
+import { warmRigCache } from "./game/voxelRig.ts";
 
 const params = new URLSearchParams(window.location.search);
 const startingProgress = params.get("progress") === "start";
@@ -235,6 +236,7 @@ const decorModels = [...new Set(decorLayout.props.map((prop) => prop.model))];
 if (decorModels.length) {
   await warmSourceCache(decorModels.map((id) => sourceCacheKey(id, cacheRev(id), 0.02)));
   await ensureModels(decorModels);
+  await warmRigCache(decorModels.map((id) => catalog.models[id]!).filter((model) => model?.clips?.length), scene, cacheRev);
 }
 const decor = createDecorScene(scene, catalog, decorLayout, { shadows, lightPool, cacheRev, colliders, particles });
 
@@ -351,6 +353,8 @@ function walk(dt: number): void {
 
 const fmt = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 0 });
 let hudWindow = performance.now();
+let rigTest: Awaited<ReturnType<typeof import("./rig-test.ts").mountRigTest>> | undefined;
+let cropTest: Awaited<ReturnType<typeof import("./crop-test.ts").mountCropTest>> | undefined;
 function updateHud(): void {
   const stats = level.stats();
   const crustStats = crust.stats();
@@ -386,6 +390,8 @@ engine.runRenderLoop(() => {
   grass.update(player.position);
   if (cutawayOn) cutaway.update(dt);
   decor.update(dt);
+  rigTest?.update(dt);
+  cropTest?.update(dt);
   particles.update(dt);
   dayNight.update(dt);
   // Everything above this line is the simulation half, and none of it is in Babylon's frameTime.
@@ -400,3 +406,20 @@ Object.assign(window as unknown as Record<string, unknown>, {
   __world: { scene, camera, player, level, cutaway, decor, particles, colliders, dayNight, build, layout: levelLayout, turn: turnCamera,
     catalog, ensureModels, decorLayout, setProgress: (next: LevelProgress) => { progress = next; applyProgress(); } },
 });
+
+if (params.get("cropTest") === "1") {
+  void import("./crop-test.ts").then(({ mountCropTest }) =>
+    mountCropTest(scene, player.position.add(new Vector3(1.5, 0, 0)), shadows))
+    .then((fixture) => { cropTest = fixture; Object.assign(window, { __cropTest: fixture }); })
+    .catch((error) => console.error("Crop test failed", error));
+}
+
+if (params.get("rigTest") === "1") {
+  void import("./rig-test.ts").then(({ mountRigTest }) => mountRigTest(scene, player, { shadows, lightPool, colliders, particles }, () => {
+    framed = false;
+    targetRadius = 10;
+  })).then((fixture) => {
+    rigTest = fixture;
+    Object.assign(window, { __rigTest: fixture });
+  }).catch((error) => console.error("Rig test failed", error));
+}

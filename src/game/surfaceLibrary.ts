@@ -1,7 +1,7 @@
 // The material library. Six to begin with, spanning the range the rest will be built against: a run of
 // boards, a tiled grid, a loose bed, a ploughed field, a living ground and a coursed wall.
 //
-// Colour rule, from ART_DIRECTION.md: architecture is the QUIET layer. Crops and food are "more saturated
+// Colour rule, from docs/RULEBOOK.md: architecture is the QUIET layer. Crops and food are "more saturated
 // than architecture", and cyan, fresh green, amber, coral and gold are reserved for game state. So every
 // tone here is low-saturation, and the tones within one material sit close together — a floor of boards
 // that differ, not a floor of stripes.

@@ -184,3 +184,57 @@ and `worldRenderer.ts` had never been loadable under `node --test`, which is why
   `cullDistance`, not density.
 - **The emitter axis will look flat** because `setParticles()` is O(capacity), not O(alive) — 0 and 3,000
   alive cost nearly the same. The control row must dispose the particle world, not idle it.
+
+---
+
+## Rig promotion cache and scheduling — 2026-09-14
+
+Implemented before Phase 1 authoring, following `docs/HANDOFF.md`'s corrected order.
+
+`createVoxelRig` now caches each part/state under the model revision. During loading, `warmRigCache`
+restores those buffers from IndexedDB (or meshes a missing model once) and prepares scene-local geometry.
+Runtime placements share that immutable geometry, with separate transform nodes, material ownership,
+state visibility and animation players. Editor rigs remain uncached unless explicitly opted in.
+
+Two traps surfaced during measurement:
+
+- Buffer restoration alone still copied aloe's **2,285,844 vertices** per placement. Reusing geometry is
+  essential for this model; disk caching alone does not solve its promotion cost.
+- Babylon's `Mesh.clone()` shares geometry but ends by recalculating bounds over the vertices. Attaching
+  the existing geometry to a fresh mesh uses its stored bounds and removes that vertex-count-dependent
+  cost. Private buffer restorations copy arrays so baking a merged source cannot corrupt the cache.
+
+CPU-only measurement: `node scripts/benchmark-rig-cache.mjs`, Babylon NullEngine, one uncached build,
+one cache-populating build, then five warm runtime builds per model. Warm column is their median.
+Measured without another project test/build running. These are **rig construction times**, not GPU frame
+times, complete interaction latency, or compound load times.
+
+| model | uncached | populate cache | warm runtime median | vertices (unchanged) |
+|---|---:|---:|---:|---:|
+| savoy_cabbage | 511.86 ms | 307.26 ms | **0.135 ms** | 116,332 |
+| aloe_vera_potted | 3,542.01 ms | 6,267.69 ms | **0.321 ms** | 2,285,844 |
+| freezer_upright | 827.11 ms | 713.26 ms | **0.246 ms** | 9,992 |
+
+Every warm build reported zero part/state cache misses. Cache population remains costly and variable;
+the mesher optimisation is still necessary. Shared geometry also stays resident for the scene lifetime.
+
+Ambient rigs now enter within 18 m of the camera target, leave beyond 22 m, and use a nearest-first
+budget of 32 concurrent rigs with at most one new promotion per update. These are configurable initial
+settings, **not yet a density-sweep-derived ceiling**. Inactive placements retain their full static models.
+Placement-id phase offsets prevent lockstep motion. Active interactions, editor selections and completed
+interactions holding a non-rest pose are protected; `protectedRigs` is reported separately and can exceed
+the ambient budget. This prevents an open freezer from silently closing when it leaves the radius.
+
+Cache eviction now removes only stale revisions/formats of a requested model. A merged source never
+evicts sibling rig parts or another LOD at the same revision; keys without the model/revision syntax are
+left untouched. Unit tests cover that rule, restored geometry/glow/empty states, independent shared-rig
+poses, buffer mutation isolation, promotion budgets, hidden props and opening/closing outside the radius.
+
+`scripts/verify-rig-cache.mjs` provides the isolated real-GPU persistence/rendering check on port 5199.
+Browser verification status is recorded below once that check completes.
+
+Manual fixture: `world.html?rigTest=1&hour=12` adds all three benchmark models near the spawn point,
+with controls for opening/closing, cycling cached rigs and simulating leaving animation range. It uses
+a separate in-memory decor scene; `decor.json` stays empty. Its button timings include physics and scene
+updates and are **not comparable to the construction-only table above**. A successful cache cycle should
+report zero new part/state remeshes. The fixture build passes; visual browser validation remains pending.

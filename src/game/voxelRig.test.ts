@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { NullEngine, Scene } from "@babylonjs/core";
-import { createClipPlayer, createVoxelRig, rigPose } from "./voxelRig.ts";
+import { createClipPlayer, createVoxelRig, rigPose, setRigPartState } from "./voxelRig.ts";
+import { clearSourceCache } from "./sourceCache.ts";
 import type { AuthoredVoxelModel } from "./voxelModel.ts";
 
 /** A cabinet with one hinged door, opened and closed by two clips. */
@@ -29,6 +30,48 @@ const withRig = (body: (rig: ReturnType<typeof createVoxelRig>) => void): void =
   const rig = createVoxelRig(cabinet, scene);
   try { body(rig); } finally { rig.dispose(); scene.dispose(); engine.dispose(); }
 };
+
+test("cached rigs restore geometry, glow, empty states and transforms without sharing mutable buffers", async () => {
+  await clearSourceCache();
+  const model: AuthoredVoxelModel = {
+    id: "cache_fixture", name: "Cache fixture", pitch: 0.1,
+    palette: { metal: "#cccccc", lamp: "#ffcc00" }, emissive: { lamp: 2 },
+    parts: [{ id: "door", pivot: [3, 1, -2], transform: { rotation: [0, 30, 0], position: [2, 0, 0] },
+      boxes: [[2, 0, -2, 4, 2, -2, "metal"], [3, 3, -2, 3, 3, -2, "lamp"]],
+      states: { empty: { voxels: [] }, open: { voxels: [[4, 0, -2, "metal"]] } },
+    }],
+  };
+  const engine = new NullEngine();
+  const scene = new Scene(engine);
+  const cold = createVoxelRig(model, scene, { cacheRevision: 1 });
+  assert.ok(cold.meshes.length > 0);
+  const buffers = cold.meshes.map((mesh) => ({ positions: Array.from(mesh.getVerticesData("position")!, Math.fround), indices: Array.from(mesh.getIndices()!), glow: mesh.metadata.glow }));
+  cold.dispose();
+  const warmScene = new Scene(engine);
+  let hits = 0;
+  const warm = createVoxelRig(model, warmScene, { cacheRevision: 1, onCache: (hit) => { assert.equal(hit, true); hits++; } });
+  assert.equal(hits, 3);
+  assert.deepEqual(warm.meshes.map((mesh) => ({ positions: Array.from(mesh.getVerticesData("position")!), indices: Array.from(mesh.getIndices()!), glow: mesh.metadata.glow })), buffers);
+  assert.ok(buffers.some((buffer) => buffer.glow), "the fixture exercises a separate glowing mesh");
+  assert.equal(warm.parts.get("door")!.stateMeshes.get("empty")!.length, 0);
+  setRigPartState(warm.parts.get("door")!, "open");
+  assert.equal(warm.parts.get("door")!.stateMeshes.get("open")![0]!.isEnabled(), true);
+  warm.anchor.position.x = 10;
+  warm.meshes[0]!.bakeCurrentTransformIntoVertices();
+  const again = createVoxelRig(model, warmScene, { cacheRevision: 1 });
+  assert.deepEqual(Array.from(again.meshes[0]!.getVerticesData("position")!), buffers[0]!.positions, "baking another instance must not mutate cached part vertices");
+  const sharedA = createVoxelRig(model, warmScene, { cacheRevision: 1, shareGeometry: true });
+  const sharedB = createVoxelRig(model, warmScene, { cacheRevision: 1, shareGeometry: true });
+  assert.equal(sharedA.meshes[0]!.geometry, sharedB.meshes[0]!.geometry, "runtime placements share immutable GPU buffers");
+  sharedA.parts.get("door")!.node.rotation.y = 1;
+  setRigPartState(sharedA.parts.get("door")!, "empty");
+  assert.notEqual(sharedA.parts.get("door")!.node.rotation.y, sharedB.parts.get("door")!.node.rotation.y);
+  assert.equal(sharedB.meshes[0]!.isEnabled(), true, "another placement keeps its base state visible");
+  sharedA.dispose();
+  assert.ok(!sharedB.meshes[0]!.geometry!.isDisposed(), "disposing one placement preserves its sibling's geometry");
+  sharedB.dispose();
+  warm.dispose(); again.dispose(); scene.dispose(); warmScene.dispose(); engine.dispose();
+});
 
 test("interrupting a clip picks up from the pose we are standing in", () => {
   withRig((rig) => {

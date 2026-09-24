@@ -25,6 +25,7 @@ import { createDecorateMode } from "./decorate";
 import { cellsFromAuthoredModel, type AuthoredVoxelCatalog } from "./game/voxelModel";
 import { attachGlow, createLightPool } from "./game/lighting";
 import { sourceCacheKey, warmSourceCache } from "./game/sourceCache";
+import { warmRigCache } from "./game/voxelRig.ts";
 import { collidersOfMeshes, createColliderField } from "./game/gravity";
 import { createParticleWorld } from "./game/voxelParticles";
 import type { ParticleEmitter } from "./game/voxelModel";
@@ -248,6 +249,7 @@ let phaseElapsed = 0;
 // Static props are world-renderer instances; their meshed sources come from the IndexedDB cache when the model revision matches.
 const cacheRev = (modelId: string): number | undefined => catalogIndex[modelId]?.rev;
 await warmSourceCache([...new Set(decorLayout.props.map((prop) => prop.model))].map((modelId) => sourceCacheKey(modelId, cacheRev(modelId), 0.02)));
+await warmRigCache([...new Set(decorLayout.props.map((prop) => prop.model))].map((id) => foodModels.models[id]!).filter((model) => model?.clips?.length), scene, cacheRev);
 // Gravity: everything that falls lands on the highest surface beneath it (counters, tables, placed props, the floor).
 const colliders = createColliderField({ groundY: 0 });
 // Voxel particles: crumbs, juice, steam — one pooled mesh, landing on the colliders.

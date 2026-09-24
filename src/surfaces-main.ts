@@ -1,6 +1,6 @@
 // The surface lab: where a wall or floor material is judged before it goes into the world.
 //
-// ART_DIRECTION.md is blunt about this — "validate every asset in the actual camera at normal zoom, not
+// docs/RULEBOOK.md is blunt about this — "validate every asset in the actual camera at normal zoom, not
 // in a close-up model viewer". So this page shows a patch at the GAME's camera by default, with the same
 // field of view and pitch world.html uses, and lets you walk in to look closer. A material that only
 // works at 1.5 m has not passed.

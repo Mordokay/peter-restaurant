@@ -163,7 +163,7 @@ export function createWorldRenderer(scene: Scene, options: WorldRendererOptions 
 
   /** Mesh from scratch: rig at rest, parts merged (glow parts as a second sub-material), coarse twin. */
   const buildSource = (model: AuthoredVoxelModel, glowMap: Map<string, number>, factor: number): { merged: Mesh; coarse: Mesh | null; glowInfo: GlowInfo | null } | null => {
-    const rig = createVoxelRig(model, scene, { name: `${name} source ${model.id}`, material, receiveShadows: false });
+    const rig = createVoxelRig(model, scene, { name: `${name} source ${model.id}`, material, receiveShadows: false, cacheRevision: options.cacheRev ? options.cacheRev(model.id) ?? 0 : undefined });
     rig.anchor.computeWorldMatrix(true);
     for (const mesh of rig.meshes) mesh.computeWorldMatrix(true);
     const meshes = rig.meshes.filter((mesh) => mesh.getTotalVertices() > 0);

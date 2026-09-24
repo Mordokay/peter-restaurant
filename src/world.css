@@ -24,3 +24,11 @@ html, body, #world { margin: 0; height: 100%; overflow: hidden; background: #93a
 .world-loading .world-load-track { width: min(420px, 60vw); height: 8px; border: 1px solid #ffffff22; border-radius: 999px; background: #0f1614; overflow: hidden; }
 .world-loading .world-load-fill { height: 100%; width: 0; border-radius: 999px; background: linear-gradient(90deg, #4f8f47, #8fd47a); transition: width .18s ease; }
 .world-loading .world-load-note { color: #6f8377; font-size: 11px; }
+
+.rig-test-panel { position: absolute; right: 14px; bottom: 14px; width: min(390px, calc(100vw - 56px)); padding: 14px; border: 1px solid #ffffff33; border-radius: 14px; background: #1d2724ef; color: #eef3ea; }
+.rig-test-panel p { margin: 8px 0; font-size: 12px; }
+.rig-test-status { color: #b9dda8; font-variant-numeric: tabular-nums; }
+.rig-test-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.rig-test-actions button { padding: 6px 10px; border: 1px solid #ffffff44; border-radius: 8px; background: #ffffff10; color: inherit; font: inherit; cursor: pointer; }
+.rig-test-actions button:disabled { opacity: .45; cursor: wait; }
+.rig-test-result { color: #cfe0d4; }

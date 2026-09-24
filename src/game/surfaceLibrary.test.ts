@@ -37,7 +37,7 @@ test("ids and names are unique, and every material can be found by id", () => {
 
 test("no scatter is fine enough to read as pepper", () => {
   // A blotch smaller than a few cells is per-cell noise by another name: it defeats the mesher's
-  // merging and it reads as static, which ART_DIRECTION forbids. Tilled soil cost 196 triangles a
+  // merging and it reads as static, which the rulebook forbids. Tilled soil cost 196 triangles a
   // square metre with 7 cm clusters and 17 with 28 cm ones, for a better-looking field.
   for (const material of surfaceLibrary) {
     for (const layer of material.scatter ?? []) {

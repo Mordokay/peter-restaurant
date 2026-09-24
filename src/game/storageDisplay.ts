@@ -176,8 +176,33 @@ export function packStock(
   return out;
 }
 
+/** Deterministic 0..1 from a name and an index — the same shelf always packs the same way. */
+export function placeHash(seed: string, index: number, salt = 0): number {
+  let h = 2166136261 ^ salt;
+  for (let i = 0; i < seed.length; i++) h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
+  h = Math.imul(h ^ index, 16777619);
+  h ^= h >>> 15;
+  return (h >>> 0) / 4294967296;
+}
+
+/** A turn and a small lean for something set down by hand.
+ *
+ *  Nobody puts a jar on a shelf perfectly square. A row of goods all standing
+ *  dead upright at the same angle reads as a texture rather than as objects, and
+ *  the fix costs nothing: a full random yaw plus a couple of degrees of tilt on
+ *  both horizontal axes. `tiltDegrees` stays small — these things are resting on
+ *  a surface, not falling off it. */
+export function placementAttitude(seed: string, index: number, tiltDegrees = 5): { x: number; y: number; z: number } {
+  const lean = (tiltDegrees * Math.PI) / 180;
+  return {
+    x: (placeHash(seed, index, 3) - 0.5) * 2 * lean,
+    y: placeHash(seed, index, 4) * Math.PI * 2,
+    z: (placeHash(seed, index, 5) - 0.5) * 2 * lean,
+  };
+}
+
 /** Bounds of a model in cells, so an item can be sized and stood on its base. */
-function modelBounds(model: AuthoredVoxelModel): { min: Vector3; max: Vector3 } {
+export function modelBounds(model: AuthoredVoxelModel): { min: Vector3; max: Vector3 } {
   let minX = Infinity, minY = Infinity, minZ = Infinity, maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
   for (const cell of cellsFromAuthoredModel(model)) {
     if (cell.x < minX) minX = cell.x; if (cell.x > maxX) maxX = cell.x;
@@ -272,8 +297,10 @@ export function createStorageDisplay(options: StorageDisplayOptions): StorageDis
         instance.parent = node;
         instance.scaling.setAll(source.scale);
         instance.position.set(centre.x, centre.y + source.lift, centre.z);
-        // A little turn each, so a shelf of the same vegetable does not look stamped out.
-        instance.rotation.y = ((index * 47) % 360) * (Math.PI / 180);
+        // A turn AND a lean each, so a shelf of the same vegetable reads as
+        // objects somebody set down rather than as a repeating texture.
+        const attitude = placementAttitude(`${node.name}.${placement.grid}`, index);
+        instance.rotation.set(attitude.x, attitude.y, attitude.z);
         instance.isPickable = false;
         options.shadows?.addShadowCaster(instance);
         placed.push(instance);
