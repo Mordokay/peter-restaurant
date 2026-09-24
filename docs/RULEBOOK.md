@@ -461,8 +461,11 @@ this loop and the player already knows it:
   than two, and it is why the compost tool spends a real item out of the player's hands.
 
 - **Late game must not be a click grind.** The replanting phase is where farming sims break down — the
-  answer is tools that work a line or a whole bed at once (a seed attachment, a tractor), not faster
-  clicking. Anything added here is judged against that.
+  answer is automation, not faster clicking. The first of it: a sprinkler waters the four beds around it
+  and a seeder re-sows them, both on their own clock, both working whether or not the player is watching.
+  Automation removes the REPETITION and leaves the decisions — where to plant, what to plant, when to
+  expand — because those are the parts anyone would miss. A device never does something the player could
+  not, and never takes a plant the player has not finished with.
 
 #### Living crop rule
 
@@ -754,6 +757,7 @@ travels). Current sources:
 | `src/game/recipes.ts` | What the kitchen can make, what it needs, what it is worth | Active foundation |
 | `src/game/soil.ts`, `tools.ts` | Tilling, watering, fertiliser, and what the held tool does | Active foundation |
 | `src/game/compost.ts`, `compostBin.ts` | Kitchen scraps rotting down into the farm's fertility | Active foundation |
+| `src/game/automation.ts` | Sprinklers and seeders: the boring half of farming, done elsewhere | Active foundation |
 | `src/game/soilPatches.ts` | Worked ground drawn: one bed model, recoloured per state | Active foundation |
 | `scripts/authored/props/farmer.py`, `clips/farmer.mjs` | The player: a rigged voxel farmer and his six clips | Active asset pipeline |
 | `src/game/prepStation.ts` | The prep counter: a board, a plate, and a dish being made | Active foundation |

@@ -29,6 +29,7 @@ import { createPrepStation, PREP_MODEL } from "./game/prepStation";
 import { BED_MODEL } from "./game/soilPatches";
 import { BIN_MODEL } from "./game/compostBin";
 import { COMPOST_ITEM, SCRAPS_ITEM, describeHeap } from "./game/compost";
+import { DEVICE_MODELS } from "./game/automation";
 import { createClipPlayer, createVoxelRig, socketNode } from "./game/voxelRig";
 
 /** The player's own model, and the tools he carries. */
@@ -257,7 +258,7 @@ const cropModels = [...new Set([
   ...cropDefinitions.flatMap((crop) => [...Object.values(crop.stages), ...(crop.produce ? [crop.produce] : [])]),
   ...recipes.map((recipe) => recipe.yields),
   "crate_harvest", PREP_MODEL, BED_MODEL, BIN_MODEL, FARMER_MODEL, SCRAPS_ITEM, COMPOST_ITEM,
-  ...Object.values(TOOL_MODELS_PRELOAD),
+  ...Object.values(TOOL_MODELS_PRELOAD), ...Object.values(DEVICE_MODELS),
 ])];
 await ensureModels(cropModels);
 const farmWind = createWindMaterial("farm wind", scene);
@@ -339,6 +340,7 @@ function showHeldTool(): void {
 /** Which clip a piece of work looks like. */
 const ACTION_CLIP: Record<string, string> = {
   till: "swing", clear: "swing", water: "pour", feed: "scatter", sow: "scatter", harvest: "pick",
+  place: "pick", lift: "pick",
 };
 
 const farmHud = createFarmHud(document.querySelector<HTMLElement>("#world")!);
@@ -607,7 +609,9 @@ window.addEventListener("keydown", (event) => {
   if (key === "b" && !event.repeat) { build.toggle(); keys.clear(); requestAnimationFrame(syncBuildButton); }
   // The farm: one key does the work, the digits pick what goes in the ground.
   if (key === " " && !event.repeat) { event.preventDefault(); actOnPlot(); }
+  // 1-9 and 0 reach the first ten slots; anything past that is tab or shift+wheel.
   if (key >= "1" && key <= "9") { farmHud.select(Number(key) - 1); showHeldTool(); }
+  if (key === "0") { farmHud.select(9); showHeldTool(); }
   if (key === "tab") { event.preventDefault(); farmHud.cycle(event.shiftKey ? -1 : 1); showHeldTool(); }
 });
 window.addEventListener("keyup", (event) => keys.delete(event.key.toLowerCase()));
@@ -715,6 +719,7 @@ let working: { site: { x: number; z: number }; colour: string } | null = null;
 /** Colour of the filling bar, by the work being done. */
 const WORK_COLOURS: Record<string, string> = {
   till: "#c08a58", water: "#5b9fd6", feed: "#7d6b4a", sow: "#9fd78a", harvest: "#f3c55a", clear: "#d98b6b",
+  place: "#b87a4a", lift: "#b87a4a",
 };
 
 /** True while the farmer is committed to a swing, a pour or a pick. */

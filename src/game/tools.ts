@@ -12,13 +12,13 @@
 import { cropById, isReady, isSpent, type PlantedCrop } from "./crops.ts";
 import { canSow, isWet, type Soil } from "./soil.ts";
 
-export type ToolId = "hoe" | "can" | "compost" | "mulch";
+export type ToolId = "hoe" | "can" | "compost" | "mulch" | "sprinkler" | "seeder";
 
 export interface ToolSlot { kind: "tool"; tool: ToolId }
 export interface SeedSlot { kind: "seed"; crop: string }
 export type Slot = ToolSlot | SeedSlot;
 
-export type FarmAction = "till" | "water" | "feed" | "sow" | "harvest" | "clear" | "nothing";
+export type FarmAction = "till" | "water" | "feed" | "sow" | "harvest" | "clear" | "place" | "lift" | "nothing";
 
 export interface ToolDefinition {
   id: ToolId;
@@ -35,7 +35,15 @@ export const tools: readonly ToolDefinition[] = [
   { id: "can", name: "Watering can", verb: "water it", motion: "pour" },
   { id: "compost", name: "Compost", verb: "feed the soil", motion: "scatter" },
   { id: "mulch", name: "Mulch", verb: "hold the water in", motion: "scatter" },
+  // The late-game answer to the replanting grind: put these down and the boring
+  // half of the work happens while the player is somewhere else.
+  { id: "sprinkler", name: "Sprinkler", verb: "water the beds around it", motion: "scatter" },
+  { id: "seeder", name: "Seeder", verb: "re-sow the beds around it", motion: "scatter" },
 ];
+
+/** Tools that are a device the player puts down rather than swings. */
+export const DEVICE_TOOLS: readonly ToolId[] = ["sprinkler", "seeder"];
+export function isDeviceTool(tool: ToolId): boolean { return DEVICE_TOOLS.includes(tool); }
 
 const toolById = new Map(tools.map((tool) => [tool.id, tool]));
 export function toolDefinition(id: ToolId): ToolDefinition | undefined { return toolById.get(id); }
@@ -47,7 +55,14 @@ export const TOOL_COSTS: Partial<Record<ToolId, string>> = { compost: "item_comp
 
 /** What the action key does on this plot with this slot in hand. `carrying` is
  *  the player's inventory, for the tools that are spent. */
-export function actionOf(slot: Slot, soil: Soil, planted: PlantedCrop | null, carrying: readonly string[] = []): FarmAction {
+export function actionOf(slot: Slot, soil: Soil, planted: PlantedCrop | null, carrying: readonly string[] = [], hasDevice = false): FarmAction {
+  // A device on the plot is the only thing there is to do with that plot, in
+  // hand or not: you pick it up, or you leave it alone.
+  if (hasDevice) return slot.kind === "tool" && isDeviceTool(slot.tool) ? "lift" : "nothing";
+  if (slot.kind === "tool" && isDeviceTool(slot.tool)) {
+    // A device stands in a bed, not on a path, and not on top of a plant.
+    return soil.tilled && !planted ? "place" : "nothing";
+  }
   // A tool with nothing left to spend does nothing, wherever it is pointed.
   if (slot.kind === "tool") {
     const cost = TOOL_COSTS[slot.tool];
@@ -78,12 +93,17 @@ function actionWithStock(slot: Slot, soil: Soil, planted: PlantedCrop | null): F
     case "can": return soil.tilled && !isWet(soil) ? "water" : "nothing";
     case "compost":
     case "mulch": return soil.tilled && soil.fertiliser !== slot.tool ? "feed" : "nothing";
+    default: return "nothing";   // devices are handled before this point
   }
 }
 
 /** Why the key did nothing, in the player's terms. Only ever shown for the plot
  *  under their hand, so it is guidance rather than a wall of rules. */
-export function refusalFor(slot: Slot, soil: Soil, planted: PlantedCrop | null, carrying: readonly string[] = []): string {
+export function refusalFor(slot: Slot, soil: Soil, planted: PlantedCrop | null, carrying: readonly string[] = [], hasDevice = false): string {
+  if (hasDevice) return "a device is standing here";
+  if (slot.kind === "tool" && isDeviceTool(slot.tool)) {
+    return planted ? "something is growing here" : "break the ground first";
+  }
   if (slot.kind === "tool") {
     const cost = TOOL_COSTS[slot.tool];
     if (cost && !carrying.includes(cost)) return "no compost — tip scraps into the bin and wait";

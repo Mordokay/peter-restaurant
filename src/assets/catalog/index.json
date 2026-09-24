@@ -311,6 +311,8 @@
     "item_pepper_red": {"name":"Bell Pepper (red)","folder":"authored/produce","tags":["food","ingredient"],"size":[0.142,0.218,0.142],"voxels":8718,"parts":3,"rev":1790263639},
     "item_pepper_yellow": {"name":"Bell Pepper (yellow)","folder":"authored/produce","tags":["food","ingredient"],"size":[0.142,0.218,0.142],"voxels":8718,"parts":3,"rev":1790263640},
     "item_scraps": {"name":"Kitchen scraps","folder":"authored/produce","tags":["food","waste"],"size":[0.16,0.102,0.142],"voxels":14334,"parts":1,"rev":1790290317},
+    "item_seeder": {"name":"Seeder","folder":"authored/produce","tags":["farm","device"],"size":[0.349,0.345,0.302],"voxels":55606,"parts":5,"rev":1790290718},
+    "item_sprinkler": {"name":"Sprinkler","folder":"authored/produce","tags":["farm","device"],"size":[0.401,0.33,0.27],"voxels":26868,"parts":6,"rev":1790290717},
     "item_strawberry": {"name":"Strawberry","folder":"authored/produce","tags":["food","ingredient"],"size":[0.06,0.098,0.062],"voxels":3764,"parts":3,"rev":1790263636},
     "juice_box": {"name":"Juice Box","folder":"food/all_food","tags":["kitchen","food","ingredient","storage"],"size":[0.12,0.207,0.06],"voxels":198404,"parts":2,"thumb":1788657431,"rev":1789076670},
     "juice_carton_01": {"name":"Juice Carton 01","folder":"food/pantry","tags":["kitchen","food","ingredient","storage"],"size":[0.122,0.239,0.11],"voxels":49429,"parts":1,"thumb":1788657431,"rev":1789076670},

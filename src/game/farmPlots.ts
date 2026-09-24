@@ -15,7 +15,7 @@
 // Harvested items go into a plain array through inventory.ts, which is the form
 // the storage grids already expect, so the crate that shows them is a renderer
 // over the same data rather than a second source of truth.
-import { TransformNode, Vector3, type Scene, type ShadowGenerator, type StandardMaterial } from "@babylonjs/core";
+import { TransformNode, Vector3, type AbstractMesh, type Scene, type ShadowGenerator, type StandardMaterial } from "@babylonjs/core";
 import { advance, cropById, type CropDefinition, type PlantedCrop } from "./crops.ts";
 import { createCropPlot, type CropPlot } from "./cropPlanting.ts";
 import {
@@ -24,11 +24,16 @@ import {
 } from "./farm.ts";
 import { bareSoil, dry, fertilise, growthRate, till, waterSoil, yieldBonus, lookOf, type Soil, type SoilLook } from "./soil.ts";
 import { actionOf, refusalFor, type FarmAction, type Slot } from "./tools.ts";
+import { DEVICE_MODELS, DEVICE_PERIOD, covered, jobFor, type Device, type DeviceKind } from "./automation.ts";
 import { addItems } from "./inventory.ts";
 import { createMeshLibrary } from "./meshLibrary.ts";
+import { createVoxelMesh } from "./voxelGeometry.ts";
+import { cellsFromAuthoredModel } from "./voxelModel.ts";
+import { hash01 } from "./hash.ts";
 import { createHarvestCrate, type HarvestCrate } from "./harvestCrate.ts";
 import { createSoilPatches } from "./soilPatches.ts";
 import { createCompostBin, type CompostBin } from "./compostBin.ts";
+import { describeDevice } from "./automation.ts";
 import { COMPOST_ITEM, SCRAPS_ITEM } from "./compost.ts";
 import { readSave, writeSave } from "./persistence.ts";
 import type { AuthoredVoxelCatalog } from "./voxelModel.ts";
@@ -82,6 +87,8 @@ export interface PlotReading {
   refusal: string;
   /** Whether the player is standing close enough to work this plot. */
   inReach: boolean;
+  /** A sprinkler or seeder standing on this plot. */
+  device: Device | null;
 }
 
 /** What actually happened, so the world can throw the right dirt in the air. */
@@ -125,6 +132,11 @@ export interface Farm {
   act(site: PlotSite, slot: Slot): ActResult | null;
   /** The ground's state at a plot, for the soil renderer. */
   soilAt(id: string): Soil;
+  /** Devices standing on the farm. */
+  readonly devices: Readonly<Record<string, Device>>;
+  /** Plots a device pass worked since the last frame — for the water and the
+   *  seed to be thrown about where it happened. */
+  takeDeviceWork(): { site: PlotSite; job: "water" | "sow" }[];
   update(dt: number, focus?: { x: number; z: number }): void;
   save(): void;
   dispose(): void;
@@ -142,6 +154,16 @@ export function createFarm(options: FarmOptions): Farm {
   /** Ground state per plot. Only plots that have been worked appear here; the
    *  rest are bare, which costs nothing to represent. */
   const soils: Record<string, Soil> = {};
+  /** Sprinklers and seeders, by the plot they stand on. */
+  const devices: Record<string, Device> = {};
+  /** Device meshes, built and taken down with the rest of the farm's scenery. */
+  const deviceMeshes = new Map<string, AbstractMesh>();
+  /** What the player last put in the ground, which is what a seeder copies. */
+  let lastSown: string | null = null;
+  /** Seconds until the devices take their next pass. */
+  let devicesIn = DEVICE_PERIOD;
+  /** What the last pass did, waiting to be shown. */
+  let deviceWork: { site: PlotSite; job: "water" | "sow" }[] = [];
   const rendered = new Map<string, CropPlot>();
   // One meshing of each crop stage and each fruit for the whole farm; every
   // plant standing in the soil is an instance of it.
@@ -177,6 +199,8 @@ export function createFarm(options: FarmOptions): Farm {
       clock = Math.max(0, saved.clock);
       Object.assign(plots, restorePlots(saved.plots, sites));
       for (const [id, soil] of Object.entries(saved.soils ?? {})) if (byId.has(id)) soils[id] = { ...soil };
+      for (const [id, device] of Object.entries(saved.devices ?? {})) if (byId.has(id)) devices[id] = { ...device };
+      lastSown = saved.lastSown ?? null;
       inventory.push(...saved.inventory);
       crate?.set(saved.crate ?? []);
       if (saved.heap) bin?.restore(saved.heap);
@@ -219,6 +243,58 @@ export function createFarm(options: FarmOptions): Farm {
     return dx * dx + dz * dz <= range * range;
   };
 
+  /** A device's mesh, instanced from the shared library like everything else. */
+  const showDevice = (site: PlotSite): void => {
+    const device = devices[site.id];
+    if (!device || deviceMeshes.has(site.id)) return;
+    const model = catalog.models[DEVICE_MODELS[device.kind]];
+    if (!model) return;
+    const source = library.source(`device:${device.kind}`, () => {
+      const mesh = createVoxelMesh(`device ${device.kind}`, cellsFromAuthoredModel(model), model.pitch, scene,
+        options.material ? { material: options.material } : {});
+      mesh.receiveShadows = true;
+      return mesh;
+    });
+    const instance = source.createInstance(`device ${site.id}`);
+    instance.parent = root;
+    instance.position.set(site.x, groundY, site.z);
+    instance.rotation.y = hash01(site.id, 3) * Math.PI * 2;
+    instance.isPickable = false;
+    options.shadows?.addShadowCaster(instance);
+    deviceMeshes.set(site.id, instance);
+  };
+
+  /** One pass of every device: water what is dry, sow what is bare. Returns the
+   *  plots that were worked, so the world can throw water about over them. */
+  const runDevices = (): { site: PlotSite; job: "water" | "sow" }[] => {
+    const worked: { site: PlotSite; job: "water" | "sow" }[] = [];
+    for (const device of Object.values(devices)) {
+      const here = byId.get(device.plot);
+      if (!here) continue;
+      // A seeder copies whatever the player last sowed, so it stays useful when
+      // they change their mind about the crop.
+      if (device.kind === "seeder" && lastSown && device.crop !== lastSown) device.crop = lastSown;
+      for (const site of covered(here, sites)) {
+        if (devices[site.id]) continue;      // devices do not work each other's plots
+        const soil = soils[site.id] ?? bareSoil();
+        const job = jobFor(device, soil, plots[site.id] ?? null);
+        if (job === "water") {
+          soils[site.id] = waterSoil(soil);
+          patches.set(site.id, lookOf(soils[site.id]!), site);
+          worked.push({ site, job });
+        } else if (job === "sow" && device.crop) {
+          const crop = cropById(device.crop);
+          if (!crop) continue;
+          const plot = rendererFor(site, crop);
+          plot.sow();
+          plots[site.id] = plot.state!;
+          worked.push({ site, job });
+        }
+      }
+    }
+    return worked;
+  };
+
   /** Build the plants and beds near the player and take down the ones that are not. */
   const admit = (focus: { x: number; z: number }): void => {
     let budget = BUILDS_PER_FRAME;
@@ -227,6 +303,15 @@ export function createFarm(options: FarmOptions): Farm {
       if (!site) continue;
       if (near(site, focus, RENDER_DISTANCE)) patches.set(id, lookOf(soil), site);
       else if (!near(site, focus, RETIRE_DISTANCE)) patches.remove(id);
+    }
+    for (const id of Object.keys(devices)) {
+      const site = byId.get(id);
+      if (!site) continue;
+      if (near(site, focus, RENDER_DISTANCE)) showDevice(site);
+      else if (!near(site, focus, RETIRE_DISTANCE)) {
+        deviceMeshes.get(id)?.dispose(false, false);
+        deviceMeshes.delete(id);
+      }
     }
     for (const [id, planted] of Object.entries(plots)) {
       const site = byId.get(id);
@@ -248,14 +333,16 @@ export function createFarm(options: FarmOptions): Farm {
   const read = (site: PlotSite, slot: Slot, from?: { x: number; z: number }): PlotReading => {
     const planted = plots[site.id] ?? null;
     const soil = soils[site.id] ?? bareSoil();
+    const device = devices[site.id] ?? null;
     const dx = (from?.x ?? site.x) - site.x;
     const dz = (from?.z ?? site.z) - site.z;
     return {
       site, planted, soil,
-      action: actionOf(slot, soil, planted, inventory),
-      label: describePlot(planted, soil),
-      refusal: refusalFor(slot, soil, planted, inventory),
+      action: actionOf(slot, soil, planted, inventory, Boolean(device)),
+      label: device ? describeDevice(device) : describePlot(planted, soil),
+      refusal: refusalFor(slot, soil, planted, inventory, Boolean(device)),
       inReach: dx * dx + dz * dz <= REACH * REACH,
+      device,
     };
   };
 
@@ -300,6 +387,12 @@ export function createFarm(options: FarmOptions): Farm {
     },
 
     soilAt(id) { return soils[id] ?? bareSoil(); },
+    get devices() { return devices; },
+    takeDeviceWork() {
+      const worked = deviceWork;
+      deviceWork = [];
+      return worked;
+    },
 
     at(x, z, slot, from) {
       const site = nearestSite(sites, x, z, POINT_RADIUS);
@@ -317,7 +410,7 @@ export function createFarm(options: FarmOptions): Farm {
       if (!byId.has(site.id)) return null;
       const planted = plots[site.id] ?? null;
       const soil = soils[site.id] ?? bareSoil();
-      const action = actionOf(slot, soil, planted, inventory);
+      const action = actionOf(slot, soil, planted, inventory, Boolean(devices[site.id]));
       const done = (items = 0, crop: string | null = null): ActResult => {
         const look = lookOf(soils[site.id] ?? bareSoil());
         patches.set(site.id, look, site);
@@ -343,8 +436,21 @@ export function createFarm(options: FarmOptions): Farm {
           soils[site.id] = fertilise(soil, kind);
           return done();
         }
+        case "place": {
+          if (slot.kind !== "tool") return done();
+          devices[site.id] = { kind: slot.tool as DeviceKind, plot: site.id, ...(slot.tool === "seeder" && lastSown ? { crop: lastSown } : {}) };
+          showDevice(site);
+          return done();
+        }
+        case "lift": {
+          delete devices[site.id];
+          deviceMeshes.get(site.id)?.dispose(false, false);
+          deviceMeshes.delete(site.id);
+          return done();
+        }
         case "sow": {
           if (slot.kind !== "seed") return done();
+          lastSown = slot.crop;
           const crop = cropById(slot.crop);
           if (!crop) return done();
           retiring.delete(site.id);
@@ -415,6 +521,14 @@ export function createFarm(options: FarmOptions): Farm {
       for (const [id, plot] of rendered) if (!plots[id] && plot.state) plots[id] = plot.state;
       bin?.update(dt);
 
+      // The devices take their pass on their own clock, wherever the player is:
+      // a farm that only runs while it is being watched is not automated.
+      devicesIn -= dt;
+      if (devicesIn <= 0) {
+        devicesIn = DEVICE_PERIOD;
+        if (Object.keys(devices).length) deviceWork = deviceWork.concat(runDevices());
+      }
+
       for (const [id, left] of retiring) {
         const remaining = left - dt;
         if (remaining > 0) { retiring.set(id, remaining); continue; }
@@ -431,6 +545,7 @@ export function createFarm(options: FarmOptions): Farm {
         version: FARM_SAVE_VERSION, savedAt: Date.now(), clock,
         plots: { ...plots }, soils: { ...soils }, inventory: [...inventory], crate: [...(crate?.contents ?? [])],
         heap: bin ? { ...bin.heap, rotting: bin.heap.rotting.map((batch) => ({ ...batch })) } : undefined,
+        devices: { ...devices }, lastSown,
       });
     },
 
@@ -438,6 +553,8 @@ export function createFarm(options: FarmOptions): Farm {
       crate?.dispose();
       bin?.dispose();
       patches.dispose();
+      for (const mesh of deviceMeshes.values()) mesh.dispose(false, false);
+      deviceMeshes.clear();
       for (const plot of rendered.values()) plot.dispose();
       rendered.clear();
       library.dispose();

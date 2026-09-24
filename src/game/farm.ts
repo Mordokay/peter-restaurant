@@ -128,6 +128,10 @@ export interface FarmSave extends VersionedSave {
   crate: string[];
   /** The compost bin: loose scraps, batches rotting, compost ready. */
   heap?: { loose: number; rotting: { left: number }[]; ready: number };
+  /** Sprinklers and seeders standing on the farm, by plot. */
+  devices?: Record<string, { kind: "sprinkler" | "seeder"; plot: string; crop?: string }>;
+  /** What the player last sowed, which is what a seeder copies. */
+  lastSown?: string | null;
   /** The prep counter: what is on its board, what is on its plate, what is
    *  half-made. Shaped by prepStation.ts; kept here because one save is easier
    *  to reason about than three. */
