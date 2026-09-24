@@ -13,9 +13,10 @@ const pepper = cropById("pepper")!;         // picked, four harvests then spent
 test("every stage model a crop names actually exists in the catalog", () => {
   const { errors, gaps } = validateCrops(Object.keys((idx as { models: Record<string, unknown> }).models));
   assert.deepEqual(errors, [], "a crop points at a model that is not there");
-  // Produce models for the whole-plant crops are a known, tracked gap — a
-  // cabbage's produce is the cabbage, and nobody has authored it as an item yet.
-  assert.deepEqual(gaps.map((g) => g.split(":")[0]).sort(), ["cabbage", "carrot", "lettuce"]);
+  // Every crop now has both forms — the staged plant and the harvested item —
+  // which is what the rulebook asks of anything growable, since buying is the
+  // expensive alternative to growing and both need something to show.
+  assert.deepEqual(gaps, [], "a crop has no produce item authored");
 });
 
 test("stages follow the plant, and the boundaries land where they should", () => {

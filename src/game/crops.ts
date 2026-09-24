@@ -31,8 +31,9 @@ export interface CropDefinition {
   /** Catalog model ids, one per stage. */
   stages: Readonly<Record<CropStage, string>>;
   /** Catalog id of the item a harvest produces, or null where that model is not
-   *  authored yet. A whole-plant crop's produce IS the thing you pulled up, so
-   *  those need a standalone item model before they can be put in a crate. */
+   *  authored yet. A whole-plant crop's produce IS the thing you pulled up — a
+   *  trimmed carrot, a cut cabbage — so it is authored separately from the plant
+   *  rather than reusing the model that was standing in the soil. */
   produce: string | null;
   /** Fruit sockets on the ripe model — what the player SEES. */
   sites: number;
@@ -56,7 +57,7 @@ export const cropDefinitions: readonly CropDefinition[] = [
   {
     id: "lettuce", name: "Lettuce",
     stages: { seedling: "crop_lettuce_seedling", growing: "crop_lettuce_growing", ripe: "crop_lettuce_ripe" },
-    produce: null,
+    produce: "item_lettuce",
     // A lettuce is one head, cut once. Fast and forgiving: the first crop a
     // player plants should finish inside a single prep phase.
     sites: 1, yield: [1, 1], growthSeconds: 45, regrowSeconds: 0, harvests: 1, wholePlant: true,
@@ -64,7 +65,7 @@ export const cropDefinitions: readonly CropDefinition[] = [
   {
     id: "carrot", name: "Carrot",
     stages: { seedling: "crop_carrot_seedling", growing: "crop_carrot_growing", ripe: "crop_carrot_ripe" },
-    produce: null,
+    produce: "item_carrot",
     // One root shows, but pulling a carrot gives a small handful — the plot is
     // read as a row, not as a single plant.
     sites: 1, yield: [1, 3], growthSeconds: 70, regrowSeconds: 0, harvests: 1, wholePlant: true,
@@ -72,7 +73,7 @@ export const cropDefinitions: readonly CropDefinition[] = [
   {
     id: "cabbage", name: "Cabbage",
     stages: { seedling: "crop_cabbage_seedling", growing: "crop_cabbage_growing", ripe: "crop_cabbage_ripe" },
-    produce: null,
+    produce: "item_cabbage",
     sites: 1, yield: [1, 1], growthSeconds: 120, regrowSeconds: 0, harvests: 1, wholePlant: true,
   },
   {

@@ -41,7 +41,12 @@ const CROPS = [
     stages: ["seedling", "growing", "ripe_green", "ripe_red", "ripe_yellow", "ripe_orange"] },
 ];
 
+// `script` picks the Blender file: fruit.py for things picked off a standing
+// plant, vegetable.py for the whole-plant crops, which arrive trimmed and cut.
 const ITEMS = [
+  { kind: "cabbage",       pitch: 0.0022, tags: ["food", "ingredient"], label: "Cabbage",   script: "vegetable" },
+  { kind: "carrot",        pitch: 0.0018, tags: ["food", "ingredient"], label: "Carrot",    script: "vegetable" },
+  { kind: "lettuce",       pitch: 0.0022, tags: ["food", "ingredient"], label: "Lettuce",   script: "vegetable" },
   { kind: "strawberry",    pitch: 0.0015, tags: ["food", "ingredient"], label: "Strawberry" },
   { kind: "pepper_green",  pitch: 0.0020, tags: ["food", "ingredient"], label: "Bell Pepper (green)" },
   { kind: "pepper_red",    pitch: 0.0020, tags: ["food", "ingredient"], label: "Bell Pepper (red)" },
@@ -98,9 +103,9 @@ for (const spec of ITEMS) {
   const glb = `${SCRATCH}/item_${spec.kind}.glb`;
   const vox = `${SCRATCH}/item_${spec.kind}.vox.json`;
   const id = `item_${spec.kind}`;
-  run("blender", ["--background", "--python", "scripts/authored/items/fruit.py", "--", spec.kind, glb]);
+  run("blender", ["--background", "--python", `scripts/authored/items/${spec.script ?? "fruit"}.py`, "--", spec.kind, glb]);
   toCatalog(glb, vox, id, spec.pitch, SCALE.produce);
-  run("node", ["scripts/authored/merge-parts.mjs", id, "^(berry|pepper|sep|calyx|stalk)"]);
+  run("node", ["scripts/authored/merge-parts.mjs", id, "^(berry|pepper|sep|calyx|stalk|root|crown|stem|head|wrap|skirt|leaf)"]);
   const model = finish(id, spec.label, "authored/produce", spec.tags);
   rows.push({ id, pitch: model.pitch, parts: model.parts.length, sockets: 0 });
 }
