@@ -7,8 +7,8 @@
 // URL: /world.html?progress=start|full&hour=19.5
 import "./world.css";
 import {
-  ArcRotateCamera, Color3, Color4, DirectionalLight, Engine, HemisphericLight,
-  MeshBuilder, Scene, SceneInstrumentation, ShadowGenerator, StandardMaterial, TransformNode, Vector3,
+  ArcRotateCamera, Color3, Color4, DirectionalLight, Engine, HemisphericLight, Matrix,
+  MeshBuilder, Plane, Scene, SceneInstrumentation, ShadowGenerator, StandardMaterial, TransformNode, Vector3,
 } from "@babylonjs/core";
 import { catalog, catalogIndex, ensureModels } from "./assets/catalog/index";
 import { decorLayout, levelLayout, levelProgress, onLevelChanged } from "./assets/scene/index";
@@ -58,7 +58,7 @@ document.querySelector<HTMLElement>("#world")!.innerHTML = `
       <button data-act="night" id="world-night" title="Jump the clock to evening">🌙 Evening</button>
       <button data-act="frame" title="Look at the whole site">🖼 Frame all</button>
     </div>
-    <div class="world-hint">W A S D walk · Q / E turn the camera · wheel zooms · F frames the site · 1-9 pick a tool or seed (tab cycles) · space works the plot</div>
+    <div class="world-hint">W A S D walk · Q / E turn the camera · F frames the site · wheel zooms · 1-9 or shift+wheel picks a tool · click the ground to work it · hold to sow or pick a row</div>
   </div>
   <div class="world-loading" id="world-loading">
     <h1>🍅 Building the compound</h1>
@@ -310,9 +310,32 @@ const MARKER_COLOURS: Record<string, string> = {
   till: "#c08a58", water: "#5b9fd6", feed: "#7d6b4a", sow: "#9fd78a",
   harvest: "#f3c55a", clear: "#d98b6b", nothing: "#6f8377",
 };
+/** Out of arm's reach: the plot is still named, but the ring says why not. */
+const OUT_OF_REACH = "#b45a4a";
+
+// Where the mouse is over the ground, in metres. The farm is flat, so this is a
+// ray against one plane rather than a pick against the whole scene — cheaper,
+// exact, and it still finds a plot standing under a plant.
+let pointer: { x: number; y: number } | null = null;
+const GROUND_PLANE = Plane.FromPositionAndNormal(new Vector3(0, 0.02, 0), Vector3.Up());
+function groundUnderPointer(): { x: number; z: number } | null {
+  if (!pointer) return null;
+  const ray = scene.createPickingRay(pointer.x, pointer.y, Matrix.Identity(), camera);
+  const distance = ray.intersectsPlane(GROUND_PLANE);
+  if (distance === null || distance < 0) return null;
+  const point = ray.origin.add(ray.direction.scale(distance));
+  return { x: point.x, z: point.z };
+}
+
 let addressed: ReturnType<typeof farm.addressed> = null;
 function refreshFarm(): void {
-  addressed = farm.addressed(player.position.x, player.position.z, farmHud.slot);
+  // The mouse says which plot; the player's position says whether they can work
+  // it. Pointing is how a farming game is played — walking up to a tile to
+  // address it is how a walking simulator is played.
+  const ground = groundUnderPointer();
+  addressed = ground
+    ? farm.at(ground.x, ground.z, farmHud.slot, player.position)
+    : farm.addressed(player.position.x, player.position.z, farmHud.slot);
   const atCrate = Boolean(farm.crate?.inReach(player.position.x, player.position.z));
   const atPrep = prepStation?.inReach(player.position.x, player.position.z) ? prepStation : null;
   farmHud.render(addressed, farm.inventory, atCrate ? farm.crate!.contents.length : null,
@@ -320,7 +343,8 @@ function refreshFarm(): void {
   plotMarker.setEnabled(Boolean(addressed));
   if (!addressed) return;
   plotMarker.position.set(addressed.site.x, 0.06, addressed.site.z);
-  plotMarkerMaterial.emissiveColor = Color3.FromHexString(MARKER_COLOURS[addressed.action] ?? "#9fd78a");
+  plotMarkerMaterial.emissiveColor = Color3.FromHexString(
+    !addressed.inReach ? OUT_OF_REACH : MARKER_COLOURS[addressed.action] ?? "#9fd78a");
 }
 
 // ── the feel of the work ──────────────────────────────────────────────────────
@@ -395,10 +419,74 @@ function actOnPlot(): void {
   // left behind.
   refreshFarm();
   if (!addressed) return;
+  if (!addressed.inReach) {
+    // Stardew swings the tool and fails, which is the lesson: the player has to
+    // move. Until there is a character to swing, the bar says it plainly.
+    farmHud.flash("too far — walk closer");
+    return;
+  }
   const result = farm.act(addressed.site, farmHud.slot);
-  if (result) showFarmCue(result);
+  if (result) {
+    showFarmCue(result);
+    if (result.items && result.crop) {
+      floatGain(`+${result.items} ${catalog.models[result.crop]?.name ?? "crop"}`, result.site);
+    }
+  }
   saveEverything();
   refreshFarm();
+}
+
+/** A "+3 Strawberry" that rises off the plot and fades. Small, and the reason
+ *  picking a field never gets old: every pick pays out visibly. */
+function floatGain(text: string, at: { x: number; z: number }): void {
+  const screen = Vector3.Project(
+    new Vector3(at.x, 0.5, at.z),
+    Matrix.Identity(),
+    scene.getTransformMatrix(),
+    camera.viewport.toGlobal(engine.getRenderWidth(), engine.getRenderHeight()),
+  );
+  farmHud.gain(text, screen.x, screen.y);
+}
+
+// ── mouse: point at a plot, click to work it ──────────────────────────────────
+// Measured against the canvas rather than read from offsetX: offset is relative
+// to whatever element the event happened to land on, and it is absent entirely
+// on a synthesised event, which made the farm think the mouse was in the corner.
+canvas.addEventListener("pointermove", (event) => {
+  const rect = canvas.getBoundingClientRect();
+  pointer = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+});
+canvas.addEventListener("pointerleave", () => { pointer = null; });
+canvas.addEventListener("contextmenu", (event) => event.preventDefault());
+
+/** Held buttons repeat, so planting a row is a drag rather than forty clicks —
+ *  the single biggest quality-of-life difference between an hour of farming and
+ *  a chore. The repeat re-reads the plot under the mouse every time, so walking
+ *  while holding works the row the player walks along. */
+const REPEAT_SECONDS = 0.18;
+let heldButton: number | null = null;
+let repeatIn = 0;
+canvas.addEventListener("pointerdown", (event) => {
+  if (build.active || event.button > 2) return;
+  heldButton = event.button;
+  repeatIn = REPEAT_SECONDS * 1.6;   // the first repeat waits a little longer
+  refreshFarm();
+  actOnPlot();
+});
+const releasePointer = (): void => { heldButton = null; };
+canvas.addEventListener("pointerup", releasePointer);
+canvas.addEventListener("pointerleave", releasePointer);
+window.addEventListener("blur", releasePointer);
+
+function tickHeldPointer(dt: number): void {
+  if (heldButton === null || build.active) return;
+  repeatIn -= dt;
+  if (repeatIn > 0) return;
+  repeatIn = REPEAT_SECONDS;
+  refreshFarm();
+  // A held button only repeats work that is safe to repeat: sowing and picking
+  // down a row. Repeating a hoe would turn a slipped click into a ploughed field.
+  if (addressed?.inReach && (addressed.action === "sow" || addressed.action === "harvest")) actOnPlot();
 }
 window.addEventListener("beforeunload", () => saveEverything());
 
@@ -437,6 +525,11 @@ window.addEventListener("keyup", (event) => keys.delete(event.key.toLowerCase())
 window.addEventListener("blur", () => keys.clear());
 canvas.addEventListener("wheel", (event) => {
   event.preventDefault();
+  // The wheel zooms. Stardew puts the hotbar on it, and this did too for about
+  // an hour, but this game's camera is a thing the player moves constantly and
+  // the tool is not: zooming is the gesture that wants the wheel. Shift+wheel
+  // picks the tool, and 1-9 and tab do it without leaving the keyboard.
+  if (event.shiftKey) { farmHud.cycle(Math.sign(event.deltaY)); return; }
   targetRadius = Math.min(camera.upperRadiusLimit ?? PLAY_RADIUS.max, Math.max(camera.lowerRadiusLimit ?? PLAY_RADIUS.min, targetRadius * (1 + Math.sign(event.deltaY) * 0.12)));
   if (targetRadius <= PLAY_RADIUS.max) camera.upperRadiusLimit = PLAY_RADIUS.max;
 }, { passive: false });
@@ -562,6 +655,7 @@ engine.runRenderLoop(() => {
   if (cutawayOn) cutaway.update(dt);
   decor.update(dt);
   farm.update(dt, player.position);
+  tickHeldPointer(dt);
   prepStation?.update(dt);
   rigTest?.update(dt);
   cropTest?.update(dt);

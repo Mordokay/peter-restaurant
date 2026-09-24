@@ -26,17 +26,21 @@ export interface FarmHud {
   /** Step through the bar — the mouse wheel and the shoulder buttons both want this. */
   cycle(direction: number): void;
   render(reading: PlotReading | null, inventory: readonly string[], crate: number | null, prep: PrepReading | null): void;
+  /** Say something for a moment — a refusal the world cannot show by itself. */
+  flash(message: string): void;
+  /** A "+3 Strawberry" rising off the plot at these screen coordinates. */
+  gain(text: string, x: number, y: number): void;
   dispose(): void;
 }
 
 /** What the key is about to do, said as an instruction rather than a noun. */
 const ACTION_TEXT: Record<FarmAction, string> = {
-  till: "space breaks the ground",
-  water: "space waters it",
-  feed: "space feeds the soil",
-  sow: "space sows it",
-  harvest: "space picks it",
-  clear: "space clears it",
+  till: "click to break the ground",
+  water: "click to water it",
+  feed: "click to feed the soil",
+  sow: "click to sow — hold to sow a row",
+  harvest: "click to pick — hold to pick a row",
+  clear: "click to clear it",
   nothing: "",
 };
 
@@ -87,6 +91,15 @@ export function createFarmHud(mount: HTMLElement): FarmHud {
   };
   paint();
 
+  /** Where the floating gains live: their own layer, so they are never clipped
+   *  by the bar and never reflow it. */
+  const gains = document.createElement("div");
+  gains.className = "farm-gains";
+  mount.append(gains);
+
+  let flashUntil = 0;
+  let flashText = "";
+
   const hud: FarmHud = {
     get slot() { return slots[selected]!; },
     select(index) {
@@ -98,7 +111,31 @@ export function createFarmHud(mount: HTMLElement): FarmHud {
       selected = (selected + direction + slots.length) % slots.length;
       paint();
     },
+    flash(message) {
+      flashText = message;
+      flashUntil = performance.now() + 1400;
+      plotEl.innerHTML = `<b class="farm-warn">${message}</b>`;
+    },
+
+    gain(text, x, y) {
+      const chip = document.createElement("span");
+      chip.className = "farm-gain";
+      chip.textContent = text;
+      chip.style.left = `${x}px`;
+      chip.style.top = `${y}px`;
+      gains.append(chip);
+      // The element removes itself when its own animation finishes, so a long
+      // afternoon of picking leaves nothing behind in the DOM.
+      chip.addEventListener("animationend", () => chip.remove());
+    },
+
     render(reading, inventory, crate, prep) {
+      // A refusal holds the line for a moment; the world state is always there
+      // to go back to.
+      if (performance.now() < flashUntil) {
+        plotEl.innerHTML = `<b class="farm-warn">${flashText}</b>`;
+        return;
+      }
       plotEl.innerHTML = prep
         ? prep.dish
           ? `<b>${catalog.models[prep.dish]?.name ?? "dish"} is up</b> · space to take it`
@@ -116,7 +153,7 @@ export function createFarmHud(mount: HTMLElement): FarmHud {
         ? entries.map(([id, count]) => `<span title="${catalog.models[id]?.name ?? id}"><i style="background:${itemColour(id)}"></i>${count}</span>`).join("")
         : "";
     },
-    dispose() { bar.remove(); },
+    dispose() { bar.remove(); gains.remove(); },
   };
   return hud;
 }

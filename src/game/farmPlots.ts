@@ -32,9 +32,14 @@ import { readSave, writeSave } from "./persistence.ts";
 import type { AuthoredVoxelCatalog } from "./voxelModel.ts";
 import type { ParticleWorld } from "./voxelParticles.ts";
 
-/** How far the player can reach a plot from, metres. Generous: the plants are
- *  knee-high and the camera is overhead, so precision is not the fun part. */
-export const REACH = 1.6;
+/** How far the player can reach, in metres — two plots, as Stardew allows. The
+ *  limit is what makes the farm a place you walk through rather than a board you
+ *  click at, so it is generous but real: work happens where the player is. */
+export const REACH = 2.5;
+/** How close the mouse has to be to a plot's middle for that plot to be the one
+ *  being pointed at. Half the spacing, so every point on the farm belongs to
+ *  exactly one plot and there is no dead ground between them. */
+export const POINT_RADIUS = 0.62;
 
 /** Items the player can carry before a harvest starts falling on the floor. */
 export const CARRY_CAPACITY = 120;
@@ -73,6 +78,8 @@ export interface PlotReading {
   label: string;
   /** Why the key would do nothing, when it would. */
   refusal: string;
+  /** Whether the player is standing close enough to work this plot. */
+  inReach: boolean;
 }
 
 /** What actually happened, so the world can throw the right dirt in the air. */
@@ -101,7 +108,11 @@ export interface Farm {
   readonly inventory: readonly string[];
   /** Game seconds since this farm started, across sessions. */
   readonly clock: number;
-  /** The plot the player is addressing, read with whatever is in their hand. */
+  /** The plot at a point, read with whatever is in hand. `from` is the player:
+   *  a plot further than REACH from them is returned with `inReach` false rather
+   *  than not at all, so the game can say "too far" instead of going quiet. */
+  at(x: number, z: number, slot: Slot, from?: { x: number; z: number }): PlotReading | null;
+  /** The nearest plot to the player, for the keyboard fallback. */
   addressed(x: number, z: number, slot: Slot): PlotReading | null;
   /** Use what is in hand on that plot. */
   act(site: PlotSite, slot: Slot): ActResult | null;
@@ -216,6 +227,21 @@ export function createFarm(options: FarmOptions): Farm {
     }
   };
 
+  /** One plot, read with what is in hand and from where the player stands. */
+  const read = (site: PlotSite, slot: Slot, from?: { x: number; z: number }): PlotReading => {
+    const planted = plots[site.id] ?? null;
+    const soil = soils[site.id] ?? bareSoil();
+    const dx = (from?.x ?? site.x) - site.x;
+    const dz = (from?.z ?? site.z) - site.z;
+    return {
+      site, planted, soil,
+      action: actionOf(slot, soil, planted),
+      label: describePlot(planted, soil),
+      refusal: refusalFor(slot, soil, planted),
+      inReach: dx * dx + dz * dz <= REACH * REACH,
+    };
+  };
+
   const farm: Farm = {
     get sites() { return sites; },
     get inventory() { return inventory; },
@@ -245,17 +271,16 @@ export function createFarm(options: FarmOptions): Farm {
 
     soilAt(id) { return soils[id] ?? bareSoil(); },
 
+    at(x, z, slot, from) {
+      const site = nearestSite(sites, x, z, POINT_RADIUS);
+      if (!site) return null;
+      return read(site, slot, from);
+    },
+
     addressed(x, z, slot) {
       const site = nearestSite(sites, x, z, REACH);
       if (!site) return null;
-      const planted = plots[site.id] ?? null;
-      const soil = soils[site.id] ?? bareSoil();
-      return {
-        site, planted, soil,
-        action: actionOf(slot, soil, planted),
-        label: describePlot(planted, soil),
-        refusal: refusalFor(slot, soil, planted),
-      };
+      return read(site, slot, { x, z });
     },
 
     act(site, slot) {
