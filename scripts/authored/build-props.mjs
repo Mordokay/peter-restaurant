@@ -29,6 +29,8 @@ const PROPS = [
     tags: ["tool"], folder: "authored/tools", holder: "can", merge: "^(handle|head|can|spout|pouch|strap)" },
   { id: "tool_pouch", script: "tools", variant: "pouch", pitch: 0.007, label: "Seed pouch",
     tags: ["tool"], folder: "authored/tools", holder: "pouch", merge: "^(handle|head|can|spout|pouch|strap)" },
+  { id: "compost_bin", script: "compost_bin", pitch: 0.011, label: "Compost bin",
+    tags: ["farm", "storage"], folder: "authored/props", holder: "bin", merge: "^(bin|heap)" },
   { id: "soil_bed", script: "soil_bed", pitch: 0.009, label: "Tilled bed",
     tags: ["farm", "ground"], folder: "authored/props", holder: "bed", merge: "^(bed)" },
   { id: "prep_table", script: "prep_table", pitch: 0.010, label: "Prep counter",

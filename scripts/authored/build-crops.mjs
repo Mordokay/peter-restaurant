@@ -48,6 +48,8 @@ const CROPS = [
 // `script` picks the Blender file: fruit.py for things picked off a standing
 // plant, vegetable.py for the whole-plant crops, which arrive trimmed and cut.
 const ITEMS = [
+  { kind: "scraps",        pitch: 0.0016, tags: ["food", "waste"], label: "Kitchen scraps", script: "kitchen" },
+  { kind: "compost",       pitch: 0.0016, tags: ["farm", "soil"],  label: "Compost",        script: "kitchen" },
   { kind: "cabbage",       pitch: 0.0022, tags: ["food", "ingredient"], label: "Cabbage",   script: "vegetable" },
   { kind: "carrot",        pitch: 0.0018, tags: ["food", "ingredient"], label: "Carrot",    script: "vegetable" },
   { kind: "lettuce",       pitch: 0.0022, tags: ["food", "ingredient"], label: "Lettuce",   script: "vegetable" },
@@ -115,7 +117,7 @@ for (const spec of ITEMS) {
   const id = `item_${spec.kind}`;
   run("blender", ["--background", "--python", `scripts/authored/items/${spec.script ?? "fruit"}.py`, "--", spec.kind, glb]);
   toCatalog(glb, vox, id, spec.pitch, SCALE.produce);
-  run("node", ["scripts/authored/merge-parts.mjs", id, "^(berry|pepper|sep|calyx|stalk|root|crown|stem|head|wrap|skirt|leaf)"]);
+  run("node", ["scripts/authored/merge-parts.mjs", id, "^(berry|pepper|sep|calyx|stalk|root|crown|stem|head|wrap|skirt|leaf|scrap|crumb)"]);
   const model = finish(id, spec.label, "authored/produce", spec.tags);
   rows.push({ id, pitch: model.pitch, parts: model.parts.length, sockets: 0 });
 }

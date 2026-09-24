@@ -456,6 +456,10 @@ this loop and the player already knows it:
 - **The tool is in the hand.** Each tool is modelled around its grip and hung on the farmer's hand
   socket, so the swing is a hoe swinging and not an arm waving.
 
+- **Compost is made, not bought.** Every dish leaves trimmings; the trimmings rot in a bin; the bin feeds
+  the soil that grows the next crop. That loop is what makes a farm-to-table restaurant one system rather
+  than two, and it is why the compost tool spends a real item out of the player's hands.
+
 - **Late game must not be a click grind.** The replanting phase is where farming sims break down — the
   answer is tools that work a line or a whole bed at once (a seed attachment, a tractor), not faster
   clicking. Anything added here is judged against that.
@@ -749,6 +753,7 @@ travels). Current sources:
 | `src/game/farmPlots.ts`, `harvestCrate.ts` | The playable farm: sowing, harvesting, carrying, unloading | Active foundation |
 | `src/game/recipes.ts` | What the kitchen can make, what it needs, what it is worth | Active foundation |
 | `src/game/soil.ts`, `tools.ts` | Tilling, watering, fertiliser, and what the held tool does | Active foundation |
+| `src/game/compost.ts`, `compostBin.ts` | Kitchen scraps rotting down into the farm's fertility | Active foundation |
 | `src/game/soilPatches.ts` | Worked ground drawn: one bed model, recoloured per state | Active foundation |
 | `scripts/authored/props/farmer.py`, `clips/farmer.mjs` | The player: a rigged voxel farmer and his six clips | Active asset pipeline |
 | `src/game/prepStation.ts` | The prep counter: a board, a plate, and a dish being made | Active foundation |

@@ -126,6 +126,8 @@ export interface FarmSave extends VersionedSave {
   inventory: string[];
   /** What has been tipped into the crate at the edge of the farm. */
   crate: string[];
+  /** The compost bin: loose scraps, batches rotting, compost ready. */
+  heap?: { loose: number; rotting: { left: number }[]; ready: number };
   /** The prep counter: what is on its board, what is on its plate, what is
    *  half-made. Shaped by prepStation.ts; kept here because one save is easier
    *  to reason about than three. */

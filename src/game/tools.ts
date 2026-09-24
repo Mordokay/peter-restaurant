@@ -40,8 +40,23 @@ export const tools: readonly ToolDefinition[] = [
 const toolById = new Map(tools.map((tool) => [tool.id, tool]));
 export function toolDefinition(id: ToolId): ToolDefinition | undefined { return toolById.get(id); }
 
-/** What the action key does on this plot with this slot in hand. */
-export function actionOf(slot: Slot, soil: Soil, planted: PlantedCrop | null): FarmAction {
+/** Tools that are spent when used, and the item each one spends. Compost is
+ *  made, not bought: the kitchen's scraps become it, so a bag of it is a real
+ *  thing in the player's hands rather than an infinite verb. */
+export const TOOL_COSTS: Partial<Record<ToolId, string>> = { compost: "item_compost" };
+
+/** What the action key does on this plot with this slot in hand. `carrying` is
+ *  the player's inventory, for the tools that are spent. */
+export function actionOf(slot: Slot, soil: Soil, planted: PlantedCrop | null, carrying: readonly string[] = []): FarmAction {
+  // A tool with nothing left to spend does nothing, wherever it is pointed.
+  if (slot.kind === "tool") {
+    const cost = TOOL_COSTS[slot.tool];
+    if (cost && !carrying.includes(cost)) return "nothing";
+  }
+  return actionWithStock(slot, soil, planted);
+}
+
+function actionWithStock(slot: Slot, soil: Soil, planted: PlantedCrop | null): FarmAction {
   if (planted) {
     const crop = cropById(planted.crop);
     // Something growing: pick it if it is ready, pull it if it is finished, and
@@ -68,7 +83,11 @@ export function actionOf(slot: Slot, soil: Soil, planted: PlantedCrop | null): F
 
 /** Why the key did nothing, in the player's terms. Only ever shown for the plot
  *  under their hand, so it is guidance rather than a wall of rules. */
-export function refusalFor(slot: Slot, soil: Soil, planted: PlantedCrop | null): string {
+export function refusalFor(slot: Slot, soil: Soil, planted: PlantedCrop | null, carrying: readonly string[] = []): string {
+  if (slot.kind === "tool") {
+    const cost = TOOL_COSTS[slot.tool];
+    if (cost && !carrying.includes(cost)) return "no compost — tip scraps into the bin and wait";
+  }
   if (planted) {
     if (slot.kind === "seed") return "something is already growing here";
     if (slot.tool === "can") return "already watered";

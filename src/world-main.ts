@@ -27,6 +27,8 @@ import { cropDefinitions } from "./game/crops";
 import { createFarm } from "./game/farmPlots";
 import { createPrepStation, PREP_MODEL } from "./game/prepStation";
 import { BED_MODEL } from "./game/soilPatches";
+import { BIN_MODEL } from "./game/compostBin";
+import { COMPOST_ITEM, SCRAPS_ITEM, describeHeap } from "./game/compost";
 import { createClipPlayer, createVoxelRig, socketNode } from "./game/voxelRig";
 
 /** The player's own model, and the tools he carries. */
@@ -254,7 +256,8 @@ const decor = createDecorScene(scene, catalog, decorLayout, { shadows, lightPool
 const cropModels = [...new Set([
   ...cropDefinitions.flatMap((crop) => [...Object.values(crop.stages), ...(crop.produce ? [crop.produce] : [])]),
   ...recipes.map((recipe) => recipe.yields),
-  "crate_harvest", PREP_MODEL, BED_MODEL, FARMER_MODEL, ...Object.values(TOOL_MODELS_PRELOAD),
+  "crate_harvest", PREP_MODEL, BED_MODEL, BIN_MODEL, FARMER_MODEL, SCRAPS_ITEM, COMPOST_ITEM,
+  ...Object.values(TOOL_MODELS_PRELOAD),
 ])];
 await ensureModels(cropModels);
 const farmWind = createWindMaterial("farm wind", scene);
@@ -435,7 +438,9 @@ function actOnPlot(): void {
   if (prepStation?.inReach(player.position.x, player.position.z)) {
     const lifted = prepStation.take();
     if (lifted) {
-      farm.give([lifted]);
+      // The dish and what making it left behind: the trimmings are the farm's
+      // compost, so the kitchen pays the soil back.
+      farm.give([lifted.dish, ...Array.from({ length: lifted.scraps }, () => SCRAPS_ITEM)]);
     } else {
       const putDown = prepStation.put(farm.inventory);
       farm.remove(putDown);
@@ -454,6 +459,17 @@ function actOnPlot(): void {
       }
     }
     saveEverything();
+    refreshFarm();
+    return;
+  }
+  if (farm.bin?.inReach(player.position.x, player.position.z)) {
+    const { tipped, taken } = farm.workBin();
+    if (tipped || taken) {
+      farmHud.flash(taken ? `took ${taken} compost` : `tipped in ${tipped} scraps`);
+      saveEverything();
+    } else {
+      farmHud.flash(describeHeap(farm.bin.heap));
+    }
     refreshFarm();
     return;
   }

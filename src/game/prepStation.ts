@@ -20,6 +20,9 @@ export const PREP_MODEL = "prep_table";
 export const PREP_REACH = 1.7;
 /** Places on the board — what the counter can hold waiting to be prepped. */
 export const BOARD_PLACES = 6;
+/** Every dish leaves trimmings. Two per dish: enough that a service pays for a
+ *  batch of compost, not so much that the bin never needs the player's habit. */
+export const SCRAPS_PER_DISH = 2;
 
 export interface PrepStationOptions {
   scene: Scene;
@@ -54,8 +57,10 @@ export interface PrepStation {
   /** True when nothing on the board is any use here — the only state worth
    *  sweeping. A board short of one ingredient is working, not stuck. */
   idle(): boolean;
-  /** Lift the finished dish off the plate. */
-  take(): string | null;
+  /** Lift the finished dish off the plate. Returns the dish and the scraps that
+   *  making it left behind — peelings, ends and trimmings, which is where the
+   *  farm's compost comes from. */
+  take(): { dish: string; scraps: number } | null;
   update(dt: number): void;
   state(): PrepState;
   restore(state: PrepState): void;
@@ -145,7 +150,7 @@ export function createPrepStation(options: PrepStationOptions): PrepStation {
       const taken = dish;
       dish = null;
       paint();
-      return taken;
+      return { dish: taken, scraps: SCRAPS_PER_DISH };
     },
 
     update(dt) {

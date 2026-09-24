@@ -5,7 +5,10 @@ import {
   COMPOST_GROWTH, MULCH_WATER_BONUS, WATER_SECONDS, bareSoil, describeSoil, dry, fertilise,
   growthRate, isWet, lookOf, till, waterSoil, yieldBonus,
 } from "./soil.ts";
-import { actionOf, hotbar, tools } from "./tools.ts";
+import { actionOf, hotbar, refusalFor, tools } from "./tools.ts";
+
+/** A player carrying a bag of compost, for the tools that are spent. */
+const BAG = ["item_compost", "item_compost"];
 
 const lettuce = cropById("lettuce")!;
 
@@ -88,7 +91,11 @@ test("what the key does depends on the tool, the soil and the plant", () => {
   assert.equal(actionOf(hoe, soil, null), "nothing", "a hoe does not stir a finished bed");
   assert.equal(actionOf(seed, soil, null), "sow");
   assert.equal(actionOf(can, soil, null), "water");
-  assert.equal(actionOf(compost, soil, null), "feed");
+  assert.equal(actionOf(compost, soil, null, BAG), "feed");
+  // Compost is made, not conjured: with none in hand the tool does nothing, and
+  // says why.
+  assert.equal(actionOf(compost, soil, null, []), "nothing");
+  assert.match(refusalFor(compost, soil, null, []), /no compost/);
 
   soil = waterSoil(soil);
   assert.equal(actionOf(can, soil, null), "nothing", "watering twice does nothing");
@@ -99,9 +106,9 @@ test("what the key does depends on the tool, the soil and the plant", () => {
   assert.equal(actionOf(seed, soil, young), "nothing");
   assert.equal(actionOf(can, soil, young), "nothing");
   assert.equal(actionOf(can, dry(soil, 10_000), young), "water");
-  assert.equal(actionOf(compost, soil, young), "feed");
+  assert.equal(actionOf(compost, soil, young, BAG), "feed");
   const ripe = advance(lettuce, young, lettuce.growthSeconds, 1);
-  for (const slot of [hoe, can, compost, seed]) assert.equal(actionOf(slot, soil, ripe), "harvest");
+  for (const slot of [hoe, can, compost, seed]) assert.equal(actionOf(slot, soil, ripe, BAG), "harvest");
 });
 
 test("the hotbar puts the tools first and never reshuffles", () => {

@@ -28,6 +28,8 @@ import { addItems } from "./inventory.ts";
 import { createMeshLibrary } from "./meshLibrary.ts";
 import { createHarvestCrate, type HarvestCrate } from "./harvestCrate.ts";
 import { createSoilPatches } from "./soilPatches.ts";
+import { createCompostBin, type CompostBin } from "./compostBin.ts";
+import { COMPOST_ITEM, SCRAPS_ITEM } from "./compost.ts";
 import { readSave, writeSave } from "./persistence.ts";
 import type { AuthoredVoxelCatalog } from "./voxelModel.ts";
 import type { ParticleWorld } from "./voxelParticles.ts";
@@ -98,6 +100,11 @@ export interface Farm {
   readonly sites: readonly PlotSite[];
   /** The crate at the edge of the farm, if its model was in the catalog. */
   readonly crate: HarvestCrate | null;
+  /** The compost bin beside it. */
+  readonly bin: CompostBin | null;
+  /** Tip carried scraps in and take out whatever compost is ready. Returns what
+   *  moved in each direction. */
+  workBin(): { tipped: number; taken: number };
   /** Tip everything carried into the crate. Returns how many went in. */
   unload(): number;
   /** Put something in the player's hands — a dish lifted off the plate, a
@@ -154,6 +161,15 @@ export function createFarm(options: FarmOptions): Farm {
         spin: Math.PI / 12,
       })
     : null;
+  // The bin stands beside the crate: waste comes back from the kitchen to the
+  // same corner the produce leaves from.
+  const bin = firstArea && catalog.models["compost_bin"]
+    ? createCompostBin({
+        scene, catalog, parent: root, shadows: options.shadows, material: options.material,
+        position: new Vector3(firstArea.rect[0] + firstArea.rect[2] / 2 + 1.5, groundY, firstArea.rect[1] + firstArea.rect[3] + 0.7),
+        spin: -Math.PI / 14,
+      })
+    : null;
 
   if (options.persist) {
     const saved = readSave<FarmSave>(FARM_SAVE_KEY, FARM_SAVE_VERSION);
@@ -163,6 +179,7 @@ export function createFarm(options: FarmOptions): Farm {
       for (const [id, soil] of Object.entries(saved.soils ?? {})) if (byId.has(id)) soils[id] = { ...soil };
       inventory.push(...saved.inventory);
       crate?.set(saved.crate ?? []);
+      if (saved.heap) bin?.restore(saved.heap);
     }
   }
 
@@ -235,9 +252,9 @@ export function createFarm(options: FarmOptions): Farm {
     const dz = (from?.z ?? site.z) - site.z;
     return {
       site, planted, soil,
-      action: actionOf(slot, soil, planted),
+      action: actionOf(slot, soil, planted, inventory),
       label: describePlot(planted, soil),
-      refusal: refusalFor(slot, soil, planted),
+      refusal: refusalFor(slot, soil, planted, inventory),
       inReach: dx * dx + dz * dz <= REACH * REACH,
     };
   };
@@ -248,6 +265,19 @@ export function createFarm(options: FarmOptions): Farm {
     get clock() { return clock; },
 
     get crate() { return crate; },
+    get bin() { return bin; },
+
+    workBin() {
+      if (!bin) return { tipped: 0, taken: 0 };
+      // One press does both jobs at the bin: tip in what you carried, take out
+      // what is done. Two keys for two halves of the same errand is a menu.
+      const scraps = inventory.filter((item) => item === SCRAPS_ITEM).length;
+      const tipped = scraps ? bin.put(scraps) : 0;
+      if (tipped) for (let n = 0; n < tipped; n++) inventory.splice(inventory.lastIndexOf(SCRAPS_ITEM), 1);
+      const taken = bin.take();
+      for (let n = 0; n < taken; n++) addItems(inventory, COMPOST_ITEM, 1, CARRY_CAPACITY);
+      return { tipped, taken };
+    },
 
     unload() {
       if (!crate || !inventory.length) return 0;
@@ -287,7 +317,7 @@ export function createFarm(options: FarmOptions): Farm {
       if (!byId.has(site.id)) return null;
       const planted = plots[site.id] ?? null;
       const soil = soils[site.id] ?? bareSoil();
-      const action = actionOf(slot, soil, planted);
+      const action = actionOf(slot, soil, planted, inventory);
       const done = (items = 0, crop: string | null = null): ActResult => {
         const look = lookOf(soils[site.id] ?? bareSoil());
         patches.set(site.id, look, site);
@@ -301,9 +331,18 @@ export function createFarm(options: FarmOptions): Farm {
         case "water":
           soils[site.id] = waterSoil(soil);
           return done();
-        case "feed":
-          soils[site.id] = fertilise(soil, slot.kind === "tool" && slot.tool === "mulch" ? "mulch" : "compost");
+        case "feed": {
+          const kind = slot.kind === "tool" && slot.tool === "mulch" ? "mulch" : "compost";
+          // Compost is spent from the player's own stock; mulch is straw off the
+          // farm and costs nothing.
+          if (kind === "compost") {
+            const at = inventory.lastIndexOf(COMPOST_ITEM);
+            if (at < 0) return done();
+            inventory.splice(at, 1);
+          }
+          soils[site.id] = fertilise(soil, kind);
           return done();
+        }
         case "sow": {
           if (slot.kind !== "seed") return done();
           const crop = cropById(slot.crop);
@@ -374,6 +413,7 @@ export function createFarm(options: FarmOptions): Farm {
         if (plot.state) plots[id] = plot.state;
       }
       for (const [id, plot] of rendered) if (!plots[id] && plot.state) plots[id] = plot.state;
+      bin?.update(dt);
 
       for (const [id, left] of retiring) {
         const remaining = left - dt;
@@ -390,11 +430,13 @@ export function createFarm(options: FarmOptions): Farm {
       writeSave<FarmSave>(FARM_SAVE_KEY, {
         version: FARM_SAVE_VERSION, savedAt: Date.now(), clock,
         plots: { ...plots }, soils: { ...soils }, inventory: [...inventory], crate: [...(crate?.contents ?? [])],
+        heap: bin ? { ...bin.heap, rotting: bin.heap.rotting.map((batch) => ({ ...batch })) } : undefined,
       });
     },
 
     dispose() {
       crate?.dispose();
+      bin?.dispose();
       patches.dispose();
       for (const plot of rendered.values()) plot.dispose();
       rendered.clear();
