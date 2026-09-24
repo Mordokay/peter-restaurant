@@ -13,16 +13,13 @@ import { TransformNode, Vector3, type Scene, type ShadowGenerator, type Standard
 import { createVoxelMesh } from "./voxelGeometry.ts";
 import { cellsFromAuthoredModel, type AuthoredVoxelCatalog } from "./voxelModel.ts";
 import { createStorageDisplay, type StorageDisplay } from "./storageDisplay.ts";
-import { consume, readyRecipe, recipeById, recipes, stockOf, type Recipe } from "./recipes.ts";
+import { consume, readyRecipe, recipeById, stockOf, takeForBoard, type Recipe } from "./recipes.ts";
 
 export const PREP_MODEL = "prep_table";
 /** How close the player has to stand to work at it, metres. */
 export const PREP_REACH = 1.7;
 /** Places on the board — what the counter can hold waiting to be prepped. */
 export const BOARD_PLACES = 6;
-
-/** Every item any prep recipe asks for: what this counter will accept. */
-const PREP_INGREDIENTS = new Set(recipes.filter((recipe) => recipe.station === "prep").flatMap((recipe) => Object.keys(recipe.needs)));
 
 export interface PrepStationOptions {
   scene: Scene;
@@ -52,6 +49,11 @@ export interface PrepStation {
   put(items: readonly string[]): string[];
   /** Begin the recipe the board can supply, if any. Returns it. */
   start(): Recipe | null;
+  /** Sweep the board back into the player's hands. */
+  clear(): string[];
+  /** True when nothing on the board is any use here — the only state worth
+   *  sweeping. A board short of one ingredient is working, not stuck. */
+  idle(): boolean;
   /** Lift the finished dish off the plate. */
   take(): string | null;
   update(dt: number): void;
@@ -89,7 +91,7 @@ export function createPrepStation(options: PrepStationOptions): PrepStation {
       // Ingredients keep to the board and the dish to the plate: a salad bowl
       // standing among the vegetables would read as another ingredient.
       ...Object.entries(stock).map(([id, count]) => ({ model: id, count, only: "board" })),
-      ...(dish ? [{ model: dish, count: 1, only: "plate", footprint: [1, 1] as const }] : []),
+      ...(dish ? [{ model: dish, count: 1, only: "plate" }] : []),
     ]);
   };
   paint();
@@ -107,17 +109,25 @@ export function createPrepStation(options: PrepStationOptions): PrepStation {
     },
 
     put(items) {
-      const taken: string[] = [];
-      for (const item of items) {
-        if (ingredients.length >= BOARD_PLACES) break;
-        // Only what a recipe here asks for: a counter that accepts strawberries
-        // it can never use is a bin with a board on it.
-        if (!PREP_INGREDIENTS.has(item)) continue;
-        ingredients.push(item);
-        taken.push(item);
-      }
+      // Only what a recipe here is still SHORT of — see takeForBoard. Taking
+      // anything a recipe uses let six lettuces fill the board and lock the
+      // carrot and the pepper out of it.
+      const taken = takeForBoard(ingredients, items, "prep", BOARD_PLACES);
+      ingredients.push(...taken);
       if (taken.length) paint();
       return taken;
+    },
+
+    idle() {
+      return ingredients.length > 0 && takeForBoard([], ingredients, "prep", ingredients.length).length === 0;
+    },
+
+    clear() {
+      if (!ingredients.length) return [];
+      const returned = [...ingredients];
+      ingredients.length = 0;
+      paint();
+      return returned;
     },
 
     start() {

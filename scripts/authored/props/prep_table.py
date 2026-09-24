@@ -22,7 +22,11 @@ OUT = sys.argv[sys.argv.index("--") + 1]
 new_scene()
 WOOD = vcol_material("wood"); MARK = vcol_material("marker")
 
-W, D, H = 1.30, 0.74, 0.90
+# 1.9 m of counter, which is a prep island rather than a side table. The first
+# cut was 1.3 m with its six places 21 cm apart, and produce at game scale does
+# not fit that: a 34 cm carrot needed two adjacent places, never got them, and
+# simply failed to appear on a board that said it was holding it.
+W, D, H = 1.90, 0.90, 0.90
 TOP, LEG, APRON = 0.045, 0.072, 0.075
 PALE, MID, DARK = hexrgb("#d8b384"), hexrgb("#b48a5c"), hexrgb("#7b5c3a")
 BOARD, BOARD_DARK = hexrgb("#c99a63"), hexrgb("#a87c4a")
@@ -52,8 +56,8 @@ for i, sx in enumerate((-1, 1)):
 box("shelf", Vector((0, 0, 0.22)), (W - 0.16, D - 0.16, 0.026), MID, 23)
 
 # The board, let into the left half and scored across the grain.
-BOARD_W, BOARD_D, BOARD_T = 0.62, 0.44, 0.026
-BOARD_X = -W / 4 + 0.02
+BOARD_W, BOARD_D, BOARD_T = 1.30, 0.64, 0.030
+BOARD_X = -W / 2 + BOARD_W / 2 + 0.06
 board = box("board", Vector((BOARD_X, 0, H + BOARD_T / 2)), (BOARD_W, BOARD_D, BOARD_T), BOARD, 29, grain=0.03)
 paint(board, lambda i, co: shade(BOARD if co.z < H + BOARD_T * 0.9 else BOARD_DARK,
                                  1.0 + 0.05 * math.sin(co.y * 120.0)))
@@ -62,9 +66,9 @@ paint(board, lambda i, co: shade(BOARD if co.z < H + BOARD_T * 0.9 else BOARD_DA
 for row in range(2):
     for col in range(3):
         socket(f"board_c{col + 1}r{row + 1}",
-               Vector((BOARD_X - BOARD_W / 2 + 0.10 + col * (BOARD_W - 0.20) / 2,
-                       -BOARD_D / 2 + 0.11 + row * (BOARD_D - 0.22),
+               Vector((BOARD_X - BOARD_W / 2 + 0.16 + col * (BOARD_W - 0.32) / 2,
+                       -BOARD_D / 2 + 0.15 + row * (BOARD_D - 0.30),
                        H + BOARD_T + 0.004)), MARK)
-socket("plate_c1r1", Vector((W / 4 + 0.02, 0, H + 0.004)), MARK)
+socket("plate_c1r1", Vector((W / 2 - 0.26, 0, H + 0.004)), MARK)
 
 finish(OUT, "prep_table")

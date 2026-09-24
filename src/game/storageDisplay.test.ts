@@ -77,3 +77,36 @@ test("an item's real size becomes the number of places it needs", () => {
   assert.deepEqual(footprintFor(0.4, 0.12, 0.15, 0.17), [3, 1], "a long tray is three across and one deep");
   assert.deepEqual(footprintFor(9, 9, 0.15, 0.17), [3, 3], "and nothing swallows more than three");
 });
+
+test("an item's footprint is measured against the places it is standing in", () => {
+  // Two grids with very different places: a wide board and a single plate. The
+  // same dish covers one place on each, and a lettuce that needs two places on
+  // a tight shelf needs one on the board. Sizing everything by the first grid
+  // was the bug: a 1x1 plate defined the board's places, the board's own
+  // spacing was never consulted, and it refused items it had room for.
+  const names = ["board_c1r1", "board_c2r1", "board_c3r1", "board_c1r2", "board_c2r2", "board_c3r2", "plate_c1r1"];
+  const twoGrids = gridsOf(names);
+  const board = twoGrids.find((grid) => grid.id === "board")!;
+  const plate = twoGrids.find((grid) => grid.id === "plate")!;
+  assert.deepEqual([board.cols, board.rows], [3, 2]);
+  assert.deepEqual([plate.cols, plate.rows], [1, 1]);
+
+  const fill = packStock(
+    [{ model: "item_carrot", count: 1, only: "board" }, { model: "item_lettuce", count: 1, only: "board" },
+     { model: "dish", count: 1, only: "plate" }],
+    twoGrids,
+    // Wide places on the board, and a plate whose one place holds whatever stands on it.
+    { footprintOf: (model, grid) => (grid.id === "plate" ? [1, 1] : model === "item_carrot" ? [1, 1] : [1, 1]) },
+  );
+  assert.equal(fill.length, 3, "everything gets somewhere to stand");
+  assert.deepEqual(fill.filter((p) => p.grid === "board").map((p) => p.model).sort(), ["item_carrot", "item_lettuce"]);
+  assert.equal(fill.find((p) => p.grid === "plate")?.model, "dish");
+});
+
+test("a place too small for an item costs it more places, and only in that grid", () => {
+  const tight = gridsOf(["shelf_c1r1", "shelf_c2r1", "shelf_c3r1"]);
+  // Three places, and a thing that needs two of them: one fits, the second cannot.
+  const fill = packStock([{ model: "melon", count: 2 }], tight, { footprintOf: () => [2, 1] });
+  assert.equal(fill.length, 1, "two melons do not fit in three places when each takes two");
+  assert.deepEqual(fill[0]!.slots, ["shelf_c1r1", "shelf_c2r1"]);
+});

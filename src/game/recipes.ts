@@ -83,6 +83,41 @@ export function consume(recipe: Recipe, items: string[]): string[] {
   return taken;
 }
 
+/** What a counter should take out of an armful, given what is already on it.
+ *
+ *  Demand-driven on purpose. Taking "anything a recipe here uses, until the
+ *  board is full" looks reasonable and is not: a player who harvested lettuce
+ *  first arrives carrying six lettuces and three other things, and the board
+ *  fills with six lettuces — so the carrot and the pepper can never be put
+ *  down, and the salad can never be made. What the counter wants is the
+ *  SHORTFALL, so it takes one of each missing thing and leaves the rest in the
+ *  player's hands.
+ *
+ *  Items are taken in carry order, so what the player picked up first goes down
+ *  first, and never more than `capacity` stand on the board at once. */
+export function takeForBoard(board: readonly string[], carried: readonly string[], station: Station, capacity: number): string[] {
+  const wanted = new Map<string, number>();
+  const standing = [...board];
+  for (const recipe of recipes) {
+    if (recipe.station !== station) continue;
+    for (const [id, short] of Object.entries(missingFor(recipe, standing))) {
+      // Several recipes may want the same thing; the counter carries enough for
+      // the hungriest of them rather than for all of them added up.
+      wanted.set(id, Math.max(wanted.get(id) ?? 0, short));
+    }
+  }
+  const taken: string[] = [];
+  for (const item of carried) {
+    if (standing.length >= capacity) break;
+    const want = wanted.get(item) ?? 0;
+    if (want <= 0) continue;
+    wanted.set(item, want - 1);
+    standing.push(item);
+    taken.push(item);
+  }
+  return taken;
+}
+
 /** Problems with the recipe table, given the ids the catalog actually has. */
 export function validateRecipes(catalogIds: Iterable<string>): string[] {
   const known = new Set(catalogIds);

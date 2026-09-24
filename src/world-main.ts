@@ -323,10 +323,24 @@ function actOnPlot(): void {
   // is indoors and nothing else is ever within reach of it.
   if (prepStation?.inReach(player.position.x, player.position.z)) {
     const lifted = prepStation.take();
-    if (lifted) farm.give([lifted]);
-    else {
-      farm.remove(prepStation.put(farm.inventory));
-      prepStation.start();
+    if (lifted) {
+      farm.give([lifted]);
+    } else {
+      const putDown = prepStation.put(farm.inventory);
+      farm.remove(putDown);
+      // Putting the last ingredient down starts the work in the same press:
+      // walking up, setting three things out and then pressing again to begin
+      // is a step the player never asked for.
+      // Only sweep the board back when what is standing on it is of no use to
+      // this counter at all. An earlier version swept whenever the key had
+      // nothing else to do, which meant a board waiting for one more ingredient
+      // emptied itself into the player's hands the moment they pressed again —
+      // and the counter looked like it was refusing everything but the first
+      // thing put down.
+      const started = prepStation.start();
+      if (!putDown.length && !started && prepStation.ingredients.length && prepStation.idle()) {
+        farm.give(prepStation.clear());
+      }
     }
     saveEverything();
     refreshFarm();

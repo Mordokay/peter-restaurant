@@ -110,19 +110,29 @@ export function gridsOf(slots: readonly string[]): StorageGrid[] {
 export function packStock(
   items: readonly StoredItem[],
   grids: readonly StorageGrid[],
-  options: { footprintOf?: (model: string) => readonly [number, number] } = {},
+  options: { footprintOf?: (model: string, grid: StorageGrid) => readonly [number, number] } = {},
 ): Placement[] {
+  // An item's footprint is a property of the PLACES, not of the item: the same
+  // cabbage covers one place on a wide prep board and four in a tight drawer.
+  // Sizing every grid by the first grid's spacing made a 1x1 plate define the
+  // places of a six-place board, and the board then refused a lettuce it had
+  // ample room for.
   const footprintOf = options.footprintOf ?? (() => [1, 1] as const);
   const list = (value: string | readonly string[] | undefined): string[] => (value === undefined ? [] : typeof value === "string" ? [value] : [...value]);
-  interface Unit { model: string; only: string[]; prefer: string[]; size: [number, number]; done: boolean }
+  interface Unit { model: string; only: string[]; prefer: string[]; fixed?: [number, number]; done: boolean }
   const queue: Unit[] = [];
   for (const item of items) {
     const count = Math.max(0, Math.floor(item.count ?? 1));
-    const size = item.footprint ?? footprintOf(item.model);
+    const fixed = item.footprint ? ([Math.max(1, item.footprint[0]), Math.max(1, item.footprint[1])] as [number, number]) : undefined;
     for (let i = 0; i < count; i++) {
-      queue.push({ model: item.model, only: list(item.only), prefer: list(item.prefer), size: [Math.max(1, size[0]), Math.max(1, size[1])], done: false });
+      queue.push({ model: item.model, only: list(item.only), prefer: list(item.prefer), fixed, done: false });
     }
   }
+  const sizeIn = (unit: Unit, grid: StorageGrid): [number, number] => {
+    if (unit.fixed) return unit.fixed;
+    const size = footprintOf(unit.model, grid);
+    return [Math.max(1, size[0]), Math.max(1, size[1])];
+  };
 
   const taken = new Map<string, Set<string>>();
   const free = (grid: StorageGrid, col: number, row: number, cols: number, rows: number): boolean => {
@@ -161,7 +171,7 @@ export function packStock(
       for (const unit of queue) {
         if (unit.done || !allowed(unit, grid)) continue;
         if (pass && !prefers(unit, grid)) continue;
-        const [cols, rows] = unit.size;
+        const [cols, rows] = sizeIn(unit, grid);
         let placed = false;
         for (let row = 1; row <= grid.rows && !placed; row++) {
           for (let col = 1; col <= grid.cols && !placed; col++) {
@@ -224,18 +234,21 @@ export function createStorageDisplay(options: StorageDisplayOptions): StorageDis
   const grids = gridsOf(Object.keys(sockets));
   const material = options.material ?? createVoxelMaterial("storage contents", scene);
 
-  /** Spacing of the first grid, which is how an item's size becomes a number of places. */
-  const spacing = ((): { x: number; z: number } => {
-    const grid = grids[0];
-    const at = (col: number, row: number) => { const name = grid?.slot(col, row); return name ? sockets[name] : undefined; };
-    const origin = at(1, 1), across = grid && grid.cols > 1 ? at(2, 1) : undefined, deep = grid && grid.rows > 1 ? at(1, 2) : undefined;
+  /** How far apart THIS grid's places stand, which is how an item's size becomes
+   *  a number of places. An axis with only one place has no spacing to measure
+   *  and no neighbour to crowd: a plate is a place for one dish whatever its
+   *  size, so that axis reports Infinity and always costs a single place. */
+  const spacingOf = (grid: StorageGrid): { x: number; z: number } => {
+    const at = (col: number, row: number) => { const name = grid.slot(col, row); return name ? sockets[name] : undefined; };
+    const origin = at(1, 1), across = grid.cols > 1 ? at(2, 1) : undefined, deep = grid.rows > 1 ? at(1, 2) : undefined;
     return {
-      x: origin && across ? Math.abs(across[0] - origin[0]) * model.pitch : 0.15,
-      z: origin && deep ? Math.abs(deep[2] - origin[2]) * model.pitch : 0.15,
+      x: origin && across ? Math.abs(across[0] - origin[0]) * model.pitch : Infinity,
+      z: origin && deep ? Math.abs(deep[2] - origin[2]) * model.pitch : Infinity,
     };
-  })();
+  };
+  const spacings = new Map(grids.map((grid) => [grid.id, spacingOf(grid)]));
 
-  const sources = new Map<string, { mesh: Mesh; scale: number; lift: number; footprint: [number, number] }>();
+  const sources = new Map<string, { mesh: Mesh; scale: number; lift: number; size: { x: number; z: number } }>();
   const placed: AbstractMesh[] = [];
 
   const sourceFor = (id: string) => {
@@ -255,7 +268,7 @@ export function createStorageDisplay(options: StorageDisplayOptions): StorageDis
       mesh, scale,
       // Lift it so the item's underside meets the shelf rather than sinking through it.
       lift: -(bounds.min.y - 0.5) * itemModel.pitch * scale,
-      footprint: footprintFor(size.x * scale, size.z * scale, spacing.x, spacing.z),
+      size: { x: size.x * scale, z: size.z * scale },
     };
     sources.set(id, entry);
     return entry;
@@ -284,7 +297,14 @@ export function createStorageDisplay(options: StorageDisplayOptions): StorageDis
       clear();
       // Mesh every kind up front, so the packer knows how much room each really needs.
       for (const item of items) sourceFor(item.model);
-      const fill = packStock(items, grids, { footprintOf: (id) => sources.get(id)?.footprint ?? [1, 1] });
+      const fill = packStock(items, grids, {
+        footprintOf: (id, grid) => {
+          const source = sources.get(id);
+          const spacing = spacings.get(grid.id);
+          if (!source || !spacing) return [1, 1];
+          return footprintFor(source.size.x, source.size.z, spacing.x, spacing.z);
+        },
+      });
       for (const [index, placement] of fill.entries()) {
         const source = sourceFor(placement.model);
         const centre = positionOf(placement);

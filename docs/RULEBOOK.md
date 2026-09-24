@@ -554,6 +554,11 @@ Normal gameplay has no permanent progress cards floating above every station, sh
 - Urgent conditions may show one small world icon: blocked, dirty, broken, expiring order, or ready output that has waited too long.
 - Management/inspection mode may deliberately reveal progress and capacity overlays for all relevant objects; leaving that mode hides them.
 - Storage fill is communicated by visible stock first. Exact counts and bars live in the shelf interaction panel.
+- **How many places an item takes is a property of the PLACES, not of the item.** The same cabbage covers
+  one place on a wide prep board and four in a tight drawer, so a footprint is measured against the grid
+  it is standing in. Measuring every grid by the first grid's spacing let a one-place plate define a
+  six-place board, and the board silently refused a carrot it had ample room for while still counting it
+  as held. A container that says it holds something must show it.
 - Crops communicate growth through their model. Exact yield/progress appears on proximity or in Farm mode.
 - Worker names and current tasks appear on hover, selection, or Staff mode. Debug balloons are not part of the normal presentation.
 
