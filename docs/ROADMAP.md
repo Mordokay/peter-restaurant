@@ -57,19 +57,38 @@ Sequence within it: world-space selection and highlights first (they are gamepla
 HUD, then menus. A voxel font is a real asset: one 5×7 glyph set, instanced, with a fallback to HTML for
 long text until it is proven legible at the game camera.
 
-### 4. Staff, and then AI staff
+### 4. Staff, and then staff you can talk to
 
-The NPC chef system is the biggest idea in the pile and the most dangerous. Split it:
+The NPC chef system is the biggest idea in the pile. Split it in two, because the halves have completely
+different risks:
 
-- **Staff as machines.** Hire a chef, assign them a station, they work it. Traits and proficiency as
+- **Staff as machines.** Hire a chef, give them a standing order, they work it. Traits and proficiency as
   plain numbers. This is a scheduling game and it can be very good on its own.
-- **Staff as characters.** Only once the above works: an AI model driving intent, chatter between chefs,
-  the player asking for things in words.
+- **Staff you instruct in words.** Voice or typed: *"your job is to cut carrots and give those to Garry,
+  clean the floor when it is dirty, and put the scraps in the composter."* The model's job is to compile
+  that sentence into the game's own automations and to ORDER them by priority. Chefs always obey; they
+  are not agents with opinions about whether to.
 
-The failure mode to design against, loudly: **an AI chef that does the wrong thing is worse than a dumb
-chef that does the right thing.** Every AI-driven action should be expressible as something the player
-could have ordered explicitly, and the player must always be able to see WHY a chef did something. The
-model chooses among the game's verbs; it does not invent new ones.
+  This is a language problem, not an autonomy problem, and it is much safer than it first sounds: the
+  model never acts, it only writes a standing order out of verbs the game already has. Two things follow
+  from that and both should be built in from the start:
+
+  1. **The compiled order is visible and editable.** Whatever the model made of the sentence is shown
+     back as a list the player can read, reorder and delete. If it misheard "Garry" or missed the floor,
+     that is one line to fix rather than a chef behaving oddly for a shift.
+  2. **The verb set is the contract.** A chef can only be told to do things the game can already express.
+     New capability comes from new verbs shipped in the game, never from the model inventing one.
+
+  Done that way, the failure mode is a wrong ROTA — visible, fixable, and frankly funny — rather than an
+  unpredictable employee.
+
+- **Accidents, and the reason they belong here.** Spills, burns, dropped plates, a fryer left on, a
+  collision in a doorway at the worst moment. They make a busy service feel like a busy service, and they
+  are the thing that gives priorities their teeth: a chef who was told "clean the floor when it is dirty"
+  is now doing it at the worst possible moment, and the player learns to say "…but not during service".
+  Accidents should rise with pressure (tickets waiting, staff crossing, hours worked) so they are a
+  consequence of how the kitchen was run and never a coin flip. Every one of them must be preventable in
+  hindsight, which is what turns an accident into a lesson instead of a tax.
 
 ### 5. Polish passes, continuous rather than at the end
 

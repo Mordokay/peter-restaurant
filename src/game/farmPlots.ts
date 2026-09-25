@@ -34,7 +34,7 @@ import { createHarvestCrate, type HarvestCrate } from "./harvestCrate.ts";
 import { createSoilPatches } from "./soilPatches.ts";
 import { createCompostBin, type CompostBin } from "./compostBin.ts";
 import { describeDevice } from "./automation.ts";
-import { COMPOST_ITEM, SCRAPS_ITEM } from "./compost.ts";
+import { COMPOST_ITEM, SCRAPS_ITEM, SCRAPS_PER_PULLED_PLANT, SCRAPS_PER_SPENT_PLANT } from "./compost.ts";
 import { readSave, writeSave } from "./persistence.ts";
 import type { AuthoredVoxelCatalog } from "./voxelModel.ts";
 import type { ParticleWorld } from "./voxelParticles.ts";
@@ -463,6 +463,9 @@ export function createFarm(options: FarmOptions): Farm {
           const cleared = planted?.crop ?? null;
           drop(site.id);
           retiring.delete(site.id);
+          // A pulled-up plant is compost waiting to happen. The farm feeds its
+          // own soil; the kitchen only adds to it.
+          if (cleared) addItems(inventory, SCRAPS_ITEM, SCRAPS_PER_SPENT_PLANT, CARRY_CAPACITY);
           return done(0, cleared);
         }
         case "harvest": {
@@ -473,6 +476,8 @@ export function createFarm(options: FarmOptions): Farm {
           // the top of the crop's range.
           const result = plot.harvest(yieldBonus(soil));
           if (result.items && grown.produce) addItems(inventory, grown.produce, result.items, CARRY_CAPACITY);
+          // Pulling a whole plant leaves tops, roots and trimmings behind.
+          if (result.spent && grown.wholePlant) addItems(inventory, SCRAPS_ITEM, SCRAPS_PER_PULLED_PLANT, CARRY_CAPACITY);
           if (result.planted) {
             plots[site.id] = result.planted;
           } else {

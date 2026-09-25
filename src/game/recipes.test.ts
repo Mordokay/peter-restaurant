@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import idx from "../assets/catalog/index.json" with { type: "json" };
-import { canMake, consume, missingFor, readyRecipe, recipeById, recipes, stockOf, takeForBoard, validateRecipes } from "./recipes.ts";
+import { canMake, consume, missingFor, readyRecipe, recipeById, recipes, stockOf, surplusOnBoard, takeForBoard, validateRecipes } from "./recipes.ts";
 
 const salad = recipeById("garden_salad")!;
 
@@ -67,4 +67,19 @@ test("a counter takes carry order, and never more than it has places for", () =>
   assert.deepEqual(takeForBoard([], carried, "prep", 2), ["item_carrot", "item_lettuce"]);
   assert.deepEqual(takeForBoard(["item_carrot", "item_lettuce"], carried, "prep", 2), [],
     "a full board takes nothing, even something it wants");
+});
+
+test("a board full of the wrong thing hands back its surplus, not its whole self", () => {
+  // The jam: an older build filled the board with six lettuces, so the carrot
+  // and the pepper could never be put down and the dish could never start —
+  // while the bar said it was ready to make one.
+  const jammed = Array.from({ length: 6 }, () => "item_lettuce");
+  const surplus = surplusOnBoard(jammed, "prep");
+  assert.equal(surplus.length, 5, "one lettuce is wanted; the other five are in the way");
+  assert.deepEqual([...new Set(surplus)], ["item_lettuce"]);
+
+  // A board holding exactly what the recipe wants gives nothing back.
+  assert.deepEqual(surplusOnBoard(["item_lettuce", "item_carrot", "item_pepper_red"], "prep"), []);
+  // And something this counter can never use is all surplus.
+  assert.deepEqual(surplusOnBoard(["item_strawberry", "item_cabbage"], "prep"), ["item_strawberry", "item_cabbage"]);
 });

@@ -15,9 +15,17 @@ export const COMPOST_ITEM = "item_compost";
 /** Scraps needed to start one batch, and what that batch becomes. */
 export const SCRAPS_PER_BATCH = 4;
 export const COMPOST_PER_BATCH = 2;
-/** How long a batch takes. About four in-game days: compost is a slow reward
- *  for a habit, not a crafting click. */
-export const COMPOST_SECONDS = 2100;
+/** What the farm itself throws away, which is the other half of the supply: a
+ *  kitchen-only scrap stream meant the farm could not feed itself until the
+ *  restaurant was running, and the soil is the farm's problem first. */
+export const SCRAPS_PER_PULLED_PLANT = 1;
+export const SCRAPS_PER_SPENT_PLANT = 2;
+/** How long a batch takes — about one in-game day (a day is roughly nine
+ *  minutes). It was four days, which sounded right written down and meant that
+ *  in practice nobody ever saw compost: the first bag was half an hour of real
+ *  time away, behind a kitchen that had to be running first. A habit needs to
+ *  pay back inside the session that forms it. */
+export const COMPOST_SECONDS = 540;
 /** How many batches can rot at once. A bin has a size. */
 export const BIN_BATCHES = 6;
 

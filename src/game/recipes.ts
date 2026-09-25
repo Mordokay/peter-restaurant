@@ -118,6 +118,30 @@ export function takeForBoard(board: readonly string[], carried: readonly string[
   return taken;
 }
 
+/** Board items no recipe at this station needs — what should be handed back when
+ *  a full board cannot assemble anything.
+ *
+ *  The deadlock this exists for: a board holding six lettuces (which an older
+ *  build would happily fill it with) has no room for the carrot and the pepper,
+ *  so the dish can never be started and the counter looks broken while the bar
+ *  cheerfully says it is ready to make one. Handing back the SURPLUS — the five
+ *  lettuces nothing needs — unjams it without throwing away the one that counts. */
+export function surplusOnBoard(board: readonly string[], station: Station): string[] {
+  const needed = new Map<string, number>();
+  for (const recipe of recipes) {
+    if (recipe.station !== station) continue;
+    for (const [id, count] of Object.entries(recipe.needs)) needed.set(id, Math.max(needed.get(id) ?? 0, count));
+  }
+  const keep = new Map(needed);
+  const surplus: string[] = [];
+  for (const item of board) {
+    const left = keep.get(item) ?? 0;
+    if (left > 0) keep.set(item, left - 1);
+    else surplus.push(item);
+  }
+  return surplus;
+}
+
 /** Problems with the recipe table, given the ids the catalog actually has. */
 export function validateRecipes(catalogIds: Iterable<string>): string[] {
   const known = new Set(catalogIds);

@@ -440,7 +440,12 @@ function showFarmCue(result: { action: string; site: { x: number; z: number }; c
 
 /** One key, whatever is under your hand: sow, harvest, clear — or, standing at
  *  the crate, tip in everything you are carrying. */
-function actOnPlot(): void {
+/** `viaKey` is true for the space bar, which has no cursor of its own: if the
+ *  mouse is not over a plot the player can reach — hovering the HUD, or left
+ *  wherever it was last — the key works the nearest plot instead of refusing.
+ *  The mouse gets no such favour: pointing at a plot out of reach and being told
+ *  so is the point. */
+function actOnPlot(viaKey = false): void {
   if (build.active || busy()) return;
   // One key, whatever you are standing at. The counter comes first because it
   // is indoors and nothing else is ever within reach of it.
@@ -463,8 +468,20 @@ function actOnPlot(): void {
       // and the counter looked like it was refusing everything but the first
       // thing put down.
       const started = prepStation.start();
-      if (!putDown.length && !started && prepStation.ingredients.length && prepStation.idle()) {
-        farm.give(prepStation.clear());
+      if (!putDown.length && !started && prepStation.ingredients.length) {
+        // Nothing to put down and nothing to start: either the board is holding
+        // something this counter cannot use at all, or it is full of the wrong
+        // proportion of things it can. Either way the fix is to hand back the
+        // surplus rather than leave the player pressing a key that does nothing.
+        const back = prepStation.idle() ? prepStation.clear() : prepStation.trim();
+        if (back.length) {
+          farm.give(back);
+          // And then get on with it in the same press: making room is not an
+          // action the player asked for, it is something in the way of one.
+          farm.remove(prepStation.put(farm.inventory));
+          const nowStarted = prepStation.start();
+          farmHud.flash(nowStarted ? `took back ${back.length} · ${nowStarted.name} started` : `took back ${back.length} · make room for the rest`);
+        }
       }
     }
     saveEverything();
@@ -493,6 +510,9 @@ function actOnPlot(): void {
   // the instant after stepping across a row would otherwise hit the plot just
   // left behind.
   refreshFarm();
+  if (viaKey && (!addressed || !addressed.inReach)) {
+    addressed = farm.addressed(player.position.x, player.position.z, farmHud.slot);
+  }
   if (!addressed) return;
   if (!addressed.inReach) {
     // Stardew swings the tool and fails, which is the lesson: the player has to
@@ -615,7 +635,7 @@ window.addEventListener("keydown", (event) => {
   if (key === "f") frameSite();
   if (key === "b" && !event.repeat) { build.toggle(); keys.clear(); requestAnimationFrame(syncBuildButton); }
   // The farm: one key does the work, the digits pick what goes in the ground.
-  if (key === " " && !event.repeat) { event.preventDefault(); actOnPlot(); }
+  if (key === " " && !event.repeat) { event.preventDefault(); actOnPlot(true); }
   // 1-9 and 0 reach the first ten slots; anything past that is tab or shift+wheel.
   if (key >= "1" && key <= "9") { farmHud.select(Number(key) - 1); showHeldTool(); }
   if (key === "0") { farmHud.select(9); showHeldTool(); }

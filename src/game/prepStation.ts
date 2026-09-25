@@ -13,7 +13,7 @@ import { TransformNode, Vector3, type Scene, type ShadowGenerator, type Standard
 import { createVoxelMesh } from "./voxelGeometry.ts";
 import { cellsFromAuthoredModel, type AuthoredVoxelCatalog } from "./voxelModel.ts";
 import { createStorageDisplay, type StorageDisplay } from "./storageDisplay.ts";
-import { consume, readyRecipe, recipeById, stockOf, takeForBoard, type Recipe } from "./recipes.ts";
+import { consume, readyRecipe, recipeById, stockOf, surplusOnBoard, takeForBoard, type Recipe } from "./recipes.ts";
 
 export const PREP_MODEL = "prep_table";
 /** How close the player has to stand to work at it, metres. */
@@ -54,6 +54,9 @@ export interface PrepStation {
   start(): Recipe | null;
   /** Sweep the board back into the player's hands. */
   clear(): string[];
+  /** Hand back only what no recipe here needs, which is what unjams a board
+   *  that is full of the wrong thing. */
+  trim(): string[];
   /** True when nothing on the board is any use here — the only state worth
    *  sweeping. A board short of one ingredient is working, not stuck. */
   idle(): boolean;
@@ -121,6 +124,16 @@ export function createPrepStation(options: PrepStationOptions): PrepStation {
       ingredients.push(...taken);
       if (taken.length) paint();
       return taken;
+    },
+
+    trim() {
+      const surplus = surplusOnBoard(ingredients, "prep");
+      for (const item of surplus) {
+        const at = ingredients.lastIndexOf(item);
+        if (at >= 0) ingredients.splice(at, 1);
+      }
+      if (surplus.length) paint();
+      return surplus;
     },
 
     idle() {
