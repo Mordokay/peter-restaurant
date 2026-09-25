@@ -61,7 +61,7 @@ const startingProgress = params.get("progress") === "start";
 document.querySelector<HTMLElement>("#world")!.innerHTML = `
   <canvas id="world-canvas"></canvas>
   <div class="world-hud">
-    <div class="world-title">🍅 Compound <a href="/">← game</a><a href="/model-lab.html">model lab</a>
+    <div class="world-title"><button data-act="collapse" id="world-collapse" title="Show or hide the panel (H)">▸</button>🍅 Compound <a href="/">← game</a><a href="/model-lab.html">model lab</a>
       <span class="world-room" id="world-room">outside</span><span class="world-clock" id="world-clock">☀ 07:00</span></div>
     <div class="world-stats" id="world-stats">building…</div>
     <div class="world-controls">
@@ -633,7 +633,7 @@ const itemPanel = createItemPanel({ scene, catalog, parent: level.root, shadows 
 // when the farmer is standing in front of the crate it belongs to.
 scene.setRenderingAutoClearDepthStencil(2, true, true, true);
 /** What the open panel is showing, so a click on a slot knows what it took. */
-let openContainerNow: { title: string; rows: () => ContainerRow[]; take: (item: string, count: number) => number } | null = null;
+let openContainerNow: OpenableContainer | null = null;
 
 /** Rows for the crate: what it holds, grouped. */
 function crateRows(): ContainerRow[] {
@@ -663,95 +663,109 @@ function boardRows(): ContainerRow[] {
   return rows;
 }
 
-/** Whatever the player is standing at, as something that can be opened. */
-function containerAtPlayer(): { title: string; rows: () => ContainerRow[]; take: (item: string, count: number) => number } | null {
-  const px = player.position.x;
-  const pz = player.position.z;
-  if (prepStation?.inReach(px, pz)) {
-    return {
-      title: "Prep counter", rows: boardRows,
+type ContainerKind = "prep" | "bin" | "crate";
+
+/** One container, however it is opened. */
+interface OpenableContainer {
+  kind: ContainerKind;
+  title: string;
+  rows: () => ContainerRow[];
+  take: (item: string, count: number) => number;
+  anchor: () => Vector3;
+  inReach: () => boolean;
+}
+
+function containersHere(): OpenableContainer[] {
+  const px = () => player.position.x;
+  const pz = () => player.position.z;
+  const list: OpenableContainer[] = [];
+  if (prepStation) {
+    list.push({
+      kind: "prep", title: "Prep counter", rows: boardRows,
+      inReach: () => prepStation!.inReach(px(), pz()),
+      anchor: () => prepStation!.root.position.add(new Vector3(0, 1.75, 0)),
       take: (item, count) => {
         if (prepStation!.dish === item) { const lifted = prepStation!.take(); if (lifted) { farm.give([lifted.dish, ...Array.from({ length: lifted.scraps }, () => SCRAPS_ITEM)]); return 1; } return 0; }
         return farm.give(prepStation!.takeBack(item, count));
       },
-    };
+    });
   }
-  if (farm.bin?.inReach(px, pz)) {
-    return {
-      title: "Compost bin", rows: binRows,
+  if (farm.bin) {
+    list.push({
+      kind: "bin", title: "Compost bin", rows: binRows,
+      inReach: () => farm.bin!.inReach(px(), pz()),
+      anchor: () => farm.bin!.root.position.add(new Vector3(0, 1.55, 0)),
       take: (item, count) => {
         if (item === COMPOST_ITEM) { const taken = Math.min(count, farm.bin!.take()); return farm.give(Array.from({ length: taken }, () => COMPOST_ITEM)); }
         if (item === SCRAPS_ITEM) return farm.give(farm.bin!.takeScraps(count));
         return 0;
       },
-    };
+    });
   }
-  if (farm.crate?.inReach(px, pz)) {
-    return { title: "Harvest crate", rows: crateRows, take: (item, count) => farm.give(farm.crate!.takeItems(item, count)) };
+  if (farm.crate) {
+    list.push({
+      kind: "crate", title: "Harvest crate", rows: crateRows,
+      inReach: () => farm.crate!.inReach(px(), pz()),
+      anchor: () => farm.crate!.position.add(new Vector3(0, 1.3, 0)),
+      take: (item, count) => farm.give(farm.crate!.takeItems(item, count)),
+    });
   }
-  return null;
+  return list;
 }
 
-/** Where a container's panel floats: above the thing, out of the player's way. */
-function panelAnchor(): Vector3 | null {
-  const px = player.position.x;
-  const pz = player.position.z;
-  if (prepStation?.inReach(px, pz)) return prepStation.root.position.add(new Vector3(0, 1.75, 0));
-  if (farm.bin?.inReach(px, pz)) return farm.bin.root.position.add(new Vector3(0, 1.55, 0));
-  if (farm.crate?.inReach(px, pz)) return farm.crate.position.add(new Vector3(0, 1.25, 0));
-  return null;
+/** The node name each container's meshes hang off, for picking. */
+const CONTAINER_NODES: Record<string, ContainerKind> = {
+  "prep station": "prep", "compost bin": "bin", "harvest crate": "crate",
+};
+
+/** Which container the cursor is over, whether or not one is already open —
+ *  so pointing at the crate while the bin is open switches to the crate rather
+ *  than leaving the player looking at the wrong thing. */
+function containerUnderCursor(): OpenableContainer | null {
+  if (!pointer) return null;
+  const hit = scene.pick(pointer.x, pointer.y, (mesh) => Boolean(CONTAINER_NODES[mesh.parent?.name ?? ""]));
+  const kind = hit?.pickedMesh ? CONTAINER_NODES[hit.pickedMesh.parent?.name ?? ""] : undefined;
+  if (!kind) return null;
+  return containersHere().find((container) => container.kind === kind && container.inReach()) ?? null;
 }
 
-// ── opening a container by looking at it ──────────────────────────────────────
-// Hover opens it, with two pieces of hysteresis that are the whole difference
-// between helpful and noisy:
-//
-//   * a beat before it opens, so sweeping the cursor across a crate on the way
-//     to a plot does not flash a board at the player;
-//   * Esc closes it AND holds it closed until the cursor leaves and comes back,
-//     so a deliberate dismissal is not undone by the next mouse twitch.
-//
-// It only ever opens for a container the player is standing AT, which is what
-// keeps it from being a tooltip for the whole farm.
+/** Whatever the player is standing at, when the cursor is not on anything. */
+function containerAtPlayer(): OpenableContainer | null {
+  return containersHere().find((container) => container.inReach()) ?? null;
+}
+
+// Hover opens a container, with two pieces of hysteresis that are the whole
+// difference between helpful and noisy: a beat before it opens, so sweeping the
+// cursor across a crate on the way to a plot does not flash a cabinet at the
+// player; and Esc closing it AND holding it closed until the cursor leaves, so
+// a deliberate dismissal is not undone by the next twitch of the mouse.
 const HOVER_DELAY = 0.28;
 let hoverFor = 0;
 let hoverDismissed = false;
 
-/** True when the cursor is over the thing the player is standing at. */
-function hoveringContainer(): boolean {
-  if (!pointer) return false;
-  const rect = canvas.getBoundingClientRect();
-  void rect;
-  const hit = scene.pick(pointer.x, pointer.y, (mesh) => {
-    const root = mesh.parent?.name ?? "";
-    return root === "prep station" || root === "compost bin" || root === "harvest crate"
-      || mesh.name.startsWith("panel slot") || mesh.name === "item panel backdrop";
-  });
-  return Boolean(hit?.hit);
-}
-
 function tickHover(dt: number): void {
   if (build.active) return;
-  const near = Boolean(panelAnchor());
-  const over = near && hoveringContainer();
-  if (!over) {
+  const under = containerUnderCursor();
+  if (!under) {
     hoverFor = 0;
     // Leaving the thing clears a dismissal, so Esc is a "not now" rather than a
     // setting the player has to remember they changed.
     hoverDismissed = false;
     return;
   }
+  // Pointing at a DIFFERENT container switches to it immediately: the player
+  // has already said which one they mean.
+  if (openContainerNow && openContainerNow.kind !== under.kind) { openContainer(under); return; }
   if (itemPanel.open || hoverDismissed) return;
   hoverFor += dt;
-  if (hoverFor >= HOVER_DELAY) openContainer();
+  if (hoverFor >= HOVER_DELAY) openContainer(under);
 }
 
-function openContainer(): boolean {
-  const container = containerAtPlayer();
-  const at = panelAnchor();
-  if (!container || !at) return false;
+function openContainer(target?: OpenableContainer | null): boolean {
+  const container = target ?? containerUnderCursor() ?? containerAtPlayer();
+  if (!container) return false;
   openContainerNow = container;
-  itemPanel.show({ title: container.title, at, from: player.position, rows: container.rows() });
+  itemPanel.show({ title: container.title, at: container.anchor(), from: player.position, rows: container.rows() });
   return true;
 }
 
@@ -762,18 +776,22 @@ function closeContainer(options: { dismissed?: boolean } = {}): void {
   itemPanel.hide();
 }
 
-/** Clicking a slot takes that item out — one on a click, the stack with shift. */
+/** Clicking a drawer or one of its buttons takes from it: the drawer and the
+ *  item take one, and the three buttons take one, half or all. */
 function clickPanel(event: PointerEvent): boolean {
   if (!openContainerNow || !itemPanel.open) return false;
   const rect = canvas.getBoundingClientRect();
   const hit = scene.pick(event.clientX - rect.left, event.clientY - rect.top,
-    (mesh) => itemPanel.rowAt(mesh) !== null);
-  const index = hit?.pickedMesh ? itemPanel.rowAt(hit.pickedMesh) : null;
-  if (index === null) return false;
+    (mesh) => itemPanel.hitAt(mesh) !== null);
+  const target = hit?.pickedMesh ? itemPanel.hitAt(hit.pickedMesh) : null;
+  if (!target) return false;
   const rows = openContainerNow.rows();
-  const row = rows[index];
+  const row = rows[target.row];
   if (!row || row.takeable === false) return true;
-  openContainerNow.take(row.item, event.shiftKey ? row.count : 1);
+  const wanted = target.amount === "all" ? row.count
+    : target.amount === "half" ? Math.max(1, Math.floor(row.count / 2))
+    : 1;
+  openContainerNow.take(row.item, wanted);
   saveEverything();
   refreshFarm();
   const left = openContainerNow.rows();
@@ -877,6 +895,7 @@ window.addEventListener("keydown", (event) => {
   if (key === "r" && !event.repeat) { placeTurn = (placeTurn + 1) % 4; refreshFarm(); }
   if (key === "e" && !event.repeat) { if (!openContainer()) closeContainer(); }
   if (key === "escape") closeContainer({ dismissed: true });
+  if (key === "h" && !event.repeat) toggleHud();
 });
 window.addEventListener("keyup", (event) => keys.delete(event.key.toLowerCase()));
 window.addEventListener("blur", () => keys.clear());
@@ -904,6 +923,19 @@ function frameSite(): void {
   targetRadius = SURVEY_RADIUS;
 }
 let framed = false;
+
+// The panel starts folded away: it is a developer's instrument panel, and the
+// game behind it is the thing worth looking at. One click or H brings it back.
+const hudPanel = document.querySelector<HTMLElement>(".world-hud")!;
+hudPanel.classList.add("folded");
+function toggleHud(): void {
+  const folded = hudPanel.classList.toggle("folded");
+  document.querySelector<HTMLElement>("#world-collapse")!.textContent = folded ? "▸" : "▾";
+}
+document.querySelector<HTMLElement>("#world-collapse")!.addEventListener("click", (event) => {
+  event.stopPropagation();
+  toggleHud();
+});
 
 document.querySelector(".world-controls")!.addEventListener("click", (event) => {
   const button = (event.target as HTMLElement).closest<HTMLElement>("button[data-act]");
@@ -1163,9 +1195,8 @@ engine.runRenderLoop(() => {
   // Walk away and the panel closes itself: it belongs to the thing, and the
   // player has left the thing.
   if (openContainerNow) {
-    const at = panelAnchor();
-    if (!at) closeContainer();
-    else itemPanel.move(at, player.position);
+    if (!openContainerNow.inReach()) closeContainer();
+    else itemPanel.move(openContainerNow.anchor(), player.position);
   }
   rigTest?.update(dt);
   cropTest?.update(dt);

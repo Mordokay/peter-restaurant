@@ -506,6 +506,12 @@ this loop and the player already knows it:
     or sliced through by whoever is standing in front of it.
   - Items in it are **unlit**: the board tips them away from the sun, and a slot full of silhouette is a
     slot full of nothing. White emissive carries their colour — see the same note in `lighting.ts`.
+  - **It is made of the same cubes as the game.** The cabinet is a carcass of sawn boards with seams and
+    nail heads, its drawers are tapered niches — back smaller than the mouth, so every inner wall shows
+    from every angle rather than one flat face — and its lettering is set in the game's own 5x7 voxel
+    font (`voxelFont.ts`). There is no texture and no HTML in it. This is the voxel UI the rulebook plans
+    for the whole game, arriving early because a container needed it first: what is built here is what
+    the rest should look like.
   - It **holds its size on screen, not in the world**: apparent size falls off with distance, so its world
     size rises with it and the board keeps about the same share of the screen from the closest zoom to
     the furthest. Measured 132 px wide at 6.7 m, at 21.6 m and at 30.5 m. It is a HUD that happens to
@@ -815,7 +821,8 @@ travels). Current sources:
 | `src/game/compost.ts`, `compostBin.ts` | Kitchen scraps rotting down into the farm's fertility | Active foundation |
 | `src/game/automation.ts` | Sprinklers and seeders: the boring half of farming, done elsewhere | Active foundation |
 | `src/game/placementGhost.ts`, `rangeHighlight.ts` | What you are about to place, and what a device reaches | Active foundation |
-| `src/game/itemPanel.ts` | A container's contents on a board that hangs over it and faces the camera | Active UI |
+| `src/game/itemPanel.ts` | The voxel cabinet: drawers, labels and take buttons over a container | Active UI |
+| `src/game/voxelFont.ts` | Letters made of cubes: the game's own 5x7 bitmap face | Active foundation |
 | `src/game/soilPatches.ts` | Worked ground drawn: one bed model, recoloured per state | Active foundation |
 | `scripts/authored/props/farmer.py`, `clips/farmer.mjs` | The player: a rigged voxel farmer and his six clips | Active asset pipeline |
 | `src/game/prepStation.ts` | The prep counter: a board, a plate, and a dish being made | Active foundation |

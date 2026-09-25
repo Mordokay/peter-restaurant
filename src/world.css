@@ -63,3 +63,13 @@ html, body, #world { margin: 0; height: 100%; overflow: hidden; background: #93a
 .farm-work i { display: block; height: 100%; width: 0; border-radius: 999px; transition: width .06s linear; }
 
 
+
+/* The instrument panel folds away: only the title row stays, and the game is
+   what fills the screen. */
+.world-hud.folded .world-stats,
+.world-hud.folded .world-controls,
+.world-hud.folded .world-hint,
+.world-hud.folded .world-load-note { display: none; }
+.world-hud.folded { padding: 6px 10px; gap: 0; }
+.world-title button[data-act="collapse"] { margin-right: 6px; padding: 1px 7px; border: 1px solid #ffffff2e; border-radius: 7px; background: #ffffff10; color: inherit; font: inherit; line-height: 1.1; cursor: pointer; }
+.world-title button[data-act="collapse"]:hover { background: #ffffff20; }
