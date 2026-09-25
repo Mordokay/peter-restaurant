@@ -465,11 +465,19 @@ this loop and the player already knows it:
   parcel never renames the ground inside it. R turns whatever is about to be placed and a translucent
   ghost of the thing itself — the bed, the sprinkler, the seedling — stands in the cell before the click.
   A preview answers which cell, which way round and how big; a coloured ring answers none of them.
+- **Holding the button keeps the work going.** Between strokes the game asks whether there is something
+  to do where the cursor is; the animation's own length is the rhythm, so strokes follow each other with
+  no gap to feel and none to fight. Walking with the button held is part of it — the next stroke starts
+  the moment the player is close enough, with no click and no release, and being out of reach while held
+  is not a refusal but a walk. The one exception is taking things back: an undo wants a press per plot,
+  or a slipped finger unmakes a field.
 - **The farmer looks at the THING, not at the floor under the cursor.** The camera is tilted, so the
   cursor's ground ray lands metres past whatever is being pointed at. He looks at the middle of the plot,
   at the board when he is working at it, at the bin he is tipping into — and at his own eye level in the
-  cursor's direction when there is nothing in particular. His head is a separate joint from his body: the
-  body says where he is working, the head says what he is watching while he works.
+  cursor's direction when there is nothing in particular — and he only looks at what he could actually
+  reach, because a man staring at a bed on the far side of the farm, or at a counter through a wall,
+  looks possessed rather than attentive. Interest follows reach. His head is a separate joint from his
+  body: the body says where he is working, the head says what he is watching while he works.
 - **Anything placed can be taken back.** One tool undoes a plot: the plant first, then the bed under it.
   Two presses to undo what took two to make, which is exactly enough to make a mis-click cheap.
 

@@ -72,7 +72,7 @@ document.querySelector<HTMLElement>("#world")!.innerHTML = `
       <button data-act="night" id="world-night" title="Jump the clock to evening">🌙 Evening</button>
       <button data-act="frame" title="Look at the whole site">🖼 Frame all</button>
     </div>
-    <div class="world-hint">W A S D walk · Q / E turn the camera · F frames the site · wheel zooms · 1-9 or shift+wheel picks a tool · R turns what you are placing · click the ground to work it · right-click a crate, bin or counter to open it</div>
+    <div class="world-hint">W A S D walk · Q / E turn the camera · F frames the site · wheel zooms · 1-9 or shift+wheel picks a tool · R turns what you are placing · click the ground to work it, hold to keep working as you walk · right-click a crate, bin or counter to open it</div>
   </div>
   <div class="world-loading" id="world-loading">
     <h1>🍅 Building the compound</h1>
@@ -685,13 +685,16 @@ canvas.addEventListener("pointermove", (event) => {
 canvas.addEventListener("pointerleave", () => { pointer = null; });
 canvas.addEventListener("contextmenu", (event) => event.preventDefault());
 
-/** Held buttons repeat, so planting a row is a drag rather than forty clicks —
- *  the single biggest quality-of-life difference between an hour of farming and
- *  a chore. The repeat re-reads the plot under the mouse every time, so walking
- *  while holding works the row the player walks along. */
-const REPEAT_SECONDS = 0.18;
+/** Held buttons keep working, so a row is a drag rather than forty clicks — the
+ *  single biggest quality-of-life difference between an hour of farming and a
+ *  chore. While the button is down the game simply asks, between strokes,
+ *  whether there is something to do where the cursor is; the animation's own
+ *  length is the rhythm, so strokes follow each other with no gap to feel and
+ *  none to fight. Walking with the button held is part of it: the next stroke
+ *  starts the moment the player is close enough, with no click and no release. */
+const HELD_BEAT = 0.05;
 let heldButton: number | null = null;
-let repeatIn = 0;
+let heldCooldown = 0;
 canvas.addEventListener("pointerdown", (event) => {
   if (build.active || event.button > 2) return;
   // Right-click opens whatever the player is standing at, and does nothing at
@@ -699,7 +702,7 @@ canvas.addEventListener("pointerdown", (event) => {
   // a menu in the way.
   if (event.button === 2) { openContainer(); return; }
   heldButton = event.button;
-  repeatIn = REPEAT_SECONDS * 1.6;   // the first repeat waits a little longer
+  heldCooldown = 0;
   refreshFarm();
   actOnPlot();
 });
@@ -708,15 +711,22 @@ canvas.addEventListener("pointerup", releasePointer);
 canvas.addEventListener("pointerleave", releasePointer);
 window.addEventListener("blur", releasePointer);
 
+/** Work that a held button may repeat. Everything except taking things back:
+ *  an undo wants one press per plot, or a slipped finger unmakes a field. */
+const REPEATABLE = new Set(["till", "water", "feed", "sow", "harvest", "clear", "place"]);
+
 function tickHeldPointer(dt: number): void {
   if (heldButton === null || build.active) return;
-  repeatIn -= dt;
-  if (repeatIn > 0) return;
-  repeatIn = REPEAT_SECONDS;
+  // A stroke in progress owns the body; the next one starts the instant it ends.
+  if (busy()) { heldCooldown = HELD_BEAT; return; }
+  heldCooldown -= dt;
+  if (heldCooldown > 0) return;
+  heldCooldown = HELD_BEAT;
   refreshFarm();
-  // A held button only repeats work that is safe to repeat: sowing and picking
-  // down a row. Repeating a hoe would turn a slipped click into a ploughed field.
-  if (addressed?.inReach && (addressed.action === "sow" || addressed.action === "harvest")) actOnPlot();
+  // Out of reach is not a refusal while the button is held — it is the player
+  // walking there. No flash, no noise: the work starts when they arrive.
+  if (!addressed?.inReach || !REPEATABLE.has(addressed.action)) return;
+  actOnPlot();
 }
 window.addEventListener("beforeunload", () => saveEverything());
 
@@ -916,9 +926,12 @@ function lookTarget(): Vector3 | null {
     const at = farm.crate.position;
     return new Vector3(at.x, at.y + 0.25, at.z);
   }
-  // A plot under the cursor: the middle of the cell, just above the soil, so a
-  // farmer about to break ground is looking at the ground he will break.
-  if (addressed) {
+  // A plot under the cursor, and only one he could actually work: the middle of
+  // the cell, just above the soil, so a farmer about to break ground is looking
+  // at the ground he will break. Out of reach he does NOT look — a man staring
+  // at a bed on the far side of the farm, or at a counter through a wall, is a
+  // man who looks possessed rather than attentive. Interest follows reach.
+  if (addressed?.inReach) {
     const height = addressed.planted ? 0.45 : 0.12;
     return new Vector3(addressed.site.x, height, addressed.site.z);
   }
