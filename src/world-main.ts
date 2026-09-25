@@ -34,6 +34,7 @@ import { createClipPlayer, createVoxelRig, socketNode } from "./game/voxelRig";
 import { createPlacementGhost } from "./game/placementGhost";
 import { createRangeHighlight } from "./game/rangeHighlight";
 import { createItemPanel, type PanelRow as ContainerRow } from "./game/itemPanel";
+import { setUiScale, uiScale } from "./game/uiScale";
 import { groupItems } from "./game/inventory";
 import { PLOT_SPACING } from "./game/farm";
 import { reliefCeiling } from "./game/surfaces";
@@ -72,6 +73,10 @@ document.querySelector<HTMLElement>("#world")!.innerHTML = `
       <button data-act="relief" id="world-relief" title="Lay the floors at each material's own cell size with real relief — board gaps cut a cell deep, every board and tile at its own height — instead of the coarse flat carpet. Measured on the whole compound: 11.7M cells and a 19.5 second build against 1.4M and 1.3 s, at the same 138 draw calls and 120 fps. The runtime is not the cost; the mesher and about 880 MB of transient cells are.">🪵 Floor relief</button>
       <button data-act="night" id="world-night" title="Jump the clock to evening">🌙 Evening</button>
       <button data-act="frame" title="Look at the whole site">🖼 Frame all</button>
+      <span class="world-sep"></span>
+      <label class="world-slider" title="How big the game's own UI draws — the drawer cabinet and everything else built out of voxels. It lives in the world rather than on the screen, so this is a size and not a zoom: the cabinet keeps this share of the screen however near or far the camera is.">🔍 UI
+        <input type="range" id="world-ui-scale" min="60" max="250" step="5">
+        <span id="world-ui-scale-value">135%</span></label>
     </div>
     <div class="world-hint">W A S D walk · Q / E turn the camera · F frames the site · wheel zooms · 1-9 or shift+wheel picks a tool · R turns what you are placing · click the ground to work it, hold to keep working as you walk · point at a crate, bin or counter to see inside it (Esc closes)</div>
   </div>
@@ -932,6 +937,18 @@ let framed = false;
 
 // The panel starts folded away: it is a developer's instrument panel, and the
 // game behind it is the thing worth looking at. One click or H brings it back.
+// The UI scale slider. It is here rather than in a settings screen because
+// there is no settings screen yet; the value lives in uiScale.ts, so the screen
+// can take it over later without anything that draws UI knowing.
+const uiScaleInput = document.querySelector<HTMLInputElement>("#world-ui-scale")!;
+const uiScaleValue = document.querySelector<HTMLElement>("#world-ui-scale-value")!;
+const showUiScale = (scale: number): void => {
+  uiScaleInput.value = `${Math.round(scale * 100)}`;
+  uiScaleValue.textContent = `${Math.round(scale * 100)}%`;
+};
+showUiScale(uiScale());
+uiScaleInput.addEventListener("input", () => showUiScale(setUiScale(Number(uiScaleInput.value) / 100)));
+
 const hudPanel = document.querySelector<HTMLElement>(".world-hud")!;
 hudPanel.classList.add("folded");
 function toggleHud(): void {

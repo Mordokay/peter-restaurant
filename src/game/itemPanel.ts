@@ -23,6 +23,7 @@ import { createMeshLibrary } from "./meshLibrary.ts";
 import { modelBounds } from "./storageDisplay.ts";
 import { hash01 } from "./hash.ts";
 import { textCells, textWidth } from "./voxelFont.ts";
+import { uiScale } from "./uiScale.ts";
 
 /** A row of a container's contents. Named for what it is, not for the panel
  *  that happens to draw it: the crate and the bin describe themselves this way
@@ -660,7 +661,9 @@ export function createItemPanel(options: {
         // it: the cabinet keeps roughly the same share of the screen from the
         // closest zoom to the furthest.
         const distance = Vector3.Distance(camera.position, root.position);
-        const wanted = Math.max(MIN_SCALE, Math.min(MAX_SCALE, distance / REFERENCE_DISTANCE));
+        // The distance part keeps the cabinet the same share of the screen at
+        // any zoom; the setting decides what share that is.
+        const wanted = Math.max(MIN_SCALE, Math.min(MAX_SCALE, distance / REFERENCE_DISTANCE)) * uiScale();
         scaleNow += (wanted - scaleNow) * Math.min(1, dt * 8);
         root.scaling.setAll(scaleNow);
         place(anchor.at, anchor.from);

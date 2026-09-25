@@ -73,3 +73,8 @@ html, body, #world { margin: 0; height: 100%; overflow: hidden; background: #93a
 .world-hud.folded { padding: 6px 10px; gap: 0; }
 .world-title button[data-act="collapse"] { margin-right: 6px; padding: 1px 7px; border: 1px solid #ffffff2e; border-radius: 7px; background: #ffffff10; color: inherit; font: inherit; line-height: 1.1; cursor: pointer; }
 .world-title button[data-act="collapse"]:hover { background: #ffffff20; }
+
+/* The UI scale slider sits with the controls, reading as one of them. */
+.world-slider { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; opacity: 0.9; }
+.world-slider input[type="range"] { width: 92px; accent-color: #e0a44a; }
+.world-slider span { min-width: 34px; text-align: right; font-variant-numeric: tabular-nums; }
