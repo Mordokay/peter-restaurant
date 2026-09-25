@@ -634,6 +634,9 @@ const itemPanel = createItemPanel({ scene, catalog, parent: level.root, shadows 
 scene.setRenderingAutoClearDepthStencil(2, true, true, true);
 /** What the open panel is showing, so a click on a slot knows what it took. */
 let openContainerNow: OpenableContainer | null = null;
+/** What the open cabinet is currently showing, so it can be refreshed when the
+ *  container changes under it. */
+let panelSignature = "";
 
 /** Rows for the crate: what it holds, grouped. */
 function crateRows(): ContainerRow[] {
@@ -765,7 +768,9 @@ function openContainer(target?: OpenableContainer | null): boolean {
   const container = target ?? containerUnderCursor() ?? containerAtPlayer();
   if (!container) return false;
   openContainerNow = container;
-  itemPanel.show({ title: container.title, at: container.anchor(), from: player.position, rows: container.rows() });
+  const rows = container.rows();
+  panelSignature = rows.map((row) => `${row.item}:${row.count}:${row.note ?? ""}`).join("|");
+  itemPanel.show({ title: container.title, at: container.anchor(), from: player.position, rows });
   return true;
 }
 
@@ -795,6 +800,7 @@ function clickPanel(event: PointerEvent): boolean {
   saveEverything();
   refreshFarm();
   const left = openContainerNow.rows();
+  panelSignature = left.map((entry) => `${entry.item}:${entry.count}:${entry.note ?? ""}`).join("|");
   if (left.length) itemPanel.setRows(left);
   else closeContainer();
   return true;
@@ -1196,7 +1202,19 @@ engine.runRenderLoop(() => {
   // player has left the thing.
   if (openContainerNow) {
     if (!openContainerNow.inReach()) closeContainer();
-    else itemPanel.move(openContainerNow.anchor(), player.position);
+    else {
+      itemPanel.move(openContainerNow.anchor(), player.position);
+      // The cabinet follows the container, not just the player: tipping a crate
+      // full while its drawers are open used to leave them showing what was in
+      // it a moment ago, because only taking FROM the panel refreshed it. The
+      // signature is compared rather than the rows rebuilt, so this costs a
+      // string per frame and a re-mesh only when something actually changed.
+      const signature = openContainerNow.rows().map((row) => `${row.item}:${row.count}:${row.note ?? ""}`).join("|");
+      if (signature !== panelSignature) {
+        panelSignature = signature;
+        itemPanel.setRows(openContainerNow.rows());
+      }
+    }
   }
   rigTest?.update(dt);
   cropTest?.update(dt);
@@ -1213,7 +1231,7 @@ window.addEventListener("resize", () => engine.resize());
 
 Object.assign(window as unknown as Record<string, unknown>, {
   __world: { scene, camera, player, level, cutaway, decor, particles, colliders, dayNight, build, layout: levelLayout, turn: turnCamera,
-    farm, prepStation, act: actOnPlot,
+    farm, prepStation, act: actOnPlot, itemPanel,
     catalog, ensureModels, decorLayout, setProgress: (next: LevelProgress) => { progress = next; applyProgress(); } },
 });
 

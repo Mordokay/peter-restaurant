@@ -49,7 +49,11 @@ const PANEL_LAYER = 2;
  *  follows from it. */
 const SLOT = 0.68;
 const COLUMNS = 4;
-const DRAWER = SLOT * 0.84;
+// A drawer fills its cell right up to the separators either side of it. The
+// reference the player gave is a chest of small drawers packed edge to edge in
+// one frame: the wood between two drawers is a divider, not a margin, and a
+// drawer floating in the middle of its cell reads as a tile on a board.
+const DRAWER = SLOT * 0.94;
 // Shallower than it was, because the whole box now stands PROUD of the board
 // rather than being sunk into it: a drawer whose back wall is behind the board
 // is a drawer you cannot see into, which is what the first cut built.
@@ -69,12 +73,17 @@ const FRONT = -1;
 /** Letters are cut from a finer grid than the furniture. At the cabinet's own
  *  cell size a five-cell letter is 11 cm wide and "BELL PEPPER (RED)" is two
  *  metres of sign — which is exactly what the first cut looked like. */
-const TEXT_CELL = 0.0085;
-/** Longest label before it is cut short. A shelf edge is not a paragraph. */
-const LABEL_LIMIT = 13;
+const TEXT_CELL = 0.013;
+/** Longest label before it is cut short. A shelf edge is not a paragraph — and
+ *  a ticket wider than its drawer covers the drawer next door, which is what
+ *  "BELL PEPPER" did to the compost beside it. */
+const LABEL_LIMIT = 11;
 /** Buttons are cut finer than the furniture as well: three of them have to sit
- *  across the top of one drawer and still be hittable. */
-const BUTTON_CELL = 0.008;
+ *  across the top of one drawer and still be hittable. The number is derived
+ *  rather than chosen: "ALL" is the widest mark at 23 cells, three of them plus
+ *  gaps have to fit the mouth, and picking the cell size by eye is exactly how
+ *  the first cut ended up with three buttons printed on top of each other. */
+const BUTTON_CELLS_WIDE = 23;
 /** Radians per second an item turns on its slot. Slow: it is a display case,
  *  not a carousel, and the player has to read a shape while it moves. */
 const SPIN = 0.55;
@@ -87,21 +96,28 @@ const MAX_SCALE = 3.2;
 /** The cabinet is a piece of furniture, so it is described in wood: boards, the
  *  seams between them, and the nails holding them together. */
 const WOOD = {
-  carcass: ["#6b4a2e", "#7a5533", "#5f4128"],
-  drawerFront: ["#b1834c", "#a2764a", "#c09055"],
-  inside: ["#c9a06a", "#bb9260"],
-  floor: ["#8a6136", "#7a5530"],
-  seam: "#3f2b1a",
-  nail: "#8d949b",
-  rim: "#d8b384",
+  // Darker than the first cut, which was pine-bright and fought the produce for
+  // attention. This is oiled oak: the drawers are furniture, the food is the
+  // thing being shown.
+  frame: ["#4a3320", "#553b26", "#3f2b1a"],
+  inside: ["#7a5530", "#6b4a2b", "#835c34"],
+  floor: ["#5f4128", "#553b26"],
+  seam: "#2b1d12",
+  nail: "#9aa2a8",
+  rim: "#8a6136",
+  knob: "#6d4a2c",
+  cap: "#5a3e26",
 };
 const BOARD = { dark: "#1d2724", mid: "#243029", light: "#2b3a32", edge: "#3c5145" };
 // Wood, because a drawer is a wooden box: a pale sawn back so the produce
 // reads against it, darker sides falling away, a worn floor, and a lighter rim
 // round the mouth where hands have been. The tiling picks between the two tones
 // of each surface, which is what gives it grain rather than paint.
-const INK = { label: "#dfe8d6", count: "#d8f0c4", muted: "#8fa598", title: "#f3ead6" };
-const BUTTON = { face: "#33463c", faceHot: "#4f7a4a", mark: "#dfe8d6" };
+// Supermarket ticket: a pale card with dark ink on it, which is legible against
+// dark wood in a way white letters floating on wood never are.
+const TICKET = { card: "#efe7cf", cardEdge: "#cdbd96", name: "#2b2119", count: "#8a2f1e", muted: "#6f6252" };
+const INK = { title: "#f3ead6" };
+const BUTTON = { face: "#d8c9a4", faceEdge: "#8a6136", side: "#a68a5c", mark: "#2b2119", hot: "#4f7a4a" };
 
 export interface ItemPanel {
   readonly open: boolean;
@@ -156,52 +172,6 @@ export function createItemPanel(options: {
     return mesh;
   };
 
-  /** A panel of sawn BOARDS: planks of a few cells each, separated by a seam a
-   *  cell deep, every plank a slightly different tone, with nail heads driven
-   *  in near the ends. It is what makes the cabinet joinery rather than a box
-   *  with a wood colour on it — the seams and the nails are the whole read.
-   *
-   *  `run` is which way the planks lie. Real carcass work alternates: the back
-   *  boards run one way, the sides the other. */
-  const plankPanel = (name: string, across: number, up: number, deep: number, palette: readonly string[],
-                      seed: string, options: { run?: "across" | "up"; nails?: boolean; cell?: number } = {}): Mesh => {
-    const cells: VoxelCell[] = [];
-    const midX = Math.floor(across / 2);
-    const midY = Math.floor(up / 2);
-    const run = options.run ?? "across";
-    const PLANK = 7;
-    for (let x = 0; x < across; x++) {
-      for (let y = 0; y < up; y++) {
-        // Which board this cell belongs to, and how far across that board it is.
-        const alongBoard = run === "across" ? y : x;
-        const board = Math.floor(alongBoard / PLANK);
-        const withinBoard = alongBoard % PLANK;
-        const seam = withinBoard === 0;
-        const tone = palette[Math.floor(hash01(`${seed}:${board}`, 9) * palette.length)] ?? palette[0]!;
-        // The seam is a cell shallower, so the boards read as separate pieces
-        // rather than as stripes painted on one.
-        const thickness = Math.max(1, seam ? deep - 1 : deep);
-        for (let z = 0; z < thickness; z++) {
-          cells.push({ x: x - midX, y: y - midY, z: -FRONT * z, color: seam ? WOOD.seam : tone });
-        }
-      }
-    }
-    if (options.nails !== false) {
-      // Two nails per board, near its ends, as a joiner would drive them.
-      const boards = Math.ceil((run === "across" ? up : across) / PLANK);
-      for (let board = 0; board < boards; board++) {
-        const alongBoard = board * PLANK + Math.floor(PLANK / 2);
-        for (const position of [2, (run === "across" ? across : up) - 3]) {
-          const x = run === "across" ? position : alongBoard;
-          const y = run === "across" ? alongBoard : position;
-          if (x < 0 || y < 0 || x >= across || y >= up) continue;
-          cells.push({ x: x - midX, y: y - midY, z: FRONT, color: WOOD.nail });
-        }
-      }
-    }
-    return voxels(name, cells, options.cell);
-  };
-
   // ── the back board ──────────────────────────────────────────────────────────
   let board: Mesh | null = null;
 
@@ -223,8 +193,9 @@ export function createItemPanel(options: {
     const cells: VoxelCell[] = [];
     const mid = Math.floor(size / 2);
     const PLANK = 6;
-    /** Cells the walls close in by, per cell of depth. */
-    const TAPER = 0.34;
+    /** Cells the walls close in by, per cell of depth. Gentle: enough that
+     *  every wall shows, not so much that the drawer reads as a funnel. */
+    const TAPER = 0.18;
     const insetAt = (z: number): number => Math.min(Math.floor(size / 2) - 3, Math.round(z * TAPER));
     const tone = (index: number, palette: readonly string[]): string =>
       palette[Math.floor(hash01(`drawer:${index}`, 11) * palette.length)] ?? palette[0]!;
@@ -262,27 +233,55 @@ export function createItemPanel(options: {
     for (const [x, y] of [[2, 2], [size - 3, 2], [2, size - 3], [size - 3, size - 3]] as const) {
       cells.push({ x: x - mid, y: y - mid, z: FRONT * 2, color: WOOD.nail });
     }
+    // A turned knob on the bottom rail of the mouth. An apothecary drawer is
+    // known by its knob more than by its box, and the rail is the one place it
+    // can stand without covering the thing inside — which is the whole point of
+    // a drawer whose front is open.
+    const knobY = -mid;
+    for (let z = 0; z < 5; z++) {
+      // Narrow at the neck, wide at the head: a mushroom, the way a turned
+      // wooden knob actually reads at a distance.
+      const radius = z < 2 ? 1 : z < 4 ? 2 : 1;
+      for (let x = -radius; x <= radius; x++) {
+        for (let y = -radius; y <= radius; y++) {
+          if (Math.abs(x) + Math.abs(y) > radius + 1) continue;
+          cells.push({ x, y: knobY + y, z: FRONT * (2 + z), color: z >= 3 ? WOOD.rim : WOOD.knob });
+        }
+      }
+    }
     return voxels("panel drawer", cells);
   };
 
-  /** A take button: a small block with its mark cut into the face. */
+  /** A take button: a raised block of card with a wooden edge and its mark cut
+   *  into the face. Twice the size it was, and built with a visible side so it
+   *  reads as something that sticks out of the drawer rather than a decal on
+   *  it — a button the player cannot see is a button they will not press. */
+  /** Cell size that makes three buttons and their gaps span one drawer mouth. */
+  const buttonCell = (DRAWER * 0.92) / (BUTTON_CELLS_WIDE * 3 + 6);
   const buildButton = (amount: TakeAmount): Mesh => {
     const mark = amount === "one" ? "1" : amount === "half" ? "1/2" : "ALL";
     const cells: VoxelCell[] = [];
-    const width = Math.max(11, textWidth(mark) + 4);
-    const height = 11;
+    const width = BUTTON_CELLS_WIDE;
+    const height = 13;
+    const thick = 3;
     const midX = Math.floor(width / 2);
     const midY = Math.floor(height / 2);
     for (let x = 0; x < width; x++) {
       for (let y = 0; y < height; y++) {
         const edge = x === 0 || y === 0 || x === width - 1 || y === height - 1;
-        cells.push({ x: x - midX, y: y - midY, z: 0, color: edge ? BUTTON.faceHot : BUTTON.face });
+        for (let z = 0; z < thick; z++) {
+          // The face is card, the sides are wood: the two together are what
+          // give it a lip you can see from an angle.
+          const front = z === thick - 1;
+          const colour = front ? (edge ? BUTTON.faceEdge : BUTTON.face) : BUTTON.side;
+          cells.push({ x: x - midX, y: y - midY, z: FRONT * z, color: colour });
+        }
       }
     }
-    for (const cell of textCells(mark, { colour: BUTTON.mark, align: "centre", baseline: 2 - midY })) {
-      cells.push({ x: cell.x, y: cell.y, z: FRONT, color: cell.color });
+    for (const cell of textCells(mark, { colour: BUTTON.mark, align: "centre", baseline: 3 - midY })) {
+      cells.push({ x: cell.x, y: cell.y, z: FRONT * thick, color: cell.color });
     }
-    return voxels(`panel button ${amount}`, cells, BUTTON_CELL);
+    return voxels(`panel button ${amount}`, cells, buttonCell);
   };
 
   const glassSource = (): Mesh => {
@@ -296,6 +295,8 @@ export function createItemPanel(options: {
 
   /** Everything built for the current contents, cleared and rebuilt on change. */
   const parts: AbstractMesh[] = [];
+  /** One node per drawer, so each box can turn towards the camera on its own. */
+  const slotNodes: TransformNode[] = [];
   const hits: { mesh: AbstractMesh; row: number; amount: TakeAmount }[] = [];
   const spinning: AbstractMesh[] = [];
   let rows: readonly PanelRow[] = [];
@@ -307,7 +308,9 @@ export function createItemPanel(options: {
 
   const clear = (): void => {
     for (const part of parts) part.dispose(false, false);
+    for (const node of slotNodes) node.dispose();
     parts.length = 0;
+    slotNodes.length = 0;
     hits.length = 0;
     spinning.length = 0;
     board?.dispose(false, false);
@@ -322,9 +325,95 @@ export function createItemPanel(options: {
     const width = cols * SLOT;
     const height = lines * SLOT + SLOT * 0.42;
 
-    // The carcass: boards running across the back of the cabinet, nailed.
-    board = plankPanel("panel board", Math.round(width / CELL), Math.round(height / CELL), 2,
-      WOOD.carcass, "carcass", { run: "across" });
+    // The carcass is a FRAME, not a wall: uprights at every column edge, rails
+    // at every row edge, and nothing behind the drawers but the world. A solid
+    // back panel made the cabinet a slab with holes in it; poles make it a
+    // piece of furniture the farm shows through.
+    const frameCells: VoxelCell[] = [];
+    const cols2 = Math.round(width / CELL);
+    const rows2 = Math.round(height / CELL);
+    const midX = Math.floor(cols2 / 2);
+    const midY = Math.floor(rows2 / 2);
+    // Dividers between drawers are thin; the outside of the carcass is thick,
+    // the way a chest's case is heavier than the partitions inside it.
+    const POLE = 4;
+    const CASE = 7;
+    const tone = (index: number): string => WOOD.frame[Math.floor(hash01(`frame:${index}`, 7) * WOOD.frame.length)] ?? WOOD.frame[0]!;
+    const post = (cx: number, thick = POLE): void => {
+      for (let x = cx - thick / 2; x < cx + thick / 2; x++) {
+        for (let y = 0; y < rows2; y++) {
+          const seam = y % 7 === 0;
+          for (let z = 0; z < 3; z++) {
+            frameCells.push({ x: Math.round(x) - midX, y: y - midY, z: -FRONT * z, color: seam ? WOOD.seam : tone(Math.floor(y / 7)) });
+          }
+        }
+      }
+    };
+    const rail = (cy: number, thick = POLE): void => {
+      for (let y = cy - thick / 2; y < cy + thick / 2; y++) {
+        for (let x = 0; x < cols2; x++) {
+          const seam = x % 7 === 0;
+          for (let z = 0; z < 3; z++) {
+            frameCells.push({ x: x - midX, y: Math.round(y) - midY, z: -FRONT * z, color: seam ? WOOD.seam : tone(Math.floor(x / 7)) });
+          }
+        }
+      }
+    };
+    for (let column = 0; column <= cols; column++) {
+      post(Math.round((column * SLOT) / CELL), column === 0 || column === cols ? CASE : POLE);
+    }
+    // A rail under the title, one under each row of drawers, and one at the foot.
+    rail(rows2 - Math.round((SLOT * 0.42) / CELL));
+    for (let line = 0; line <= lines; line++) {
+      rail(Math.round(((lines - line) * SLOT) / CELL), line === 0 || line === lines ? CASE : POLE);
+    }
+    // Nails where the rails cross the posts, as a frame is actually fixed.
+    for (let column = 0; column <= cols; column++) {
+      for (let line = 0; line <= lines; line++) {
+        frameCells.push({
+          x: Math.round((column * SLOT) / CELL) - midX,
+          y: Math.round(((lines - line) * SLOT) / CELL) - midY,
+          z: FRONT, color: WOOD.nail,
+        });
+      }
+    }
+    // The carcass proper, taken from the apothecary chest the player pointed at:
+    // a capped top that overhangs on every side, a solid board closing each end,
+    // and feet under the whole thing. The frame alone was a rack; these are what
+    // make it furniture standing in the air rather than a trellis.
+    const OVERHANG = Math.round(0.055 / CELL);
+    const CAP = 4;
+    const SIDE = 5;
+    const capTone = (index: number): string => (index % 3 === 0 ? WOOD.cap : tone(index));
+    for (let y = 0; y < CAP; y++) {
+      for (let x = -OVERHANG; x < cols2 + OVERHANG; x++) {
+        for (let z = -2; z < 5; z++) {
+          const grain = x % 9 === 0;
+          frameCells.push({ x: x - midX, y: rows2 + y - midY, z: -FRONT * z,
+                            color: grain ? WOOD.seam : capTone(Math.floor(x / 9) + y) });
+        }
+      }
+    }
+    for (const edge of [-OVERHANG, cols2 + OVERHANG - SIDE]) {
+      for (let x = edge; x < edge + SIDE; x++) {
+        for (let y = 0; y < rows2; y++) {
+          const grain = y % 8 === 0;
+          for (let z = -2; z < 5; z++) {
+            frameCells.push({ x: x - midX, y: y - midY, z: -FRONT * z,
+                              color: grain ? WOOD.seam : tone(Math.floor(y / 8) + x) });
+          }
+        }
+      }
+    }
+    // Feet: short blocks under each end board, set in from the corners.
+    for (const edge of [-OVERHANG + 1, cols2 + OVERHANG - SIDE - 1]) {
+      for (let x = edge; x < edge + SIDE; x++) {
+        for (let y = -4; y < 0; y++) {
+          for (let z = -1; z < 4; z++) frameCells.push({ x: x - midX, y: y - midY, z: -FRONT * z, color: WOOD.cap });
+        }
+      }
+    }
+    board = voxels("panel board", frameCells);
     board.parent = root;
     board.position.set(0, 0, 0);
 
@@ -364,19 +453,23 @@ export function createItemPanel(options: {
       const centre = new Vector3(
         (col - (cols - 1) / 2) * SLOT,
         height / 2 - SLOT * 0.42 - (line + 0.5) * SLOT + SLOT * 0.06,
-        // Far enough forward that the back wall of the drawer clears the board.
-        FRONT * (DEPTH + CELL * 2),
+        // Far enough forward that the back wall of the drawer clears the board,
+        // plus a little per drawer: in the chest the player pointed at, no two
+        // drawers are pushed in to the same depth, and that stagger is most of
+        // what stops a grid of boxes reading as a printed sheet.
+        FRONT * (DEPTH + CELL * 2 + hash01(`stagger:${index}`, 23) * SLOT * 0.16),
       );
 
+      // Every slot is its own node: drawer, glass, ticket, buttons and item all
+      // hang off it, so the whole box can turn to face the camera as a unit.
+      const slot = new TransformNode(`panel slot ${index}`, scene);
+      slot.parent = root;
+      slot.position.copyFrom(centre);
+      slotNodes.push(slot);
+
       const box = shell.createInstance(`panel drawer ${index}`);
-      box.parent = root;
-      box.position.copyFrom(centre);
-      // A shade off square, alternating, so at least one side wall of every
-      // drawer catches the light: a cabinet seen dead-on is a grid of flat
-      // rectangles, and the whole point of building it in three dimensions is
-      // that it should not look like one.
-      box.rotation.y = (index % 2 ? -1 : 1) * 0.16;
-      box.rotation.x = -0.06;
+      box.parent = slot;
+      box.position.setAll(0);
       box.isPickable = true;
       parts.push(box);
       // The drawer itself takes one: the commonest thing to want, on the
@@ -384,19 +477,19 @@ export function createItemPanel(options: {
       hits.push({ mesh: box, row: index, amount: "one" });
 
       const pane = glass.createInstance(`panel glass ${index}`);
-      pane.parent = root;
-      pane.position.set(centre.x, centre.y, centre.z + FRONT * 0.002);
-      pane.rotation.y = box.rotation.y;
-      pane.rotation.x = box.rotation.x;
+      pane.parent = slot;
+      pane.position.set(0, 0, FRONT * 0.002);
       parts.push(pane);
 
       // Three buttons across the top of the drawer, supermarket-style.
       if (row.takeable !== false) {
         const amounts: TakeAmount[] = ["one", "half", "all"];
-        for (const [slot, amount] of amounts.entries()) {
+        for (const [place, amount] of amounts.entries()) {
           const button = buttons[amount].createInstance(`panel button ${index} ${amount}`);
-          button.parent = root;
-          button.position.set(centre.x + (slot - 1) * SLOT * 0.3, centre.y + DRAWER * 0.56, centre.z + FRONT * CELL * 2);
+          button.parent = slot;
+          // Inside the mouth, along its top edge: on the cabinet's front board
+          // they sat over the title and over the drawer above.
+          button.position.set((place - 1) * (BUTTON_CELLS_WIDE + 2) * buttonCell, DRAWER * 0.34, FRONT * (DEPTH * 0.2));
           button.isPickable = true;
           parts.push(button);
           hits.push({ mesh: button, row: index, amount });
@@ -407,15 +500,41 @@ export function createItemPanel(options: {
       // count in its own colour.
       const full = row.note ?? nameOf(row);
       const label = full.length > LABEL_LIMIT ? `${full.slice(0, LABEL_LIMIT - 1)}.` : full;
-      const labelCells = textCells(label, { colour: row.takeable === false ? INK.muted : INK.label, align: "centre" });
-      const countCells = textCells(`${row.count}`, { colour: INK.count, align: "centre" })
-        .map((cell) => ({ ...cell, y: cell.y + 10 }));
-      const plate = voxels(`panel label ${index}`, [...labelCells, ...countCells].map((cell) => ({ ...cell, z: 0 })), TEXT_CELL);
-      plate.parent = root;
-      // On the drawer's own front board, not on the carcass behind it: the
-      // drawers stand proud, so a label on the back board is hidden by the row
-      // below it from any angle but dead-on.
-      plate.position.set(centre.x, centre.y - DRAWER * 0.52, centre.z + FRONT * CELL * 2);
+      // A supermarket ticket: a pale card with dark ink, which is legible
+      // against dark wood in a way white letters floating on wood never are.
+      // One line, count first: a supermarket ticket, not a caption. Stacked on
+      // two lines the card filled half the mouth and the produce behind it was
+      // a coloured dot — the opposite of what a display case is for.
+      const count = row.note ? "" : `${row.count}`;
+      const countCells = textCells(count, { colour: TICKET.count, align: "left" });
+      const gap = count ? textWidth(count) + 3 : 0;
+      const nameCells = textCells(label, { colour: TICKET.name, align: "left" })
+        .map((cell) => ({ ...cell, x: cell.x + gap }));
+      const inkWidth = gap + textWidth(label);
+      const cardWidth = inkWidth + 5;
+      const cardHeight = 11;
+      const cardCells: VoxelCell[] = [];
+      for (let x = -2; x < cardWidth - 2; x++) {
+        for (let y = -2; y < cardHeight - 2; y++) {
+          const edge = x === -2 || x === cardWidth - 3 || y === -2 || y === cardHeight - 3;
+          cardCells.push({ x, y, z: 0, color: edge ? TICKET.cardEdge : (row.takeable === false ? TICKET.muted : TICKET.card) });
+        }
+      }
+      // The ticket is scaled to the drawer, not the other way round: whatever
+      // the name costs in cells, the card comes out one mouth wide. This is the
+      // rule the first cut lacked, and why a pepper's ticket lay across the
+      // compost drawer beside it.
+      const ticketCell = Math.min(TEXT_CELL, (DRAWER * 0.9) / (cardWidth + 1));
+      const shift = -Math.floor(inkWidth / 2);
+      const plate = voxels(`panel label ${index}`, [
+        ...cardCells.map((cell) => ({ ...cell, x: cell.x + shift })),
+        ...countCells.map((cell) => ({ ...cell, x: cell.x + shift, z: FRONT })),
+        ...nameCells.map((cell) => ({ ...cell, x: cell.x + shift, z: FRONT })),
+      ], ticketCell);
+      plate.parent = slot;
+      // Along the bottom edge of the mouth, in the drawer's own cell. Hung
+      // under the drawer it covered the one below it.
+      plate.position.set(0, -DRAWER * 0.5 + cardHeight * ticketCell * 0.6, FRONT * (DEPTH * 0.2));
       parts.push(plate);
 
       const model = catalog.models[row.item];
@@ -431,13 +550,17 @@ export function createItemPanel(options: {
       const item = source.createInstance(`panel item ${index}`);
       const bounds = modelBounds(model);
       const size = bounds.max.subtract(bounds.min).scale(model.pitch);
-      const scale = (DRAWER * 0.5) / Math.max(size.x, size.y, size.z, 1e-3);
-      item.parent = root;
+      // The produce is the reason the cabinet exists, so it gets the middle band
+      // of the mouth — everything else was pushed to the edges to give it room.
+      const scale = (DRAWER * 0.52) / Math.max(size.x, size.y, size.z, 1e-3);
+      // On the slot, not the root: the item rides with its box when the box
+      // turns, or it swims across a drawer that is looking somewhere else.
+      item.parent = slot;
       item.scaling.setAll(scale);
       // In the middle of the box and set back off the glass: an item on the
       // rim of its drawer looks dropped on top of the cabinet.
       // Standing on the floor of its box, halfway back.
-      item.position.set(centre.x, centre.y - DRAWER * 0.3 + size.y * scale * 0.1, centre.z - FRONT * DEPTH * 0.5);
+      item.position.set(0, -DRAWER * 0.02, -FRONT * DEPTH * 0.5);
       item.isPickable = true;
       parts.push(item);
       spinning.push(item);
@@ -487,6 +610,26 @@ export function createItemPanel(options: {
         item.rotation.y += dt * (SPIN + index * 0.06);
       }
       const camera = scene.activeCamera;
+      if (camera) {
+        // Every box looks at the camera on its own account. The cabinet as a
+        // whole already faces the player; this is the residue — the few degrees
+        // each drawer is off, because it sits to one side of the middle. Walking
+        // round the cabinet makes the boxes turn one after another, which is the
+        // whole effect: a wall of drawers that notices where you are.
+        const inverse = root.getWorldMatrix().clone().invert();
+        for (const node of slotNodes) {
+          const local = Vector3.TransformCoordinates(camera.position, inverse).subtract(node.position);
+          const flat = Math.hypot(local.x, local.z);
+          const yaw = Math.atan2(local.x, local.z);
+          const pitch = -Math.atan2(local.y, Math.max(0.001, flat));
+          // Clamped: a drawer that swings right round to follow the camera
+          // stops being part of the cabinet.
+          const wantedY = Math.max(-0.4, Math.min(0.4, yaw));
+          const wantedX = Math.max(-0.3, Math.min(0.3, pitch));
+          node.rotation.y += (wantedY - node.rotation.y) * Math.min(1, dt * 6);
+          node.rotation.x += (wantedX - node.rotation.x) * Math.min(1, dt * 6);
+        }
+      }
       if (camera && anchor) {
         // Apparent size falls off with distance, so the world size rises with
         // it: the cabinet keeps roughly the same share of the screen from the
