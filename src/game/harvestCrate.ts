@@ -43,6 +43,8 @@ export interface HarvestCrate {
   put(items: readonly string[]): number;
   /** Put back a saved tally. */
   set(items: readonly string[]): void;
+  /** Take a particular thing out, for the container panel. */
+  takeItems(item: string, count: number): string[];
   dispose(): void;
 }
 
@@ -98,6 +100,18 @@ export function createHarvestCrate(options: HarvestCrateOptions): HarvestCrate {
       paint();
       return items.length;
     },
+    takeItems(item, count) {
+      const taken: string[] = [];
+      for (let n = 0; n < Math.max(0, Math.floor(count)); n++) {
+        const at = contents.lastIndexOf(item);
+        if (at < 0) break;
+        contents.splice(at, 1);
+        taken.push(item);
+      }
+      if (taken.length) paint();
+      return taken;
+    },
+
     set(items) {
       contents.length = 0;
       contents.push(...items);

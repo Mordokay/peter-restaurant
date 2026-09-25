@@ -19,8 +19,9 @@ import type { SoilLook } from "./soil.ts";
 export const BED_MODEL = "soil_bed";
 
 export interface SoilPatches {
-  /** Show this plot's ground in this state; "bare" takes the bed away. */
-  set(id: string, look: SoilLook, at: { x: number; z: number }): void;
+  /** Show this plot's ground in this state; "bare" takes the bed away. `turn`
+   *  is the quarter turn the player laid it at. */
+  set(id: string, look: SoilLook, at: { x: number; z: number }, turn?: number): void;
   /** Take a plot's bed away entirely. */
   remove(id: string): void;
   readonly shown: number;
@@ -59,7 +60,7 @@ export function createSoilPatches(options: {
   const groundY = options.groundY ?? 0.02;
   const model = catalog.models[BED_MODEL];
   const library = createMeshLibrary();
-  const shown = new Map<string, { mesh: AbstractMesh; look: SoilLook; flecks?: AbstractMesh }>();
+  const shown = new Map<string, { mesh: AbstractMesh; look: SoilLook; turn: number; flecks?: AbstractMesh }>();
 
   /** Compost on top of the bed: flecks of peel, leaf and shell scattered over
    *  the ridges. Fed ground has to be legible at a glance from across the farm,
@@ -98,22 +99,23 @@ export function createSoilPatches(options: {
 
   return {
     get shown() { return shown.size; },
-    set(id, look, at) {
+    set(id, look, at, turn = 0) {
       const existing = shown.get(id);
-      if (existing?.look === look) return;
+      if (existing?.look === look && existing.turn === turn) return;
       if (existing) { existing.flecks?.dispose(false, false); existing.mesh.dispose(false, false); shown.delete(id); }
       if (look === "bare") return;
       const source = sourceFor(look);
       if (!source) return;
       const instance = source.createInstance(`bed ${id}`);
       instance.parent = root;
-      // A quarter turn per plot, chosen by the plot's own name: hoed beds do not
-      // all run the same way, and a field of identical ridges reads as tiling.
-      instance.rotation.y = Math.floor(hash01(id, 0) * 4) * (Math.PI / 2);
+      // The quarter turn the player chose with R: hoed beds run the way they
+      // ploughed them, and a whole field can be laid in one direction or in a
+      // deliberate patchwork.
+      instance.rotation.y = (((turn % 4) + 4) % 4) * (Math.PI / 2);
       instance.position.set(at.x, groundY, at.z);
       instance.isPickable = false;
       options.shadows?.addShadowCaster(instance);
-      shown.set(id, { mesh: instance, look });
+      shown.set(id, { mesh: instance, look, turn });
       if (look === "fed" || look === "fedwet") {
         const flecks = sprinkleSource()?.createInstance(`bed flecks ${id}`);
         if (flecks) {

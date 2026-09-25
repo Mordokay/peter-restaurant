@@ -525,7 +525,7 @@
     "soda_can_2": {"name":"Soda Can 2","folder":"food/all_food","tags":["kitchen","food","ingredient","storage"],"size":[0.105,0.147,0.105],"voxels":250617,"parts":5,"thumb":1788657605,"rev":1789076674},
     "soda_cup_with_straw_1": {"name":"Soda Cup With Straw 1","folder":"food/all_food","tags":["kitchen","dining","outdoor","food","ingredient","tableware","decor"],"size":[0.146,0.279,0.146],"voxels":254303,"parts":3,"thumb":1788657605,"rev":1789076674},
     "soda_cup_with_straw_2": {"name":"Soda Cup With Straw 2","folder":"food/all_food","tags":["kitchen","dining","outdoor","food","ingredient","tableware","decor"],"size":[0.13,0.198,0.114],"voxels":256157,"parts":3,"thumb":1788657606,"rev":1789076674},
-    "soil_bed": {"name":"Tilled bed","folder":"authored/props","tags":["farm","ground"],"size":[1.072,0.067,1.072],"voxels":30114,"parts":1,"rev":1790288465},
+    "soil_bed": {"name":"Tilled bed","folder":"authored/props","tags":["farm","ground"],"size":[0.995,0.067,0.995],"voxels":26375,"parts":1,"rev":1790296737},
     "soup_spoon_elegant": {"name":"Soup Spoon Elegant","folder":"dining/tableware_elegant","tags":["dining","food","prep","tool"],"size":[0.036,0.021,0.152],"voxels":15745,"parts":3,"thumb":1788686612,"rev":1789076674},
     "spade": {"name":"Spade","folder":"farm/tools","tags":["farm","outdoor"],"size":[0.336,1.296,0.06],"voxels":249486,"parts":6,"thumb":1788686613,"rev":1789076674},
     "spatula_a": {"name":"Spatula A","folder":"kitchen/utensils","tags":["kitchen","prep","tool"],"size":[0.074,0.026,0.384],"voxels":17781,"parts":1,"thumb":1788657606,"rev":1789076674},

@@ -14,29 +14,39 @@ const areas: AreaRect[] = [
   { id: "tiny", zone: "farm", rect: [0, 0, 1, 1] },
 ];
 
-test("plots are derived from the farm parcels, centred, and never outside them", () => {
+test("plots are whole cells of one world grid, so beds tile edge to edge", () => {
   const sites = plotSites(areas);
-  assert.deepEqual([...new Set(sites.map((site) => site.area))], ["farm_a1", "farm_b1"],
+  assert.deepEqual([...new Set(sites.map((site) => site.area))], ["farm_a1", "farm_b1", "tiny"],
     "only farm-zone areas grow crops; the herb garden is its own thing");
 
   const parcel = sites.filter((site) => site.area === "farm_a1");
-  assert.equal(parcel.length, 25, "a 7 m parcel holds a 5x5 grid at 1.2 m spacing");
+  assert.equal(parcel.length, 49, "a 7 m parcel holds seven rows of seven whole metre cells");
   for (const site of parcel) {
     assert.ok(site.x >= -14 && site.x <= -7 && site.z >= -23 && site.z <= -16, `${site.id} is inside its parcel`);
+    // Every plot sits in the middle of a whole metre cell of the world grid.
+    assert.ok(Math.abs((site.x - 0.5) - Math.round(site.x - 0.5)) < 1e-9, `${site.id} is on the grid in x`);
+    assert.ok(Math.abs((site.z - 0.5) - Math.round(site.z - 0.5)) < 1e-9, `${site.id} is on the grid in z`);
   }
-  // Centred: the border is the same on both sides.
-  const xs = parcel.map((site) => site.x);
-  assert.ok(Math.abs((Math.min(...xs) - -14) - (-7 - Math.max(...xs))) < 1e-9, "the grid sits centred in the parcel");
-  const columns = [...new Set(xs)].sort((a, b) => a - b);
-  assert.equal(columns.length, 5);
-  assert.ok(Math.abs(columns[1]! - columns[0]! - PLOT_SPACING) < 1e-9, "columns stand one spacing apart");
 
-  // A parcel narrower than its own borders contributes nothing, rather than a
-  // plot hanging over the edge of the soil.
-  assert.equal(sites.filter((site) => site.area === "tiny").length, 0);
+  // Columns are exactly one spacing apart, which is what "touching" means.
+  const columns = [...new Set(parcel.map((site) => site.x))].sort((a, b) => a - b);
+  assert.ok(Math.abs(columns[1]! - columns[0]! - PLOT_SPACING) < 1e-9);
 
-  // Ids are stable and unique, because a save names plots by them.
+  // The two parcels are stacked; their plots continue the same lattice rather
+  // than each being centred in its own rectangle.
+  const all = [...new Set(sites.map((site) => site.z))].sort((a, b) => a - b);
+  for (let index = 1; index < all.length; index++) {
+    const gap = all[index]! - all[index - 1]!;
+    assert.ok(Math.abs(gap - PLOT_SPACING) < 1e-9 || gap > PLOT_SPACING,
+      "rows step by exactly one cell, or skip a border");
+  }
+
+  // A one-metre parcel holds exactly one bed, which is now the honest answer:
+  // a bed is a metre, and a metre fits.
+  assert.equal(sites.filter((site) => site.area === "tiny").length, 1);
+  // Ids are global and unique: a plot is a place in the world.
   assert.equal(new Set(sites.map((site) => site.id)).size, sites.length);
+  assert.match(sites[0]!.id, /^plot:-?\d+,-?\d+$/);
 });
 
 test("the plot you address is the nearest one in reach, and nothing when out of reach", () => {

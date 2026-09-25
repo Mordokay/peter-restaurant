@@ -7,7 +7,7 @@
 import { TransformNode, Vector3, type AbstractMesh, type Scene, type ShadowGenerator, type StandardMaterial } from "@babylonjs/core";
 import { createVoxelMesh } from "./voxelGeometry.ts";
 import { cellsFromAuthoredModel, type AuthoredVoxelCatalog } from "./voxelModel.ts";
-import { addScraps, emptyHeap, fullness, rot, takeCompost, type Heap } from "./compost.ts";
+import { SCRAPS_ITEM, addScraps, emptyHeap, fullness, rot, takeCompost, type Heap } from "./compost.ts";
 
 export const BIN_MODEL = "compost_bin";
 export const BIN_REACH = 1.5;
@@ -20,6 +20,9 @@ export interface CompostBin {
   put(scraps: number): number;
   /** Take the finished compost; returns how much came out. */
   take(): number;
+  /** Take loose scraps back out — the ones not yet in a batch. Anything already
+   *  rotting stays: you cannot un-rot a heap. */
+  takeScraps(count: number): string[];
   update(dt: number): void;
   restore(heap: Heap): void;
   dispose(): void;
@@ -88,6 +91,14 @@ export function createCompostBin(options: {
       paint();
       return result.taken;
     },
+    takeScraps(count) {
+      const taken = Math.max(0, Math.min(heap.loose, Math.floor(count)));
+      if (!taken) return [];
+      heap = { ...heap, loose: heap.loose - taken };
+      paint();
+      return Array.from({ length: taken }, () => SCRAPS_ITEM);
+    },
+
     update(dt) {
       const next = rot(heap, dt);
       if (next === heap) return;

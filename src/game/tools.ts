@@ -12,7 +12,7 @@
 import { cropById, isReady, isSpent, type PlantedCrop } from "./crops.ts";
 import { canSow, isWet, type Soil } from "./soil.ts";
 
-export type ToolId = "hoe" | "can" | "compost" | "mulch" | "sprinkler" | "seeder";
+export type ToolId = "hoe" | "can" | "compost" | "mulch" | "sprinkler" | "seeder" | "remove";
 
 export interface ToolSlot { kind: "tool"; tool: ToolId }
 export interface SeedSlot { kind: "seed"; crop: string }
@@ -23,7 +23,7 @@ export type Slot = ToolSlot | SeedSlot | HandSlot;
 
 export const EMPTY_HANDS: HandSlot = { kind: "hand" };
 
-export type FarmAction = "till" | "water" | "feed" | "sow" | "harvest" | "clear" | "place" | "lift" | "nothing";
+export type FarmAction = "till" | "water" | "feed" | "sow" | "harvest" | "clear" | "place" | "lift" | "remove" | "nothing";
 
 export interface ToolDefinition {
   id: ToolId;
@@ -44,6 +44,8 @@ export const tools: readonly ToolDefinition[] = [
   // half of the work happens while the player is somewhere else.
   { id: "sprinkler", name: "Sprinkler", verb: "water the beds around it", motion: "scatter" },
   { id: "seeder", name: "Seeder", verb: "re-sow the beds around it", motion: "scatter" },
+  // The undo of the whole farm: whatever was put here, this takes it back.
+  { id: "remove", name: "Remove", verb: "take back whatever is here", motion: "swing" },
 ];
 
 /** Tools that are a device the player puts down rather than swings. */
@@ -64,7 +66,10 @@ export function actionOf(slot: Slot, soil: Soil, planted: PlantedCrop | null, ca
   // A device on the plot is the only thing there is to do with that plot, in
   // hand or not: you pick it up, or you leave it alone. Bare hands lift it too,
   // since picking something up is what hands are for.
-  if (hasDevice) return slot.kind === "hand" || (slot.kind === "tool" && isDeviceTool(slot.tool)) ? "lift" : "nothing";
+  if (hasDevice) return slot.kind === "hand" || (slot.kind === "tool" && (isDeviceTool(slot.tool) || slot.tool === "remove")) ? "lift" : "nothing";
+  // The remover works down the stack: a plant first, then the bed under it, so
+  // one tool undoes a plot without the player choosing which half to undo.
+  if (slot.kind === "tool" && slot.tool === "remove") return planted || soil.tilled ? "remove" : "nothing";
   if (slot.kind === "hand") return actionWithStock(slot, soil, planted);
   if (slot.kind === "tool" && isDeviceTool(slot.tool)) {
     // A device stands in a bed, not on a path, and not on top of a plant.
@@ -113,6 +118,7 @@ export function refusalFor(slot: Slot, soil: Soil, planted: PlantedCrop | null, 
   if (slot.kind === "tool" && isDeviceTool(slot.tool)) {
     return planted ? "something is growing here" : "break the ground first";
   }
+  if (slot.kind === "tool" && slot.tool === "remove") return "nothing here to take back";
   if (slot.kind === "tool") {
     const cost = TOOL_COSTS[slot.tool];
     if (cost && !carrying.includes(cost)) return "no compost — tip scraps into the bin and wait";

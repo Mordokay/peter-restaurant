@@ -57,6 +57,8 @@ export interface PrepStation {
   /** Hand back only what no recipe here needs, which is what unjams a board
    *  that is full of the wrong thing. */
   trim(): string[];
+  /** Take a particular thing off the board, for the container panel. */
+  takeBack(item: string, count: number): string[];
   /** True when nothing on the board is any use here — the only state worth
    *  sweeping. A board short of one ingredient is working, not stuck. */
   idle(): boolean;
@@ -134,6 +136,18 @@ export function createPrepStation(options: PrepStationOptions): PrepStation {
       }
       if (surplus.length) paint();
       return surplus;
+    },
+
+    takeBack(item, count) {
+      const taken: string[] = [];
+      for (let n = 0; n < Math.max(0, Math.floor(count)); n++) {
+        const at = ingredients.lastIndexOf(item);
+        if (at < 0) break;
+        ingredients.splice(at, 1);
+        taken.push(item);
+      }
+      if (taken.length) paint();
+      return taken;
     },
 
     idle() {

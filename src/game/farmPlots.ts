@@ -29,7 +29,6 @@ import { addItems } from "./inventory.ts";
 import { createMeshLibrary } from "./meshLibrary.ts";
 import { createVoxelMesh } from "./voxelGeometry.ts";
 import { cellsFromAuthoredModel } from "./voxelModel.ts";
-import { hash01 } from "./hash.ts";
 import { createHarvestCrate, type HarvestCrate } from "./harvestCrate.ts";
 import { createSoilPatches } from "./soilPatches.ts";
 import { createCompostBin, type CompostBin } from "./compostBin.ts";
@@ -128,12 +127,14 @@ export interface Farm {
   at(x: number, z: number, slot: Slot, from?: { x: number; z: number }): PlotReading | null;
   /** The nearest plot to the player, for the keyboard fallback. */
   addressed(x: number, z: number, slot: Slot): PlotReading | null;
-  /** Use what is in hand on that plot. */
-  act(site: PlotSite, slot: Slot): ActResult | null;
+  /** Use what is in hand on that plot, laid at `turn` quarter turns. */
+  act(site: PlotSite, slot: Slot, turn?: number): ActResult | null;
   /** The ground's state at a plot, for the soil renderer. */
   soilAt(id: string): Soil;
   /** Devices standing on the farm. */
   readonly devices: Readonly<Record<string, Device>>;
+  /** The plots a device on this plot would work — for showing its reach. */
+  covering(site: PlotSite): PlotSite[];
   /** Plots a device pass worked since the last frame — for the water and the
    *  seed to be thrown about where it happened. */
   takeDeviceWork(): { site: PlotSite; job: "water" | "sow" }[];
@@ -258,7 +259,7 @@ export function createFarm(options: FarmOptions): Farm {
     const instance = source.createInstance(`device ${site.id}`);
     instance.parent = root;
     instance.position.set(site.x, groundY, site.z);
-    instance.rotation.y = hash01(site.id, 3) * Math.PI * 2;
+    instance.rotation.y = (device.turn ?? 0) * (Math.PI / 2);
     instance.isPickable = false;
     options.shadows?.addShadowCaster(instance);
     deviceMeshes.set(site.id, instance);
@@ -280,7 +281,7 @@ export function createFarm(options: FarmOptions): Farm {
         const job = jobFor(device, soil, plots[site.id] ?? null);
         if (job === "water") {
           soils[site.id] = waterSoil(soil);
-          patches.set(site.id, lookOf(soils[site.id]!), site);
+          patches.set(site.id, lookOf(soils[site.id]!), site, soils[site.id]!.turn);
           worked.push({ site, job });
         } else if (job === "sow" && device.crop) {
           const crop = cropById(device.crop);
@@ -301,7 +302,7 @@ export function createFarm(options: FarmOptions): Farm {
     for (const [id, soil] of Object.entries(soils)) {
       const site = byId.get(id);
       if (!site) continue;
-      if (near(site, focus, RENDER_DISTANCE)) patches.set(id, lookOf(soil), site);
+      if (near(site, focus, RENDER_DISTANCE)) patches.set(id, lookOf(soil), site, soil.turn);
       else if (!near(site, focus, RETIRE_DISTANCE)) patches.remove(id);
     }
     for (const id of Object.keys(devices)) {
@@ -388,6 +389,7 @@ export function createFarm(options: FarmOptions): Farm {
 
     soilAt(id) { return soils[id] ?? bareSoil(); },
     get devices() { return devices; },
+    covering(site) { return covered(site, sites); },
     takeDeviceWork() {
       const worked = deviceWork;
       deviceWork = [];
@@ -406,20 +408,21 @@ export function createFarm(options: FarmOptions): Farm {
       return read(site, slot, { x, z });
     },
 
-    act(site, slot) {
+    act(site, slot, turn = 0) {
       if (!byId.has(site.id)) return null;
       const planted = plots[site.id] ?? null;
       const soil = soils[site.id] ?? bareSoil();
       const action = actionOf(slot, soil, planted, inventory, Boolean(devices[site.id]));
       const done = (items = 0, crop: string | null = null): ActResult => {
-        const look = lookOf(soils[site.id] ?? bareSoil());
-        patches.set(site.id, look, site);
+        const soilNow = soils[site.id] ?? bareSoil();
+        const look = lookOf(soilNow);
+        patches.set(site.id, look, site, soilNow.turn);
         return { action, site, items, crop, look };
       };
 
       switch (action) {
         case "till":
-          soils[site.id] = till(soil);
+          soils[site.id] = till(soil, turn);
           return done();
         case "water":
           soils[site.id] = waterSoil(soil);
@@ -438,7 +441,8 @@ export function createFarm(options: FarmOptions): Farm {
         }
         case "place": {
           if (slot.kind !== "tool") return done();
-          devices[site.id] = { kind: slot.tool as DeviceKind, plot: site.id, ...(slot.tool === "seeder" && lastSown ? { crop: lastSown } : {}) };
+          devices[site.id] = { kind: slot.tool as DeviceKind, plot: site.id, turn,
+                               ...(slot.tool === "seeder" && lastSown ? { crop: lastSown } : {}) };
           showDevice(site);
           return done();
         }
@@ -458,6 +462,22 @@ export function createFarm(options: FarmOptions): Farm {
           plot.sow();
           plots[site.id] = plot.state!;
           return done(0, crop.id);
+        }
+        case "remove": {
+          // A plant comes out first and leaves its trimmings; a bare bed is
+          // simply turned back into ground. Two presses to undo a planted plot,
+          // which is one more than it takes to make one and exactly enough to
+          // make a mis-click cheap.
+          if (planted) {
+            const pulled = planted.crop;
+            drop(site.id);
+            retiring.delete(site.id);
+            addItems(inventory, SCRAPS_ITEM, SCRAPS_PER_SPENT_PLANT, CARRY_CAPACITY);
+            return done(0, pulled);
+          }
+          delete soils[site.id];
+          patches.remove(site.id);
+          return done();
         }
         case "clear": {
           const cleared = planted?.crop ?? null;
@@ -508,7 +528,7 @@ export function createFarm(options: FarmOptions): Farm {
         // Ground drying out is a visible event, not a number: the bed lightens
         // the moment the last of the water goes.
         const site = byId.get(id);
-        if (site && lookOf(before) !== lookOf(dried)) patches.set(id, lookOf(dried), site);
+        if (site && lookOf(before) !== lookOf(dried)) patches.set(id, lookOf(dried), site, dried.turn);
       }
       for (const [id, planted] of Object.entries(plots)) {
         const rate = growthRate(soils[id] ?? bareSoil());

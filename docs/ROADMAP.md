@@ -12,8 +12,12 @@ prep → plate**. A rigged farmer does the work with a tool in his hand and the 
 Soil holds water and fertility, plants bank only watered time, compost is made from the kitchen's own
 scraps, and sprinklers and seeders do the boring half while the player is elsewhere.
 
-Not built: money, customers, days, staff, inventory beyond an armful, audio, weather, and a UI that is
-anything but HTML over the top of the world.
+The farm is grid-based and reversible: beds tile edge to edge on a one-metre world lattice, R turns what
+you are about to place, a ghost of it stands in the cell first, a remove tool takes anything back, and
+right-clicking a crate, bin or counter opens it so a particular thing can be taken out.
+
+Not built: money, customers, days, staff, inventory beyond an armful, audio, weather, drag-and-drop or
+sorting in containers, and a UI that is anything but HTML over the top of the world.
 
 **The honest summary: the farm is a game and the restaurant is a diorama.** One dish exists, nobody eats
 it, and nothing is worth anything. That gap is what decides the order below.

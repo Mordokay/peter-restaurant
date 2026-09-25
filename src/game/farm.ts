@@ -21,12 +21,33 @@ export interface PlotSite {
   z: number;
 }
 
-/** Metres between plants, and the bare border left around a parcel. Spacing is
- *  set by the widest ripe plant (a cabbage spans ~0.5 m at game scale) plus room
- *  to walk between rows, because a farm the player cannot walk into is a
- *  picture, not a place. */
-export const PLOT_SPACING = 1.2;
-export const PLOT_MARGIN = 1.0;
+/** The world is a one-metre grid, and a plot is one cell of it.
+ *
+ *  One metre rather than the old 1.2, and snapped to the WORLD rather than
+ *  centred in each parcel: beds now tile edge to edge, across parcel boundaries
+ *  as well as within them, which is what lets the player lay a solid field
+ *  instead of a polka-dot pattern. Everything placed on the ground shares this
+ *  lattice, so a bed, a sprinkler and a plant can never be half a cell out from
+ *  each other. */
+export const PLOT_SPACING = 1;
+/** Bare border kept inside a parcel's edge, so a bed never overhangs the soil. */
+export const PLOT_MARGIN = 0.5;
+
+/** The grid cell a world point falls in. */
+export function cellOf(x: number, z: number): { gx: number; gz: number } {
+  return { gx: Math.floor(x / PLOT_SPACING), gz: Math.floor(z / PLOT_SPACING) };
+}
+
+/** The middle of a cell, which is where anything standing in it stands. */
+export function cellCentre(gx: number, gz: number): { x: number; z: number } {
+  return { x: (gx + 0.5) * PLOT_SPACING, z: (gz + 0.5) * PLOT_SPACING };
+}
+
+/** A plot's stable id. Global, because a plot is a place in the WORLD and not a
+ *  place in a parcel: re-drawing a parcel must not rename the ground inside it. */
+export function plotId(gx: number, gz: number): string {
+  return `plot:${gx},${gz}`;
+}
 
 export interface AreaRect {
   id: string;
@@ -36,24 +57,27 @@ export interface AreaRect {
 }
 
 /** Every plot of every farm area, in a stable order. */
-export function plotSites(areas: readonly AreaRect[], options: { spacing?: number; margin?: number; zone?: string } = {}): PlotSite[] {
-  const spacing = options.spacing ?? PLOT_SPACING;
+export function plotSites(areas: readonly AreaRect[], options: { margin?: number; zone?: string } = {}): PlotSite[] {
   const margin = options.margin ?? PLOT_MARGIN;
   const zone = options.zone ?? "farm";
   const sites: PlotSite[] = [];
+  const seen = new Set<string>();
   for (const area of areas) {
     if (area.zone !== zone) continue;
     const [x, z, width, depth] = area.rect;
-    const cols = Math.floor((width - margin * 2) / spacing) + 1;
-    const rows = Math.floor((depth - margin * 2) / spacing) + 1;
-    if (cols < 1 || rows < 1) continue;
-    // Centre the grid in the parcel, so the border is even on both sides
-    // whatever the parcel's size.
-    const left = x + (width - (cols - 1) * spacing) / 2;
-    const top = z + (depth - (rows - 1) * spacing) / 2;
-    for (let row = 0; row < rows; row++) {
-      for (let col = 0; col < cols; col++) {
-        sites.push({ id: `${area.id}:${col},${row}`, area: area.id, x: left + col * spacing, z: top + row * spacing });
+    const first = cellOf(x + margin, z + margin);
+    const last = cellOf(x + width - margin, z + depth - margin);
+    for (let gz = first.gz; gz <= last.gz; gz++) {
+      for (let gx = first.gx; gx <= last.gx; gx++) {
+        const centre = cellCentre(gx, gz);
+        // Whole cells only: half a bed hanging over the path is not a plot.
+        if (centre.x - PLOT_SPACING / 2 < x || centre.x + PLOT_SPACING / 2 > x + width) continue;
+        if (centre.z - PLOT_SPACING / 2 < z || centre.z + PLOT_SPACING / 2 > z + depth) continue;
+        const id = plotId(gx, gz);
+        // Parcels can abut; a cell belongs to whichever claims it first.
+        if (seen.has(id)) continue;
+        seen.add(id);
+        sites.push({ id, area: area.id, x: centre.x, z: centre.z });
       }
     }
   }

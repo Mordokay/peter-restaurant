@@ -61,3 +61,17 @@ html, body, #world { margin: 0; height: 100%; overflow: hidden; background: #93a
 /* The work bar: only ever visible while an action is actually running. */
 .farm-work { position: absolute; width: 92px; height: 9px; transform: translate(-50%, -50%); border: 1px solid #ffffff44; border-radius: 999px; background: #10181580; overflow: hidden; pointer-events: none; }
 .farm-work i { display: block; height: 100%; width: 0; border-radius: 999px; transition: width .06s linear; }
+
+/* Container panel: what is inside a crate, a bin or a counter. Plain HTML for
+   now; the roadmap moves the whole UI into world-space voxels. */
+.container-panel { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); width: min(300px, calc(100vw - 28px)); padding: 12px; border: 1px solid #ffffff22; border-radius: 14px; background: #1d2724f2; color: #eef3ea; backdrop-filter: blur(10px); font-size: 12px; }
+.container-panel header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.container-panel header strong { flex: 1; font-size: 13px; }
+.container-panel button { padding: 3px 8px; border: 1px solid #ffffff2e; border-radius: 8px; background: #ffffff10; color: inherit; font: inherit; cursor: pointer; }
+.container-panel button:hover { background: #ffffff1f; }
+.container-row { display: flex; align-items: center; gap: 6px; padding: 4px 0; border-top: 1px solid #ffffff14; }
+.container-name { flex: 1; }
+.container-count { color: #b9dda8; font-variant-numeric: tabular-nums; }
+.container-note { color: #8fa598; font-size: 11px; }
+.container-empty { color: #8fa598; margin: 6px 0; }
+.container-panel footer { margin-top: 8px; }

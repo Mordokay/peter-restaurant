@@ -50,6 +50,7 @@ const ACTION_TEXT: Record<FarmAction, string> = {
   harvest: "click to pick — hold to pick a row",
   clear: "click to clear it",
   place: "click to set it down here",
+  remove: "click to take it back",
   lift: "click to pick it up",
   nothing: "",
 };
@@ -58,7 +59,7 @@ const ACTION_TEXT: Record<FarmAction, string> = {
  *  earth, water, dark compost, straw mulch. */
 const TOOL_COLOUR: Record<string, string> = {
   hoe: "#8a6a44", can: "#5b9fd6", compost: "#4a3a27", mulch: "#c9a765",
-  sprinkler: "#b87a4a", seeder: "#4f7a4a",
+  sprinkler: "#b87a4a", seeder: "#4f7a4a", remove: "#c25a4a",
 };
 
 function colourOf(slot: Slot): string {

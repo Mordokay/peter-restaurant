@@ -17,6 +17,10 @@ export type Fertiliser = "none" | "compost" | "mulch";
 export interface Soil {
   /** Broken with the hoe. Nothing can be sown in unbroken ground. */
   tilled: boolean;
+  /** Quarter turns the bed was laid at, 0-3. The player chooses it with R
+   *  before breaking the ground, so a field can be ploughed in rows that run
+   *  the way they want them to rather than the way a hash decided. */
+  turn?: number;
   /** Seconds of moisture left. Growth stops at zero. */
   wet: number;
   fertiliser: Fertiliser;
@@ -36,11 +40,11 @@ export function bareSoil(): Soil {
   return { tilled: false, wet: 0, fertiliser: "none" };
 }
 
-export function till(soil: Soil): Soil {
+export function till(soil: Soil, turn = 0): Soil {
   // Tilling turns the bed over: it does not water it, and it loses whatever was
   // dug in last time. A plot is only ever tilled while it is empty, so nothing
   // growing is ever disturbed by this.
-  return { tilled: true, wet: soil.wet, fertiliser: "none" };
+  return { tilled: true, wet: soil.wet, fertiliser: "none", turn: ((turn % 4) + 4) % 4 };
 }
 
 export function waterSoil(soil: Soil): Soil {

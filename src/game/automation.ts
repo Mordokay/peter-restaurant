@@ -24,6 +24,8 @@ export interface Device {
   plot: string;
   /** For a seeder: what it puts in the ground. */
   crop?: string;
+  /** Quarter turns it was set down at. */
+  turn?: number;
 }
 
 /** Seconds between passes. Slower than a player would be, on purpose: a device

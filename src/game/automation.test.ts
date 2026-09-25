@@ -1,22 +1,28 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { advance, cropById, harvest, plant } from "./crops.ts";
-import { plotSites, type AreaRect } from "./farm.ts";
+import { cellOf, plotId, plotSites, type AreaRect } from "./farm.ts";
 import { bareSoil, till, waterSoil } from "./soil.ts";
 import { blocksSeeder, covered, describeDevice, jobFor, type Device } from "./automation.ts";
 
 const areas: AreaRect[] = [{ id: "farm_a1", zone: "farm", rect: [-14, -23, 7, 7] }];
 const sites = plotSites(areas);
-const middle = sites.find((site) => site.id === "farm_a1:2,2")!;
+/** A plot with neighbours on all four sides, named the way the world names it. */
+const middleCell = cellOf(-11.5, -20.5);
+const middle = sites.find((site) => site.id === plotId(middleCell.gx, middleCell.gz))!;
 
 test("a device covers the four beds around it, and not the corners", () => {
   const around = covered(middle, sites);
   assert.equal(around.length, 4);
-  assert.deepEqual(around.map((site) => site.id).sort(), ["farm_a1:1,2", "farm_a1:2,1", "farm_a1:2,3", "farm_a1:3,2"]);
+  assert.deepEqual(around.map((site) => site.id).sort(), [
+    plotId(middleCell.gx - 1, middleCell.gz), plotId(middleCell.gx + 1, middleCell.gz),
+    plotId(middleCell.gx, middleCell.gz - 1), plotId(middleCell.gx, middleCell.gz + 1),
+  ].sort());
   assert.ok(!around.some((site) => site.id === middle.id), "and never itself");
 
   // A device in the corner of a parcel covers only what is there.
-  assert.equal(covered(sites.find((site) => site.id === "farm_a1:0,0")!, sites).length, 2);
+  const corner = sites.find((site) => site.x === Math.min(...sites.map((s) => s.x)) && site.z === Math.min(...sites.map((s) => s.z)))!;
+  assert.equal(covered(corner, sites).length, 2);
 });
 
 test("a sprinkler waters beds, not paths, and not what is already wet", () => {

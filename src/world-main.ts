@@ -31,6 +31,12 @@ import { BIN_MODEL } from "./game/compostBin";
 import { COMPOST_ITEM, SCRAPS_ITEM, describeHeap } from "./game/compost";
 import { DEVICE_MODELS } from "./game/automation";
 import { createClipPlayer, createVoxelRig, socketNode } from "./game/voxelRig";
+import { createPlacementGhost } from "./game/placementGhost";
+import { createRangeHighlight } from "./game/rangeHighlight";
+import { createContainerPanel, type ContainerRow } from "./container-panel";
+import { groupItems } from "./game/inventory";
+import { PLOT_SPACING } from "./game/farm";
+import { cropById } from "./game/crops";
 
 /** The player's own model, and the tools he carries. */
 const FARMER_MODEL = "farmer";
@@ -66,7 +72,7 @@ document.querySelector<HTMLElement>("#world")!.innerHTML = `
       <button data-act="night" id="world-night" title="Jump the clock to evening">🌙 Evening</button>
       <button data-act="frame" title="Look at the whole site">🖼 Frame all</button>
     </div>
-    <div class="world-hint">W A S D walk · Q / E turn the camera · F frames the site · wheel zooms · 1-9 or shift+wheel picks a tool · click the ground to work it · hold to sow or pick a row</div>
+    <div class="world-hint">W A S D walk · Q / E turn the camera · F frames the site · wheel zooms · 1-9 or shift+wheel picks a tool · R turns what you are placing · click the ground to work it · right-click a crate, bin or counter to open it</div>
   </div>
   <div class="world-loading" id="world-loading">
     <h1>🍅 Building the compound</h1>
@@ -347,7 +353,7 @@ function showHeldTool(): void {
 /** Which clip a piece of work looks like. */
 const ACTION_CLIP: Record<string, string> = {
   till: "swing", clear: "swing", water: "pour", feed: "scatter", sow: "scatter", harvest: "pick",
-  place: "pick", lift: "pick",
+  place: "pick", lift: "pick", remove: "swing",
 };
 
 const farmHud = createFarmHud(document.querySelector<HTMLElement>("#world")!);
@@ -356,6 +362,25 @@ showHeldTool();
 // The plot under the player's hand, marked on the ground. A world marker rather
 // than a floating label: the rulebook allows labels for selection, and this is
 // the selection — the bar only says what the soil cannot.
+// The preview: the thing itself, translucent, where it would go. R turns it.
+const ghost = createPlacementGhost({ scene, catalog, parent: level.root });
+let placeTurn = 0;
+
+/** Which model previews the work the held slot would do here. Only placements
+ *  get a ghost — watering an existing bed has nothing to preview, and a ghost
+ *  over every action would be noise. */
+function ghostModelFor(reading: ReturnType<typeof farm.addressed>): string | null {
+  if (!reading || !reading.inReach) return null;
+  const slot = farmHud.slot;
+  if (reading.action === "till") return BED_MODEL;
+  if (reading.action === "place" && slot.kind === "tool") return DEVICE_MODELS[slot.tool as "sprinkler" | "seeder"] ?? null;
+  if (reading.action === "sow" && slot.kind === "seed") return cropById(slot.crop)?.stages.seedling ?? null;
+  return null;
+}
+
+// Point at a device and it shows you what it reaches.
+const rangeHighlight = createRangeHighlight({ scene, parent: level.root, size: PLOT_SPACING });
+
 const plotMarker = MeshBuilder.CreateTorus("plot marker", { diameter: 0.86, thickness: 0.05, tessellation: 20 }, scene);
 const plotMarkerMaterial = new StandardMaterial("plot marker", scene);
 plotMarkerMaterial.disableLighting = true;
@@ -370,7 +395,7 @@ plotMarker.setEnabled(false);
 // the key would do nothing here.
 const MARKER_COLOURS: Record<string, string> = {
   till: "#c08a58", water: "#5b9fd6", feed: "#7d6b4a", sow: "#9fd78a",
-  harvest: "#f3c55a", clear: "#d98b6b", nothing: "#6f8377",
+  harvest: "#f3c55a", clear: "#d98b6b", remove: "#c25a4a", nothing: "#6f8377",
 };
 /** Out of arm's reach: the plot is still named, but the ring says why not. */
 const OUT_OF_REACH = "#b45a4a";
@@ -403,6 +428,14 @@ function refreshFarm(): void {
   farmHud.render(addressed, farm.inventory, atCrate ? farm.crate!.contents.length : null,
     atPrep ? { dish: atPrep.dish, working: atPrep.working, board: atPrep.ingredients } : null);
   plotMarker.setEnabled(Boolean(addressed));
+  // A device under the cursor lights up the beds it works, in its own colour:
+  // water blue for a sprinkler, seed green for a seeder.
+  if (addressed?.device) {
+    rangeHighlight.show(farm.covering(addressed.site), addressed.device.kind === "sprinkler" ? "#5b9fd6" : "#9fd78a");
+  } else rangeHighlight.hide();
+  const preview = ghostModelFor(addressed);
+  if (preview && addressed) ghost.show(preview, addressed.site, placeTurn);
+  else ghost.hide();
   if (!addressed) return;
   plotMarker.position.set(addressed.site.x, 0.06, addressed.site.z);
   plotMarkerMaterial.emissiveColor = Color3.FromHexString(
@@ -530,7 +563,7 @@ function actOnPlot(viaKey = false): void {
   player.rotation.y = Math.atan2(site.x - player.position.x, site.z - player.position.z);
 
   const land = (): void => {
-    const result = farm.act(site, slot);
+    const result = farm.act(site, slot, placeTurn);
     if (!result) return;
     showFarmCue(result);
     if (result.items && result.crop) {
@@ -566,6 +599,81 @@ function floatGain(text: string, at: { x: number; z: number }): void {
   farmHud.gain(text, screen.x, screen.y);
 }
 
+// ── containers: right-click one to see inside it ──────────────────────────────
+// Left-click works a thing; right-click opens it. The crate, the bin and the
+// counter all show their contents in the world already — this is for taking a
+// particular thing back OUT, which a heap of vegetables cannot offer by itself.
+const containerPanel = createContainerPanel(document.querySelector<HTMLElement>("#world")!);
+
+/** Rows for the crate: what it holds, grouped. */
+function crateRows(): ContainerRow[] {
+  const held = groupItems([...(farm.crate?.contents ?? [])]);
+  return Object.entries(held).map(([item, count]) => ({ item, count: count ?? 0 }));
+}
+
+/** Rows for the compost bin: what can come out, and what is still rotting. */
+function binRows(): ContainerRow[] {
+  const heap = farm.bin?.heap;
+  if (!heap) return [];
+  const rows: ContainerRow[] = [];
+  if (heap.ready) rows.push({ item: COMPOST_ITEM, count: heap.ready });
+  if (heap.loose) rows.push({ item: SCRAPS_ITEM, count: heap.loose, note: "not enough for a batch yet" });
+  if (heap.rotting.length) {
+    rows.push({ item: "rotting", count: heap.rotting.length, takeable: false, label: "Batches rotting",
+                note: `next in ${Math.ceil(Math.min(...heap.rotting.map((batch) => batch.left)))}s` });
+  }
+  return rows;
+}
+
+function boardRows(): ContainerRow[] {
+  if (!prepStation) return [];
+  const rows: ContainerRow[] = Object.entries(groupItems([...prepStation.ingredients]))
+    .map(([item, count]) => ({ item, count: count ?? 0, note: "on the board" }));
+  if (prepStation.dish) rows.push({ item: prepStation.dish, count: 1, note: "on the plate" });
+  return rows;
+}
+
+/** Whatever the player is standing at, as something that can be opened. */
+function containerAtPlayer(): { title: string; rows: () => ContainerRow[]; take: (item: string, count: number) => number } | null {
+  const px = player.position.x;
+  const pz = player.position.z;
+  if (prepStation?.inReach(px, pz)) {
+    return {
+      title: "Prep counter", rows: boardRows,
+      take: (item, count) => {
+        if (prepStation!.dish === item) { const lifted = prepStation!.take(); if (lifted) { farm.give([lifted.dish, ...Array.from({ length: lifted.scraps }, () => SCRAPS_ITEM)]); return 1; } return 0; }
+        return farm.give(prepStation!.takeBack(item, count));
+      },
+    };
+  }
+  if (farm.bin?.inReach(px, pz)) {
+    return {
+      title: "Compost bin", rows: binRows,
+      take: (item, count) => {
+        if (item === COMPOST_ITEM) { const taken = Math.min(count, farm.bin!.take()); return farm.give(Array.from({ length: taken }, () => COMPOST_ITEM)); }
+        if (item === SCRAPS_ITEM) return farm.give(farm.bin!.takeScraps(count));
+        return 0;
+      },
+    };
+  }
+  if (farm.crate?.inReach(px, pz)) {
+    return { title: "Harvest crate", rows: crateRows, take: (item, count) => farm.give(farm.crate!.takeItems(item, count)) };
+  }
+  return null;
+}
+
+function openContainer(): boolean {
+  const container = containerAtPlayer();
+  if (!container) return false;
+  containerPanel.show({
+    title: container.title,
+    rows: container.rows(),
+    onTake: (item, count) => { const moved = container.take(item, count); saveEverything(); refreshFarm(); return moved; },
+    refresh: container.rows,
+  });
+  return true;
+}
+
 // ── mouse: point at a plot, click to work it ──────────────────────────────────
 // Measured against the canvas rather than read from offsetX: offset is relative
 // to whatever element the event happened to land on, and it is absent entirely
@@ -586,6 +694,10 @@ let heldButton: number | null = null;
 let repeatIn = 0;
 canvas.addEventListener("pointerdown", (event) => {
   if (build.active || event.button > 2) return;
+  // Right-click opens whatever the player is standing at, and does nothing at
+  // all when they are standing at nothing: a menu that opens over empty soil is
+  // a menu in the way.
+  if (event.button === 2) { openContainer(); return; }
   heldButton = event.button;
   repeatIn = REPEAT_SECONDS * 1.6;   // the first repeat waits a little longer
   refreshFarm();
@@ -640,6 +752,10 @@ window.addEventListener("keydown", (event) => {
   if (key >= "1" && key <= "9") { farmHud.select(Number(key) - 1); showHeldTool(); }
   if (key === "0") { farmHud.select(9); showHeldTool(); }
   if (key === "tab") { event.preventDefault(); farmHud.cycle(event.shiftKey ? -1 : 1); showHeldTool(); }
+  // R turns whatever is about to be placed, which the ghost shows immediately.
+  if (key === "r" && !event.repeat) { placeTurn = (placeTurn + 1) % 4; refreshFarm(); }
+  if (key === "e" && !event.repeat) openContainer();
+  if (key === "escape") containerPanel.close();
 });
 window.addEventListener("keyup", (event) => keys.delete(event.key.toLowerCase()));
 window.addEventListener("blur", () => keys.clear());
@@ -748,7 +864,7 @@ let working: { site: { x: number; z: number }; colour: string } | null = null;
 /** Colour of the filling bar, by the work being done. */
 const WORK_COLOURS: Record<string, string> = {
   till: "#c08a58", water: "#5b9fd6", feed: "#7d6b4a", sow: "#9fd78a", harvest: "#f3c55a", clear: "#d98b6b",
-  place: "#b87a4a", lift: "#b87a4a",
+  place: "#b87a4a", lift: "#b87a4a", remove: "#c25a4a",
 };
 
 /** True while the farmer is committed to a swing, a pour or a pick. */
@@ -766,20 +882,79 @@ function faceTowards(heading: number, dt: number): void {
   player.rotation.y += delta * Math.min(1, dt * 14);
 }
 
-/** The farmer looks where the mouse is. It is the hand that does the work, so
- *  it is the thing worth watching — and it makes reach legible: you can see
- *  what you are about to hit before you click. While walking with no pointer on
- *  the ground he faces his own direction of travel instead. */
+/** Heights the farmer looks AT, rather than the height his eyes are at. */
+const EYE_HEIGHT = 1.42;
+/** Where the mouse is assumed to be when it is not over anything: level with
+ *  the player, a little way out. A cursor over empty ground is not a request to
+ *  stare at the floor. */
+const IDLE_LOOK_HEIGHT = 1.25;
+
+/** What the farmer is looking at, in three dimensions.
+ *
+ *  The ground point under the cursor is the wrong answer and looks it: the
+ *  camera is tilted, so the ray lands metres past whatever the player is
+ *  pointing at and the farmer ends up staring at his own feet's future. What he
+ *  should look at is the THING — the middle of the plot he is about to break,
+ *  the board at chest height when he is working at it, the bin he is tipping
+ *  scraps into — and when there is no thing, a point at his own eye level in
+ *  the direction the mouse is pointing. */
+function lookTarget(): Vector3 | null {
+  const px = player.position.x;
+  const pz = player.position.z;
+  // Anything he is standing at wins over anything he is pointing at: he is
+  // working at the counter, and the counter is what he is looking at.
+  if (prepStation?.inReach(px, pz)) {
+    const at = prepStation.root.position;
+    // The board and the plate, not the feet of the table.
+    return new Vector3(at.x, at.y + 0.95, at.z);
+  }
+  if (farm.bin?.inReach(px, pz)) {
+    const at = farm.bin.root.position;
+    return new Vector3(at.x, at.y + 0.55, at.z);
+  }
+  if (farm.crate?.inReach(px, pz)) {
+    const at = farm.crate.position;
+    return new Vector3(at.x, at.y + 0.25, at.z);
+  }
+  // A plot under the cursor: the middle of the cell, just above the soil, so a
+  // farmer about to break ground is looking at the ground he will break.
+  if (addressed) {
+    const height = addressed.planted ? 0.45 : 0.12;
+    return new Vector3(addressed.site.x, height, addressed.site.z);
+  }
+  // Nothing in particular: take the cursor at his own eye level rather than at
+  // the floor, which is what the player means by "looking at the mouse".
+  const level = pointerAtHeight(IDLE_LOOK_HEIGHT);
+  if (level) return level;
+  return moveHeading === null ? null
+    : new Vector3(px + Math.sin(moveHeading) * 3, IDLE_LOOK_HEIGHT, pz + Math.cos(moveHeading) * 3);
+}
+
+/** Where the cursor's ray crosses a horizontal plane at this height. */
+function pointerAtHeight(height: number): Vector3 | null {
+  if (!pointer) return null;
+  const ray = scene.createPickingRay(pointer.x, pointer.y, Matrix.Identity(), camera);
+  const plane = Plane.FromPositionAndNormal(new Vector3(0, height, 0), Vector3.Up());
+  const distance = ray.intersectsPlane(plane);
+  if (distance === null || distance < 0) return null;
+  return ray.origin.add(ray.direction.scale(distance));
+}
+
+/** Turn the body towards what he is looking at, and tilt the head onto it. The
+ *  head is a separate joint doing a separate job: the body says where he is
+ *  working, the head says what he is looking at while he works. */
+let headPitch = 0;
 function faceMouse(dt: number): void {
   if (busy()) return;
-  const ground = groundUnderPointer();
-  if (ground) {
-    const dx = ground.x - player.position.x;
-    const dz = ground.z - player.position.z;
-    if (dx * dx + dz * dz > 0.04) faceTowards(Math.atan2(dx, dz), dt);
-    return;
-  }
-  if (moveHeading !== null) faceTowards(moveHeading, dt);
+  const target = lookTarget();
+  if (!target) return;
+  const dx = target.x - player.position.x;
+  const dz = target.z - player.position.z;
+  const flat = Math.hypot(dx, dz);
+  if (flat > 0.2) faceTowards(Math.atan2(dx, dz), dt);
+  // Down at the soil, up at nothing much: clamped so he never cranes.
+  const wanted = Math.max(-0.62, Math.min(0.45, Math.atan2(EYE_HEIGHT - target.y, Math.max(0.35, flat))));
+  headPitch += (wanted - headPitch) * Math.min(1, dt * 10);
 }
 
 function driveFarmer(dt: number): void {
@@ -799,6 +974,10 @@ function driveFarmer(dt: number): void {
     if (farmerClips.clip?.id !== wanted || !farmerClips.playing) farmerClips.play(wanted, { loop: true });
   }
   farmerClips.update(dt);
+  // After the clip, not before: the clip poses every joint from rest, so a look
+  // applied first would be overwritten the moment he moved.
+  const head = farmer?.parts.get("head");
+  if (head) head.node.rotation.x += headPitch;
 }
 
 const fmt = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 0 });
@@ -848,6 +1027,7 @@ engine.runRenderLoop(() => {
   farm.update(dt, player.position);
   tickHeldPointer(dt);
   prepStation?.update(dt);
+  rangeHighlight.update(dt);
   rigTest?.update(dt);
   cropTest?.update(dt);
   particles.update(dt);

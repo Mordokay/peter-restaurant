@@ -460,6 +460,19 @@ this loop and the player already knows it:
   the soil that grows the next crop. That loop is what makes a farm-to-table restaurant one system rather
   than two, and it is why the compost tool spends a real item out of the player's hands.
 
+- **The world is a one-metre grid and everything placed shares it.** Beds tile edge to edge across parcel
+  boundaries, so a player can lay a solid field; a plot's id is its cell in the WORLD, so re-drawing a
+  parcel never renames the ground inside it. R turns whatever is about to be placed and a translucent
+  ghost of the thing itself — the bed, the sprinkler, the seedling — stands in the cell before the click.
+  A preview answers which cell, which way round and how big; a coloured ring answers none of them.
+- **The farmer looks at the THING, not at the floor under the cursor.** The camera is tilted, so the
+  cursor's ground ray lands metres past whatever is being pointed at. He looks at the middle of the plot,
+  at the board when he is working at it, at the bin he is tipping into — and at his own eye level in the
+  cursor's direction when there is nothing in particular. His head is a separate joint from his body: the
+  body says where he is working, the head says what he is watching while he works.
+- **Anything placed can be taken back.** One tool undoes a plot: the plant first, then the bed under it.
+  Two presses to undo what took two to make, which is exactly enough to make a mis-click cheap.
+
 - **Late game must not be a click grind.** The replanting phase is where farming sims break down — the
   answer is automation, not faster clicking. The first of it: a sprinkler waters the four beds around it
   and a seeder re-sows them, both on their own clock, both working whether or not the player is watching.
@@ -758,6 +771,8 @@ travels). Current sources:
 | `src/game/soil.ts`, `tools.ts` | Tilling, watering, fertiliser, and what the held tool does | Active foundation |
 | `src/game/compost.ts`, `compostBin.ts` | Kitchen scraps rotting down into the farm's fertility | Active foundation |
 | `src/game/automation.ts` | Sprinklers and seeders: the boring half of farming, done elsewhere | Active foundation |
+| `src/game/placementGhost.ts`, `rangeHighlight.ts` | What you are about to place, and what a device reaches | Active foundation |
+| `src/container-panel.ts` | Looking inside a crate, a bin or a counter, and taking things out | Active UI |
 | `src/game/soilPatches.ts` | Worked ground drawn: one bed model, recoloured per state | Active foundation |
 | `scripts/authored/props/farmer.py`, `clips/farmer.mjs` | The player: a rigged voxel farmer and his six clips | Active asset pipeline |
 | `src/game/prepStation.ts` | The prep counter: a board, a plate, and a dish being made | Active foundation |

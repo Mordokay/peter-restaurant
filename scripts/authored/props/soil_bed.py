@@ -21,7 +21,12 @@ OUT = sys.argv[sys.argv.index("--") + 1]
 new_scene()
 EARTH = vcol_material("earth")
 
-W = 1.00          # a plot is 1.2 m apart, so the beds nearly meet with a path between
+# Exactly one grid cell, and nothing may cross that line: beds tile edge to edge
+# now, so a ridge wandering 5 cm past the edge would overlap its neighbour.
+# 0.93 authored, not 1.00: the voxeliser pads a surface by a voxel all round and
+# rounds up to whole cells, so a metre of mesh comes back as 1.07 m of model —
+# which on a tiling grid is 7 cm of overlap with the neighbouring bed.
+W = 0.93
 # The first cut had seven long true ridges and read as decking. Earth is not
 # planks: the ridges are shorter, there are more of them, each one wanders along
 # its length, and the crumbs on top break the line.
@@ -57,7 +62,7 @@ for r in range(RIDGES):
         h1 = crest * (0.35 + hash01(r, sgm + 1, 2) * 1.05)
         # The crest wanders across the ridge as well as along it, so the furrow
         # between two ridges is never a straight dark line.
-        mid_y = (y0 + y1) / 2 + (hash01(r, sgm, 4) - 0.5) * step * 0.45
+        mid_y = min(y1, max(y0, (y0 + y1) / 2 + (hash01(r, sgm, 4) - 0.5) * step * 0.45))
         tone = 0.80 + hash01(r, sgm, 3) * 0.46
         # Two slopes up to the crest line and down again: a ridge, not a box.
         quad(Vector((x0, y0, BASE_H)), Vector((x1, y0, BASE_H)),
