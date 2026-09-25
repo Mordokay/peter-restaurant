@@ -78,12 +78,13 @@ const TEXT_CELL = 0.013;
  *  a ticket wider than its drawer covers the drawer next door, which is what
  *  "BELL PEPPER" did to the compost beside it. */
 const LABEL_LIMIT = 11;
-/** Buttons are cut finer than the furniture as well: three of them have to sit
- *  across the top of one drawer and still be hittable. The number is derived
- *  rather than chosen: "ALL" is the widest mark at 23 cells, three of them plus
- *  gaps have to fit the mouth, and picking the cell size by eye is exactly how
- *  the first cut ended up with three buttons printed on top of each other. */
-const BUTTON_CELLS_WIDE = 23;
+/** What each take button says. A button is only as wide as its own mark, so
+ *  "1" does not claim the same slice of the mouth as "ALL" — which is what let
+ *  the marks grow by half again without the three of them colliding. */
+const MARKS: Record<TakeAmount, string> = { one: "1", half: "1/2", all: "ALL" };
+/** Cells of card around a mark, and between two buttons. */
+const BUTTON_PAD = 6;
+const BUTTON_GAP = 3;
 /** Radians per second an item turns on its slot. Slow: it is a display case,
  *  not a carousel, and the player has to read a shape while it moves. */
 const SPIN = 0.55;
@@ -105,7 +106,6 @@ const WOOD = {
   seam: "#2b1d12",
   nail: "#9aa2a8",
   rim: "#8a6136",
-  knob: "#6d4a2c",
   cap: "#5a3e26",
 };
 const BOARD = { dark: "#1d2724", mid: "#243029", light: "#2b3a32", edge: "#3c5145" };
@@ -233,22 +233,6 @@ export function createItemPanel(options: {
     for (const [x, y] of [[2, 2], [size - 3, 2], [2, size - 3], [size - 3, size - 3]] as const) {
       cells.push({ x: x - mid, y: y - mid, z: FRONT * 2, color: WOOD.nail });
     }
-    // A turned knob on the bottom rail of the mouth. An apothecary drawer is
-    // known by its knob more than by its box, and the rail is the one place it
-    // can stand without covering the thing inside — which is the whole point of
-    // a drawer whose front is open.
-    const knobY = -mid;
-    for (let z = 0; z < 5; z++) {
-      // Narrow at the neck, wide at the head: a mushroom, the way a turned
-      // wooden knob actually reads at a distance.
-      const radius = z < 2 ? 1 : z < 4 ? 2 : 1;
-      for (let x = -radius; x <= radius; x++) {
-        for (let y = -radius; y <= radius; y++) {
-          if (Math.abs(x) + Math.abs(y) > radius + 1) continue;
-          cells.push({ x, y: knobY + y, z: FRONT * (2 + z), color: z >= 3 ? WOOD.rim : WOOD.knob });
-        }
-      }
-    }
     return voxels("panel drawer", cells);
   };
 
@@ -256,13 +240,17 @@ export function createItemPanel(options: {
    *  into the face. Twice the size it was, and built with a visible side so it
    *  reads as something that sticks out of the drawer rather than a decal on
    *  it — a button the player cannot see is a button they will not press. */
-  /** Cell size that makes three buttons and their gaps span one drawer mouth. */
-  const buttonCell = (DRAWER * 0.92) / (BUTTON_CELLS_WIDE * 3 + 6);
+  const buttonCells = (amount: TakeAmount): number => textWidth(MARKS[amount]) + BUTTON_PAD;
+  const AMOUNTS: TakeAmount[] = ["one", "half", "all"];
+  /** Cell size that makes the three buttons and their gaps span one drawer
+   *  mouth. Derived, not chosen by eye: choosing it by eye is how the first cut
+   *  ended up with three buttons printed on top of each other. */
+  const buttonCell = (DRAWER * 0.94) / (AMOUNTS.reduce((sum, a) => sum + buttonCells(a), 0) + BUTTON_GAP * 2);
   const buildButton = (amount: TakeAmount): Mesh => {
-    const mark = amount === "one" ? "1" : amount === "half" ? "1/2" : "ALL";
+    const mark = MARKS[amount];
     const cells: VoxelCell[] = [];
-    const width = BUTTON_CELLS_WIDE;
-    const height = 13;
+    const width = buttonCells(amount);
+    const height = 15;
     const thick = 3;
     const midX = Math.floor(width / 2);
     const midY = Math.floor(height / 2);
@@ -298,7 +286,7 @@ export function createItemPanel(options: {
   /** One node per drawer, so each box can turn towards the camera on its own. */
   const slotNodes: TransformNode[] = [];
   const hits: { mesh: AbstractMesh; row: number; amount: TakeAmount }[] = [];
-  const spinning: AbstractMesh[] = [];
+  const spinning: TransformNode[] = [];
   let rows: readonly PanelRow[] = [];
   let title = "";
   let scaleNow = 1;
@@ -382,12 +370,15 @@ export function createItemPanel(options: {
     // and feet under the whole thing. The frame alone was a rack; these are what
     // make it furniture standing in the air rather than a trellis.
     const OVERHANG = Math.round(0.055 / CELL);
+    /** How far back the case runs: to the back panel, so the cabinet is a box
+     *  and not a picture frame with a board floating behind it. */
+    const CASE_DEPTH = Math.round(DEPTH / CELL) + 5;
     const CAP = 4;
     const SIDE = 5;
     const capTone = (index: number): string => (index % 3 === 0 ? WOOD.cap : tone(index));
     for (let y = 0; y < CAP; y++) {
       for (let x = -OVERHANG; x < cols2 + OVERHANG; x++) {
-        for (let z = -2; z < 5; z++) {
+        for (let z = -2; z < CASE_DEPTH; z++) {
           const grain = x % 9 === 0;
           frameCells.push({ x: x - midX, y: rows2 + y - midY, z: -FRONT * z,
                             color: grain ? WOOD.seam : capTone(Math.floor(x / 9) + y) });
@@ -398,7 +389,7 @@ export function createItemPanel(options: {
       for (let x = edge; x < edge + SIDE; x++) {
         for (let y = 0; y < rows2; y++) {
           const grain = y % 8 === 0;
-          for (let z = -2; z < 5; z++) {
+          for (let z = -2; z < CASE_DEPTH; z++) {
             frameCells.push({ x: x - midX, y: y - midY, z: -FRONT * z,
                               color: grain ? WOOD.seam : tone(Math.floor(y / 8) + x) });
           }
@@ -410,6 +401,19 @@ export function createItemPanel(options: {
       for (let x = edge; x < edge + SIDE; x++) {
         for (let y = -4; y < 0; y++) {
           for (let z = -1; z < 4; z++) frameCells.push({ x: x - midX, y: y - midY, z: -FRONT * z, color: WOOD.cap });
+        }
+      }
+    }
+    // A back behind every drawer, closing the carcass. Without it the cabinet
+    // was a window frame: the farm showed through the empty cells and through
+    // the letters of the title, which is not something a chest of drawers does.
+    const backAt = Math.round(DEPTH / CELL) + 3;
+    for (let x = 0; x < cols2; x++) {
+      for (let y = 0; y < rows2; y++) {
+        const seam = x % 11 === 0 || y % 9 === 0;
+        for (let z = 0; z < 2; z++) {
+          frameCells.push({ x: x - midX, y: y - midY, z: -FRONT * (backAt + z),
+                            color: seam ? WOOD.seam : tone(Math.floor(x / 11) + Math.floor(y / 9)) });
         }
       }
     }
@@ -453,11 +457,12 @@ export function createItemPanel(options: {
       const centre = new Vector3(
         (col - (cols - 1) / 2) * SLOT,
         height / 2 - SLOT * 0.42 - (line + 0.5) * SLOT + SLOT * 0.06,
-        // Far enough forward that the back wall of the drawer clears the board,
-        // plus a little per drawer: in the chest the player pointed at, no two
-        // drawers are pushed in to the same depth, and that stagger is most of
-        // what stops a grid of boxes reading as a printed sheet.
-        FRONT * (DEPTH + CELL * 2 + hash01(`stagger:${index}`, 23) * SLOT * 0.16),
+        // The mouth of the drawer is FLUSH with the face of the frame, and the
+        // box runs back from there into the carcass. Standing clear in front of
+        // the frame, a drawer turning to follow the camera swung its whole body
+        // across its neighbours and opened a gap you could see the farm
+        // through; pivoting on the mouth, only the back moves.
+        FRONT * CELL,
       );
 
       // Every slot is its own node: drawer, glass, ticket, buttons and item all
@@ -483,13 +488,18 @@ export function createItemPanel(options: {
 
       // Three buttons across the top of the drawer, supermarket-style.
       if (row.takeable !== false) {
-        const amounts: TakeAmount[] = ["one", "half", "all"];
-        for (const [place, amount] of amounts.entries()) {
+        // Laid out by their real widths, left to right across the mouth.
+        const span = AMOUNTS.reduce((sum, a) => sum + buttonCells(a), 0) + BUTTON_GAP * 2;
+        let cursor = -span / 2;
+        for (const amount of AMOUNTS) {
+          const wide = buttonCells(amount);
+          const centreX = (cursor + wide / 2) * buttonCell;
+          cursor += wide + BUTTON_GAP;
           const button = buttons[amount].createInstance(`panel button ${index} ${amount}`);
           button.parent = slot;
           // Inside the mouth, along its top edge: on the cabinet's front board
           // they sat over the title and over the drawer above.
-          button.position.set((place - 1) * (BUTTON_CELLS_WIDE + 2) * buttonCell, DRAWER * 0.34, FRONT * (DEPTH * 0.2));
+          button.position.set(centreX, DRAWER * 0.36, FRONT * (DEPTH * 0.2));
           button.isPickable = true;
           parts.push(button);
           hits.push({ mesh: button, row: index, amount });
@@ -550,20 +560,29 @@ export function createItemPanel(options: {
       const item = source.createInstance(`panel item ${index}`);
       const bounds = modelBounds(model);
       const size = bounds.max.subtract(bounds.min).scale(model.pitch);
+      // Where the model's MIDDLE is, which is not where its origin is: a
+      // strawberry authored hanging from a stem has its origin at the stem, so
+      // placing the origin in the drawer hangs the fruit up against the
+      // buttons. It also has to spin about its middle, or an off-centre origin
+      // turns the display case into a fairground ride.
+      const middle = bounds.min.add(bounds.max).scale(0.5 * model.pitch);
       // The produce is the reason the cabinet exists, so it gets the middle band
       // of the mouth — everything else was pushed to the edges to give it room.
       const scale = (DRAWER * 0.52) / Math.max(size.x, size.y, size.z, 1e-3);
-      // On the slot, not the root: the item rides with its box when the box
-      // turns, or it swims across a drawer that is looking somewhere else.
-      item.parent = slot;
+      // On a pivot inside the slot, not on the root: the item rides with its
+      // box when the box turns, and the pivot is what actually spins.
+      const spin = new TransformNode(`panel item pivot ${index}`, scene);
+      spin.parent = slot;
+      item.parent = spin;
       item.scaling.setAll(scale);
+      item.position.copyFrom(middle.scale(-scale));
       // In the middle of the box and set back off the glass: an item on the
       // rim of its drawer looks dropped on top of the cabinet.
       // Standing on the floor of its box, halfway back.
-      item.position.set(0, -DRAWER * 0.02, -FRONT * DEPTH * 0.5);
+      spin.position.set(0, -DRAWER * 0.04, -FRONT * DEPTH * 0.5);
       item.isPickable = true;
       parts.push(item);
-      spinning.push(item);
+      spinning.push(spin);
       hits.push({ mesh: item, row: index, amount: "one" });
     }
   };
@@ -616,16 +635,22 @@ export function createItemPanel(options: {
         // each drawer is off, because it sits to one side of the middle. Walking
         // round the cabinet makes the boxes turn one after another, which is the
         // whole effect: a wall of drawers that notices where you are.
-        const inverse = root.getWorldMatrix().clone().invert();
+        // The root already billboards, so in ITS space the camera is straight
+        // ahead: down the front axis at the viewing distance. Taking the camera
+        // through the inverse world matrix instead gave an angle measured
+        // against the billboard's own turn, which pinned every drawer to the
+        // same clamped yaw — the whole cabinet looking off to the right.
+        const distance = Vector3.Distance(camera.position, root.position);
+        const ahead = FRONT * Math.max(0.5, distance / Math.max(1e-3, scaleNow));
         for (const node of slotNodes) {
-          const local = Vector3.TransformCoordinates(camera.position, inverse).subtract(node.position);
-          const flat = Math.hypot(local.x, local.z);
-          const yaw = Math.atan2(local.x, local.z);
-          const pitch = -Math.atan2(local.y, Math.max(0.001, flat));
-          // Clamped: a drawer that swings right round to follow the camera
-          // stops being part of the cabinet.
-          const wantedY = Math.max(-0.4, Math.min(0.4, yaw));
-          const wantedX = Math.max(-0.3, Math.min(0.3, pitch));
+          const dx = -node.position.x;
+          const dy = -node.position.y;
+          const dz = ahead - node.position.z;
+          // Aim the drawer's front axis at that point. Clamped, because a
+          // drawer that swings right round to follow the camera stops being
+          // part of the cabinet.
+          const wantedY = Math.max(-0.35, Math.min(0.35, Math.atan2(-dx, -dz)));
+          const wantedX = Math.max(-0.28, Math.min(0.28, Math.atan2(dy, Math.hypot(dx, dz))));
           node.rotation.y += (wantedY - node.rotation.y) * Math.min(1, dt * 6);
           node.rotation.x += (wantedX - node.rotation.x) * Math.min(1, dt * 6);
         }
