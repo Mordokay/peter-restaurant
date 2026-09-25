@@ -73,7 +73,7 @@ document.querySelector<HTMLElement>("#world")!.innerHTML = `
       <button data-act="night" id="world-night" title="Jump the clock to evening">🌙 Evening</button>
       <button data-act="frame" title="Look at the whole site">🖼 Frame all</button>
     </div>
-    <div class="world-hint">W A S D walk · Q / E turn the camera · F frames the site · wheel zooms · 1-9 or shift+wheel picks a tool · R turns what you are placing · click the ground to work it, hold to keep working as you walk · right-click a crate, bin or counter to see inside it</div>
+    <div class="world-hint">W A S D walk · Q / E turn the camera · F frames the site · wheel zooms · 1-9 or shift+wheel picks a tool · R turns what you are placing · click the ground to work it, hold to keep working as you walk · point at a crate, bin or counter to see inside it (Esc closes)</div>
   </div>
   <div class="world-loading" id="world-loading">
     <h1>🍅 Building the compound</h1>
@@ -629,6 +629,9 @@ function floatGain(text: string, at: { x: number; z: number }): void {
 // The panel hangs over the thing it belongs to and turns with the camera: a
 // container's contents are part of the world, not a corner of the screen.
 const itemPanel = createItemPanel({ scene, catalog, parent: level.root, shadows });
+// Group 2 starts with a clean depth buffer, which is what keeps the board whole
+// when the farmer is standing in front of the crate it belongs to.
+scene.setRenderingAutoClearDepthStencil(2, true, true, true);
 /** What the open panel is showing, so a click on a slot knows what it took. */
 let openContainerNow: { title: string; rows: () => ContainerRow[]; take: (item: string, count: number) => number } | null = null;
 
@@ -699,17 +702,63 @@ function panelAnchor(): Vector3 | null {
   return null;
 }
 
+// ── opening a container by looking at it ──────────────────────────────────────
+// Hover opens it, with two pieces of hysteresis that are the whole difference
+// between helpful and noisy:
+//
+//   * a beat before it opens, so sweeping the cursor across a crate on the way
+//     to a plot does not flash a board at the player;
+//   * Esc closes it AND holds it closed until the cursor leaves and comes back,
+//     so a deliberate dismissal is not undone by the next mouse twitch.
+//
+// It only ever opens for a container the player is standing AT, which is what
+// keeps it from being a tooltip for the whole farm.
+const HOVER_DELAY = 0.28;
+let hoverFor = 0;
+let hoverDismissed = false;
+
+/** True when the cursor is over the thing the player is standing at. */
+function hoveringContainer(): boolean {
+  if (!pointer) return false;
+  const rect = canvas.getBoundingClientRect();
+  void rect;
+  const hit = scene.pick(pointer.x, pointer.y, (mesh) => {
+    const root = mesh.parent?.name ?? "";
+    return root === "prep station" || root === "compost bin" || root === "harvest crate"
+      || mesh.name.startsWith("panel slot") || mesh.name === "item panel backdrop";
+  });
+  return Boolean(hit?.hit);
+}
+
+function tickHover(dt: number): void {
+  if (build.active) return;
+  const near = Boolean(panelAnchor());
+  const over = near && hoveringContainer();
+  if (!over) {
+    hoverFor = 0;
+    // Leaving the thing clears a dismissal, so Esc is a "not now" rather than a
+    // setting the player has to remember they changed.
+    hoverDismissed = false;
+    return;
+  }
+  if (itemPanel.open || hoverDismissed) return;
+  hoverFor += dt;
+  if (hoverFor >= HOVER_DELAY) openContainer();
+}
+
 function openContainer(): boolean {
   const container = containerAtPlayer();
   const at = panelAnchor();
   if (!container || !at) return false;
   openContainerNow = container;
-  itemPanel.show({ title: container.title, at, rows: container.rows() });
+  itemPanel.show({ title: container.title, at, from: player.position, rows: container.rows() });
   return true;
 }
 
-function closeContainer(): void {
+function closeContainer(options: { dismissed?: boolean } = {}): void {
   openContainerNow = null;
+  hoverFor = 0;
+  if (options.dismissed) hoverDismissed = true;
   itemPanel.hide();
 }
 
@@ -827,7 +876,7 @@ window.addEventListener("keydown", (event) => {
   // R turns whatever is about to be placed, which the ghost shows immediately.
   if (key === "r" && !event.repeat) { placeTurn = (placeTurn + 1) % 4; refreshFarm(); }
   if (key === "e" && !event.repeat) { if (!openContainer()) closeContainer(); }
-  if (key === "escape") closeContainer();
+  if (key === "escape") closeContainer({ dismissed: true });
 });
 window.addEventListener("keyup", (event) => keys.delete(event.key.toLowerCase()));
 window.addEventListener("blur", () => keys.clear());
@@ -1109,9 +1158,15 @@ engine.runRenderLoop(() => {
   tickHeldPointer(dt);
   prepStation?.update(dt);
   rangeHighlight.update(dt);
+  tickHover(dt);
+  itemPanel.spin(dt);
   // Walk away and the panel closes itself: it belongs to the thing, and the
   // player has left the thing.
-  if (openContainerNow && !panelAnchor()) closeContainer();
+  if (openContainerNow) {
+    const at = panelAnchor();
+    if (!at) closeContainer();
+    else itemPanel.move(at, player.position);
+  }
   rigTest?.update(dt);
   cropTest?.update(dt);
   particles.update(dt);

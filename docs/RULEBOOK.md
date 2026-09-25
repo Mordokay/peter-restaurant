@@ -493,10 +493,22 @@ this loop and the player already knows it:
   looks possessed rather than attentive. Interest follows reach. His head is a separate joint from his
   body: the body says where he is working, the head says what he is watching while he works.
 - **A container's contents hang over the container.** The panel is a board in the world at the thing it
-  belongs to, turning to face the camera, with the REAL items standing in its slots — the same carrot
-  model that grew in the row. A panel pinned to the corner of the screen is a spreadsheet the world
-  happens to be behind. Its lettering is drawn on a texture for now and the voxel font replaces it later;
-  the slots and the items are already the real thing.
+  belongs to, with the REAL items turning slowly in its slots — the same carrot model that grew in the
+  row. A panel pinned to the corner of the screen is a spreadsheet the world happens to be behind. Its
+  lettering is drawn on a texture for now and the voxel font replaces it later; the slots and the items
+  are already the real thing.
+  - It faces the camera on **all** axes, not just the vertical one: this camera looks down from a high
+    three-quarter angle, so a board that only spins about its own upright is still read at a slant.
+  - It is **lifted above the object and leaned away from the player**, with a stem running back down to
+    what it belongs to. A board at the height of a crate is at the height of the farmer standing at the
+    crate; raising it alone would leave it belonging to nothing, which is what the stem answers.
+  - It draws in its own rendering group on a cleared depth buffer, so it is never half-buried in a wall
+    or sliced through by whoever is standing in front of it.
+  - Items in it are **unlit**: the board tips them away from the sun, and a slot full of silhouette is a
+    slot full of nothing. White emissive carries their colour — see the same note in `lighting.ts`.
+  - Pointing at a container opens it after a beat, Esc closes it and holds it closed until the cursor
+    leaves, and walking away closes it. A panel that flashes up every time the cursor crosses a crate is
+    worse than one the player has to ask for.
 - **Anything placed can be taken back.** One tool undoes a plot: the plant first, then the bed under it.
   Two presses to undo what took two to make, which is exactly enough to make a mis-click cheap.
 

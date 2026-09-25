@@ -12,10 +12,10 @@
 // its slots and swaps its sign-writing. The items in the slots are already the
 // real thing.
 import {
-  DynamicTexture, MeshBuilder, StandardMaterial, TransformNode, Vector3,
+  Color3, DynamicTexture, MeshBuilder, StandardMaterial, TransformNode, Vector3,
   type AbstractMesh, type Scene, type ShadowGenerator,
 } from "@babylonjs/core";
-import { createVoxelMesh } from "./voxelGeometry.ts";
+import { createVoxelMaterial, createVoxelMesh } from "./voxelGeometry.ts";
 import { cellsFromAuthoredModel, type AuthoredVoxelCatalog } from "./voxelModel.ts";
 import { createMeshLibrary } from "./meshLibrary.ts";
 import { modelBounds } from "./storageDisplay.ts";
@@ -34,13 +34,25 @@ export interface PanelRow {
   label?: string;
 }
 
+/** Rendering group the panel draws in: after the world, on a cleared depth
+ *  buffer, so nothing can cut through it. */
+const PANEL_LAYER = 2;
+
 export interface ItemPanel {
   readonly open: boolean;
   /** Which row a picked mesh belongs to, or null. */
   rowAt(mesh: AbstractMesh | null | undefined): number | null;
-  show(options: { title: string; at: Vector3; rows: readonly PanelRow[] }): void;
+  /** `at` is the thing the panel belongs to; `from` is the player, so the board
+   *  can stand clear of them rather than through them. */
+  show(options: { title: string; at: Vector3; from?: Vector3; rows: readonly PanelRow[] }): void;
+  /** Keep it over a thing that has moved, or a player who has. */
+  move(at: Vector3, from?: Vector3): void;
   /** Redraw with new contents, keeping it where it is. */
   update(rows: readonly PanelRow[]): void;
+  /** Turn the items on their slots. Call it each frame; it costs one rotation
+   *  per visible slot and not a single extra draw call, because every item in
+   *  the panel is already an instance of a mesh the game had anyway. */
+  spin(dt: number): void;
   hide(): void;
   dispose(): void;
 }
@@ -54,6 +66,9 @@ const SLOT = 0.34;
 const SLOT_PX = 256;
 const HEADER_PX = 96;
 const PX = SLOT / SLOT_PX;
+/** Radians per second an item turns on its slot. Slow: it is a display case,
+ *  not a carousel, and the player has to be able to read a shape while it moves. */
+const SPIN = 0.55;
 
 export function createItemPanel(options: {
   scene: Scene;
@@ -65,11 +80,27 @@ export function createItemPanel(options: {
   const root = new TransformNode("item panel", scene);
   if (options.parent) root.parent = options.parent;
   root.setEnabled(false);
-  // Y-only, so the panel turns to face the camera while its items stay upright
-  // rather than tipping over as the camera rises.
-  root.billboardMode = TransformNode.BILLBOARDMODE_Y;
+  // Facing the camera means FACING it: this camera looks down from a high
+  // three-quarter angle, so a board that only spins about its vertical axis is
+  // still being read at a slant. Billboarding all three axes tips it up to meet
+  // the eye, and the items tip with it, which shows their tops rather than
+  // their silhouettes.
+  root.billboardMode = TransformNode.BILLBOARDMODE_ALL;
 
   const library = createMeshLibrary();
+  // Items in the slots are lit by nothing: the board tips towards the camera,
+  // which tips them away from the sun, and a slot full of silhouette is a slot
+  // full of nothing. Unlit keeps their own colours exactly as authored, which
+  // is what an icon wants anyway.
+  //
+  // WHITE emissive is what carries the colour. Turning lighting off leaves
+  // nothing driving the diffuse term, so the meshes render BLACK — the same
+  // mistake lighting.ts documents for glowing voxels, made again here and
+  // found the same way: by looking at a panel full of silhouettes.
+  const itemMaterial = createVoxelMaterial("item panel items", scene);
+  itemMaterial.disableLighting = true;
+  itemMaterial.emissiveColor = Color3.White();
+  itemMaterial.specularColor = Color3.Black();
   let texture: DynamicTexture | null = null;
   const backdropMaterial = new StandardMaterial("item panel", scene);
   backdropMaterial.disableLighting = true;
@@ -78,6 +109,24 @@ export function createItemPanel(options: {
   backdrop.material = backdropMaterial;
   backdrop.parent = root;
   backdrop.isPickable = false;
+  // The panel draws after the world with a fresh depth buffer, so it is never
+  // half-buried in a wall or sliced through by the farmer standing in front of
+  // it. Every game that puts a readable board in world space does this; the
+  // alternative is a panel that is sometimes a panel and sometimes a mess.
+  backdrop.renderingGroupId = PANEL_LAYER;
+
+  // A stem down to the thing it belongs to. Once the board is lifted clear of
+  // the player it needs to say what it is ABOUT, which is exactly what the tail
+  // of a speech balloon is for.
+  const stemMaterial = new StandardMaterial("item panel stem", scene);
+  stemMaterial.disableLighting = true;
+  stemMaterial.emissiveColor = Color3.FromHexString("#8fa598");
+  stemMaterial.alpha = 0.5;
+  const stem = MeshBuilder.CreateCylinder("item panel stem", { height: 1, diameter: 0.025, tessellation: 6 }, scene);
+  stem.material = stemMaterial;
+  stem.isPickable = false;
+  stem.renderingGroupId = PANEL_LAYER;
+  if (options.parent) stem.parent = options.parent;
 
   /** One instance per filled slot, and the row it belongs to. */
   const slots: { mesh: AbstractMesh; row: number }[] = [];
@@ -159,8 +208,13 @@ export function createItemPanel(options: {
       const model = catalog.models[row.item];
       if (!model) continue;
       const source = library.source(`panel:${row.item}`, () => {
-        const mesh = createVoxelMesh(`panel ${row.item}`, cellsFromAuthoredModel(model), model.pitch, scene);
+        const mesh = createVoxelMesh(`panel ${row.item}`, cellsFromAuthoredModel(model), model.pitch, scene, { material: itemMaterial });
         mesh.isPickable = false;
+        // On the SOURCE, not on the instances: an instance's rendering group is
+        // its source's, so setting it per instance silently did nothing and the
+        // board — which does draw in the panel layer, on a cleared depth
+        // buffer — painted straight over every item in it.
+        mesh.renderingGroupId = PANEL_LAYER;
         return mesh;
       });
       const instance = source.createInstance(`panel slot ${index}`);
@@ -176,7 +230,10 @@ export function createItemPanel(options: {
         // Measured down the board in the same pixels the slots were drawn in,
         // then lifted so the item stands on the slot rather than through it.
         planeH / 2 - (HEADER_PX + (line + 0.5) * SLOT_PX) * PX - size.y * scale * 0.18,
-        -0.05,
+        // In FRONT of the board. A Babylon plane faces +Z, so the first cut put
+        // every item behind its own backdrop — they were there all along, seen
+        // dimly through a dark sheet, which reads exactly like a lighting bug.
+        0.06,
       );
       instance.isPickable = true;
       slots.push({ mesh: instance, row: index });
@@ -191,6 +248,30 @@ export function createItemPanel(options: {
     fillSlots(cols, lines);
   };
 
+  /** Lift the board clear of the object and lean it away from the player, then
+   *  run the stem back down to the thing itself.
+   *
+   *  The overlap this solves is the obvious one once seen: a panel at the height
+   *  of a crate is at the height of the farmer standing at the crate, and he is
+   *  between it and the camera. Raising it is not enough on its own — a board
+   *  floating in the sky belongs to nothing — hence the stem. */
+  const LIFT = 1.15;
+  const CLEAR = 0.55;
+  const place = (at: Vector3, from?: Vector3): void => {
+    const away = from ? at.subtract(from) : Vector3.Zero();
+    away.y = 0;
+    // Push it to the far side of the object from the player, so the player is
+    // never standing between the camera and the board they just opened.
+    if (away.lengthSquared() > 1e-4) away.normalize().scaleInPlace(CLEAR);
+    const head = at.add(new Vector3(away.x, LIFT, away.z));
+    root.position.copyFrom(head);
+    const lines = Math.max(1, Math.ceil(rows.length / COLUMNS));
+    const boardBottom = head.y - ((HEADER_PX + lines * SLOT_PX) * PX) / 2;
+    const drop = Math.max(0.05, boardBottom - at.y);
+    stem.position.set(head.x, boardBottom - drop / 2, head.z);
+    stem.scaling.y = drop;
+  };
+
   let title = "";
   return {
     get open() { return root.isEnabled(); },
@@ -201,9 +282,19 @@ export function createItemPanel(options: {
     show(shown) {
       title = shown.title;
       rows = shown.rows;
-      root.position.copyFrom(shown.at);
+      place(shown.at, shown.from);
       layout(title);
       root.setEnabled(true);
+      stem.setEnabled(true);
+    },
+    move(at, from) { if (root.isEnabled()) place(at, from); },
+    spin(dt) {
+      if (!root.isEnabled()) return;
+      for (const [index, slot] of slots.entries()) {
+        // Each one a little out of step with its neighbours, so a full crate
+        // reads as a shelf of objects rather than a clock mechanism.
+        slot.mesh.rotation.y += dt * (SPIN + index * 0.06);
+      }
     },
     update(next) {
       rows = next;
@@ -211,11 +302,15 @@ export function createItemPanel(options: {
     },
     hide() {
       root.setEnabled(false);
+      stem.setEnabled(false);
       clearSlots();
     },
     dispose() {
       clearSlots();
       library.dispose();
+      itemMaterial.dispose();
+      stem.dispose(false, false);
+      stemMaterial.dispose();
       backdrop.dispose(false, false);
       backdropMaterial.dispose();
       texture?.dispose();
