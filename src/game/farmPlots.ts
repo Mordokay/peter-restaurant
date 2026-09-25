@@ -131,6 +131,8 @@ export interface Farm {
   act(site: PlotSite, slot: Slot, turn?: number): ActResult | null;
   /** The ground's state at a plot, for the soil renderer. */
   soilAt(id: string): Soil;
+  /** Lift or drop the whole farm — floor relief changes what "ground" means. */
+  setGroundY(y: number): void;
   /** Devices standing on the farm. */
   readonly devices: Readonly<Record<string, Device>>;
   /** The plots a device on this plot would work — for showing its reach. */
@@ -147,7 +149,12 @@ export function createFarm(options: FarmOptions): Farm {
   const { scene, catalog, particles } = options;
   const root = new TransformNode("farm", scene);
   if (options.parent) root.parent = options.parent;
-  const groundY = options.groundY ?? 0.02;
+  // The ground height lives on the farm's ROOT, not in every placement. Floor
+  // relief raises the soil by a few centimetres and the farm has to come with
+  // it — otherwise beds and plants sink into the ridges and vanish. One node to
+  // move, and everything standing on the farm moves with it.
+  root.position.y = options.groundY ?? 0.02;
+  const groundY = 0;
 
   const sites = plotSites(options.areas);
   const byId = new Map(sites.map((site) => [site.id, site]));
@@ -388,6 +395,7 @@ export function createFarm(options: FarmOptions): Farm {
     },
 
     soilAt(id) { return soils[id] ?? bareSoil(); },
+    setGroundY(y) { root.position.y = y; },
     get devices() { return devices; },
     covering(site) { return covered(site, sites); },
     takeDeviceWork() {

@@ -127,6 +127,8 @@ export function createCropPlot(options: CropPlotOptions): CropPlot {
       parent: root, spin: options.spin, initialStage: 0, shadows: options.shadows,
       material: options.material, sway: options.sway ?? PLANT_SWAY, name: `${crop.id} plant`,
       library: options.library,
+      // How much of each stage is underground: a root crop is mostly root.
+      sink: (_id, index) => crop.sink?.[CROP_STAGES[index]!] ?? 0,
     });
     const ripe = rig.stages[rig.stages.length - 1]!;
     // Whole-plant crops carry no fruit: the plant IS the produce, and pulling it

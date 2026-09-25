@@ -140,7 +140,7 @@
     "coffee_lid": {"name":"Coffee Lid","folder":"food/all_food","tags":["kitchen","food","ingredient","cooking"],"size":[0.135,0.047,0.135],"voxels":187890,"parts":2,"thumb":1788657398,"rev":1789076668},
     "coffee_maker": {"name":"Coffee Maker","folder":"kitchen/electronics_kitchen/appliances","tags":["kitchen","ingredient","cooking","appliance"],"size":[0.36,0.639,0.475],"voxels":298654,"parts":6,"thumb":1788657399,"rev":1789076668},
     "coffee_maker_01": {"name":"Coffee Maker 01","folder":"kitchen/electronics_kitchen/appliances","tags":["kitchen","ingredient","cooking","appliance"],"size":[0.367,0.6,0.517],"voxels":301745,"parts":9,"thumb":1788657400,"rev":1789076668},
-    "compost_bin": {"name":"Compost bin","folder":"authored/props","tags":["farm","storage"],"size":[0.977,0.744,0.833],"voxels":32733,"parts":2,"rev":1790290347},
+    "compost_bin": {"name":"Compost bin","folder":"authored/props","tags":["farm","storage"],"size":[0.988,0.755,0.855],"voxels":163310,"parts":2,"rev":1790298809},
     "cookie_006": {"name":"Cookie 006","folder":"food/food_free","tags":["kitchen","dining","food"],"size":[0.054,0.032,0.054],"voxels":4098,"parts":1,"thumb":1788657400,"rev":1789076820},
     "cookie_011": {"name":"Cookie 011","folder":"food/food_free","tags":["kitchen","dining","food"],"size":[0.054,0.032,0.054],"voxels":4099,"parts":1,"thumb":1788657400,"rev":1789076668},
     "cookie_012": {"name":"Cookie 012","folder":"food/food_free","tags":["kitchen","dining","food"],"size":[0.054,0.032,0.054],"voxels":4100,"parts":1,"thumb":1788657400,"rev":1789076668},

@@ -45,6 +45,13 @@ export function createCompostBin(options: {
 
   const model = catalog.models[BIN_MODEL];
   let heapMesh: AbstractMesh | null = null;
+  /** Cells of the heap, sorted by height, so a fill level is a slice of them. */
+  let heapCells: ReturnType<typeof cellsFromAuthoredModel> = [];
+  let heapTop = 0;
+  /** The fill the mesh currently shows, in tenths — remeshing on every gram
+   *  would be absurd, and the eye cannot tell 61% from 63% of a bin. */
+  let shownStep = -1;
+
   if (model) {
     const build = (name: string, parts: string[]) => {
       const mesh = createVoxelMesh(name, cellsFromAuthoredModel(model, parts), model.pitch, scene,
@@ -56,18 +63,36 @@ export function createCompostBin(options: {
       return mesh;
     };
     build("compost bin body", ["bin"]);
-    heapMesh = build("compost heap", ["heap"]);
+    heapCells = cellsFromAuthoredModel(model, ["heap"]);
+    heapTop = heapCells.reduce((high, cell) => Math.max(high, cell.y), 0);
   }
+
+  /** Show the heap up to `fill` of its full height: a three-dimensional
+   *  progress bar. Scaling the whole heap down — the first attempt — left cubes
+   *  hanging in the air with daylight under them, because a heap is not a thing
+   *  that gets shorter, it is a thing that has less IN it. */
+  const meshHeap = (fill: number): void => {
+    if (!model) return;
+    const waterline = Math.max(0, Math.min(1, fill)) * (heapTop + 1);
+    const cells = heapCells.filter((cell) => cell.y <= waterline);
+    heapMesh?.dispose(false, false);
+    heapMesh = null;
+    if (!cells.length) return;
+    heapMesh = createVoxelMesh("compost heap", cells, model.pitch, scene,
+      options.material ? { material: options.material } : {});
+    heapMesh.parent = root;
+    heapMesh.receiveShadows = true;
+    heapMesh.isPickable = false;
+    options.shadows?.addShadowCaster(heapMesh);
+  };
 
   let heap = emptyHeap();
 
   const paint = (): void => {
-    if (!heapMesh) return;
-    const fill = fullness(heap);
-    // Never quite zero: a hairline of compost left in an "empty" bin is how the
-    // player knows the bin is a bin and not a box.
-    heapMesh.scaling.y = Math.max(0.001, fill);
-    heapMesh.setEnabled(fill > 0.01);
+    const step = Math.round(fullness(heap) * 10);
+    if (step === shownStep) return;
+    shownStep = step;
+    meshHeap(step / 10);
   };
   paint();
 

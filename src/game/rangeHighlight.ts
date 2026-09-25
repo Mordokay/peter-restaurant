@@ -13,6 +13,8 @@ export interface RangeHighlight {
   /** Light these cells up. Passing none puts the highlight away. */
   show(cells: readonly { x: number; z: number }[], colour?: string): void;
   hide(): void;
+  /** Floor relief changes where the ground is; the squares follow it. */
+  setGroundY(y: number): void;
   /** Call each frame: the pulse is time-based, not frame-based. */
   update(dt: number): void;
   dispose(): void;
@@ -44,6 +46,7 @@ export function createRangeHighlight(options: {
   source.isPickable = false;
   source.parent = root;
 
+  let groundY = options.groundY ?? 0.05;
   const cells: InstancedMesh[] = [];
   let shown = 0;
   let time = 0;
@@ -63,7 +66,7 @@ export function createRangeHighlight(options: {
       ensure(wanted.length);
       for (const [index, cell] of wanted.entries()) {
         const instance = cells[index]!;
-        instance.position.set(cell.x, options.groundY ?? 0.05, cell.z);
+        instance.position.set(cell.x, groundY, cell.z);
         instance.setEnabled(true);
       }
       for (let index = wanted.length; index < cells.length; index++) cells[index]!.setEnabled(false);
@@ -73,6 +76,7 @@ export function createRangeHighlight(options: {
       for (const instance of cells) instance.setEnabled(false);
       shown = 0;
     },
+    setGroundY(y) { groundY = y; },
     update(dt) {
       if (!shown) return;
       time += dt;

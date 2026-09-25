@@ -48,6 +48,15 @@ export interface CropDefinition {
   /** True where harvesting takes the plant itself (a cabbage, a carrot) rather
    *  than picking fruit off it (a pepper, a strawberry). */
   wholePlant: boolean;
+  /** Metres each stage sits INTO the soil.
+   *
+   *  A root crop is modelled whole — a carrot is mostly carrot below ground —
+   *  and the pipeline stands every model on its own base, so planted straight
+   *  onto the soil the entire root is above it and the thing looks dropped
+   *  rather than grown. The sink is how much of the model is underground, and
+   *  it is a property of the PLANT, not of the renderer: only the crop knows
+   *  how much of itself should be buried. */
+  sink?: Readonly<Partial<Record<CropStage, number>>>;
 }
 
 /** Fraction of `growthSeconds` spent as a seedling before the plant bulks up. */
@@ -58,6 +67,7 @@ export const cropDefinitions: readonly CropDefinition[] = [
     id: "lettuce", name: "Lettuce",
     stages: { seedling: "crop_lettuce_seedling", growing: "crop_lettuce_growing", ripe: "crop_lettuce_ripe" },
     produce: "item_lettuce",
+    sink: { growing: 0.02, ripe: 0.03 },
     // A lettuce is one head, cut once. Fast and forgiving: the first crop a
     // player plants should finish inside a single prep phase.
     sites: 1, yield: [1, 1], growthSeconds: 45, regrowSeconds: 0, harvests: 1, wholePlant: true,
@@ -69,11 +79,17 @@ export const cropDefinitions: readonly CropDefinition[] = [
     // One root shows, but pulling a carrot gives a small handful — the plot is
     // read as a row, not as a single plant.
     sites: 1, yield: [1, 3], growthSeconds: 70, regrowSeconds: 0, harvests: 1, wholePlant: true,
+    // The ripe root is 32 cm of carrot; all but its shoulder belongs in the
+    // ground. The younger stages have no root to bury.
+    sink: { ripe: 0.28 },
   },
   {
     id: "cabbage", name: "Cabbage",
     stages: { seedling: "crop_cabbage_seedling", growing: "crop_cabbage_growing", ripe: "crop_cabbage_ripe" },
     produce: "item_cabbage",
+    // Bedded in just far enough that the lowest wrapper leaves touch soil
+    // rather than hovering over it.
+    sink: { growing: 0.02, ripe: 0.04 },
     sites: 1, yield: [1, 1], growthSeconds: 120, regrowSeconds: 0, harvests: 1, wholePlant: true,
   },
   {

@@ -33,9 +33,10 @@ import { DEVICE_MODELS } from "./game/automation";
 import { createClipPlayer, createVoxelRig, socketNode } from "./game/voxelRig";
 import { createPlacementGhost } from "./game/placementGhost";
 import { createRangeHighlight } from "./game/rangeHighlight";
-import { createContainerPanel, type ContainerRow } from "./container-panel";
+import { createItemPanel, type PanelRow as ContainerRow } from "./game/itemPanel";
 import { groupItems } from "./game/inventory";
 import { PLOT_SPACING } from "./game/farm";
+import { reliefCeiling } from "./game/surfaces";
 import { cropById } from "./game/crops";
 
 /** The player's own model, and the tools he carries. */
@@ -72,7 +73,7 @@ document.querySelector<HTMLElement>("#world")!.innerHTML = `
       <button data-act="night" id="world-night" title="Jump the clock to evening">🌙 Evening</button>
       <button data-act="frame" title="Look at the whole site">🖼 Frame all</button>
     </div>
-    <div class="world-hint">W A S D walk · Q / E turn the camera · F frames the site · wheel zooms · 1-9 or shift+wheel picks a tool · R turns what you are placing · click the ground to work it, hold to keep working as you walk · right-click a crate, bin or counter to open it</div>
+    <div class="world-hint">W A S D walk · Q / E turn the camera · F frames the site · wheel zooms · 1-9 or shift+wheel picks a tool · R turns what you are placing · click the ground to work it, hold to keep working as you walk · right-click a crate, bin or counter to see inside it</div>
   </div>
   <div class="world-loading" id="world-loading">
     <h1>🍅 Building the compound</h1>
@@ -267,10 +268,32 @@ const cropModels = [...new Set([
   ...Object.values(TOOL_MODELS_PRELOAD), ...Object.values(DEVICE_MODELS),
 ])];
 await ensureModels(cropModels);
+/** The height of the soil the farm stands on.
+ *
+ *  Floor relief lays each material at its own cell size with real relief, which
+ *  raises the top of the ground by a couple of centimetres — enough to swallow a
+ *  seedling and to bury a bed in its own ridges. The farm asks the level how
+ *  high its ground actually is rather than assuming the slab's flat top. */
+function farmGroundY(): number {
+  const parcels = levelLayout.areas.filter((area) => area.zone === "farm");
+  if (!parcels.length) return 0.02;
+  const probe = parcels[0]!;
+  const x = probe.rect[0] + probe.rect[2] / 2;
+  const z = probe.rect[1] + probe.rect[3] / 2;
+  let top = 0.02;
+  for (const surface of level.surfaces()) {
+    const [sx, sz, sw, sd] = surface.rect;
+    if (x < sx || x > sx + sw || z < sz || z > sz + sd) continue;
+    const lift = level.surfaceDetail && surface.material ? reliefCeiling(surface.material) : 0;
+    top = Math.max(top, surface.topY + lift);
+  }
+  return top;
+}
+
 const farmWind = createWindMaterial("farm wind", scene);
 const farm = createFarm({
   scene, catalog, areas: levelLayout.areas, material: farmWind,
-  shadows, particles, persist: true, parent: level.root,
+  shadows, particles, persist: true, parent: level.root, groundY: farmGroundY(),
 });
 // The kitchen end of the chain: one counter in the prep kitchen, where produce
 // becomes a dish. It stands where a prep island would, against the room's south
@@ -363,7 +386,7 @@ showHeldTool();
 // than a floating label: the rulebook allows labels for selection, and this is
 // the selection — the bar only says what the soil cannot.
 // The preview: the thing itself, translucent, where it would go. R turns it.
-const ghost = createPlacementGhost({ scene, catalog, parent: level.root });
+const ghost = createPlacementGhost({ scene, catalog, parent: level.root, groundY: farmGroundY() });
 let placeTurn = 0;
 
 /** Which model previews the work the held slot would do here. Only placements
@@ -379,7 +402,7 @@ function ghostModelFor(reading: ReturnType<typeof farm.addressed>): string | nul
 }
 
 // Point at a device and it shows you what it reaches.
-const rangeHighlight = createRangeHighlight({ scene, parent: level.root, size: PLOT_SPACING });
+const rangeHighlight = createRangeHighlight({ scene, parent: level.root, size: PLOT_SPACING, groundY: farmGroundY() + 0.04 });
 
 const plotMarker = MeshBuilder.CreateTorus("plot marker", { diameter: 0.86, thickness: 0.05, tessellation: 20 }, scene);
 const plotMarkerMaterial = new StandardMaterial("plot marker", scene);
@@ -437,7 +460,7 @@ function refreshFarm(): void {
   if (preview && addressed) ghost.show(preview, addressed.site, placeTurn);
   else ghost.hide();
   if (!addressed) return;
-  plotMarker.position.set(addressed.site.x, 0.06, addressed.site.z);
+  plotMarker.position.set(addressed.site.x, farmGroundY() + 0.05, addressed.site.z);
   plotMarkerMaterial.emissiveColor = Color3.FromHexString(
     !addressed.inReach ? OUT_OF_REACH : MARKER_COLOURS[addressed.action] ?? "#9fd78a");
 }
@@ -603,7 +626,11 @@ function floatGain(text: string, at: { x: number; z: number }): void {
 // Left-click works a thing; right-click opens it. The crate, the bin and the
 // counter all show their contents in the world already — this is for taking a
 // particular thing back OUT, which a heap of vegetables cannot offer by itself.
-const containerPanel = createContainerPanel(document.querySelector<HTMLElement>("#world")!);
+// The panel hangs over the thing it belongs to and turns with the camera: a
+// container's contents are part of the world, not a corner of the screen.
+const itemPanel = createItemPanel({ scene, catalog, parent: level.root, shadows });
+/** What the open panel is showing, so a click on a slot knows what it took. */
+let openContainerNow: { title: string; rows: () => ContainerRow[]; take: (item: string, count: number) => number } | null = null;
 
 /** Rows for the crate: what it holds, grouped. */
 function crateRows(): ContainerRow[] {
@@ -662,15 +689,47 @@ function containerAtPlayer(): { title: string; rows: () => ContainerRow[]; take:
   return null;
 }
 
+/** Where a container's panel floats: above the thing, out of the player's way. */
+function panelAnchor(): Vector3 | null {
+  const px = player.position.x;
+  const pz = player.position.z;
+  if (prepStation?.inReach(px, pz)) return prepStation.root.position.add(new Vector3(0, 1.75, 0));
+  if (farm.bin?.inReach(px, pz)) return farm.bin.root.position.add(new Vector3(0, 1.55, 0));
+  if (farm.crate?.inReach(px, pz)) return farm.crate.position.add(new Vector3(0, 1.25, 0));
+  return null;
+}
+
 function openContainer(): boolean {
   const container = containerAtPlayer();
-  if (!container) return false;
-  containerPanel.show({
-    title: container.title,
-    rows: container.rows(),
-    onTake: (item, count) => { const moved = container.take(item, count); saveEverything(); refreshFarm(); return moved; },
-    refresh: container.rows,
-  });
+  const at = panelAnchor();
+  if (!container || !at) return false;
+  openContainerNow = container;
+  itemPanel.show({ title: container.title, at, rows: container.rows() });
+  return true;
+}
+
+function closeContainer(): void {
+  openContainerNow = null;
+  itemPanel.hide();
+}
+
+/** Clicking a slot takes that item out — one on a click, the stack with shift. */
+function clickPanel(event: PointerEvent): boolean {
+  if (!openContainerNow || !itemPanel.open) return false;
+  const rect = canvas.getBoundingClientRect();
+  const hit = scene.pick(event.clientX - rect.left, event.clientY - rect.top,
+    (mesh) => itemPanel.rowAt(mesh) !== null);
+  const index = hit?.pickedMesh ? itemPanel.rowAt(hit.pickedMesh) : null;
+  if (index === null) return false;
+  const rows = openContainerNow.rows();
+  const row = rows[index];
+  if (!row || row.takeable === false) return true;
+  openContainerNow.take(row.item, event.shiftKey ? row.count : 1);
+  saveEverything();
+  refreshFarm();
+  const left = openContainerNow.rows();
+  if (left.length) itemPanel.update(left);
+  else closeContainer();
   return true;
 }
 
@@ -700,7 +759,10 @@ canvas.addEventListener("pointerdown", (event) => {
   // Right-click opens whatever the player is standing at, and does nothing at
   // all when they are standing at nothing: a menu that opens over empty soil is
   // a menu in the way.
-  if (event.button === 2) { openContainer(); return; }
+  if (event.button === 2) { if (!openContainer()) closeContainer(); return; }
+  // A click on the floating panel takes from it rather than working the ground
+  // behind it.
+  if (clickPanel(event)) return;
   heldButton = event.button;
   heldCooldown = 0;
   refreshFarm();
@@ -764,8 +826,8 @@ window.addEventListener("keydown", (event) => {
   if (key === "tab") { event.preventDefault(); farmHud.cycle(event.shiftKey ? -1 : 1); showHeldTool(); }
   // R turns whatever is about to be placed, which the ghost shows immediately.
   if (key === "r" && !event.repeat) { placeTurn = (placeTurn + 1) % 4; refreshFarm(); }
-  if (key === "e" && !event.repeat) openContainer();
-  if (key === "escape") containerPanel.close();
+  if (key === "e" && !event.repeat) { if (!openContainer()) closeContainer(); }
+  if (key === "escape") closeContainer();
 });
 window.addEventListener("keyup", (event) => keys.delete(event.key.toLowerCase()));
 window.addEventListener("blur", () => keys.clear());
@@ -812,6 +874,12 @@ document.querySelector(".world-controls")!.addEventListener("click", (event) => 
       level.setSurfaceDetail(on);
       void relayLevel(on ? "Laying floors with relief" : "Laying the flat carpet").then(() => {
         button.textContent = "🪵 Floor relief";
+        // Relief moved the ground; everything standing on it has to move too,
+        // or the beds are buried in their own ridges and the seedlings vanish.
+        const ground = farmGroundY();
+        farm.setGroundY(ground);
+        ghost.setGroundY(ground);
+        rangeHighlight.setGroundY(ground + 0.04);
       });
       break;
     }
@@ -1041,6 +1109,9 @@ engine.runRenderLoop(() => {
   tickHeldPointer(dt);
   prepStation?.update(dt);
   rangeHighlight.update(dt);
+  // Walk away and the panel closes itself: it belongs to the thing, and the
+  // player has left the thing.
+  if (openContainerNow && !panelAnchor()) closeContainer();
   rigTest?.update(dt);
   cropTest?.update(dt);
   particles.update(dt);

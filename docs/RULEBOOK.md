@@ -432,6 +432,20 @@ No recognizable real-world asset is approved from memory or after a single model
 
 The author—not the player—is responsible for completing these iterations. Model Lab supports the process; it is not evidence by itself that an asset has passed.
 
+#### Every crop is judged PLANTED
+
+A crop model is approved in the ground, on a bed, at the game camera — never in the lab alone. The lab
+says whether the thing is well made; only the farm says whether it is well planted. Two things go wrong
+that the lab cannot show:
+
+- **Depth.** The pipeline stands every model on its own base, so a root crop modelled whole sits entirely
+  ON the soil and looks dropped rather than grown. How much of a plant is underground is a property of
+  the CROP (`sink` in crops.ts), because only the crop knows.
+- **Ground height.** Floor relief raises the soil a few centimetres; anything that assumed a flat slab is
+  buried by its own ridges. Everything on the farm hangs off one node whose height is asked of the level.
+
+So: author, build, plant one, look at it, adjust, and only then call it done.
+
 #### The farming loop
 
 Copied deliberately from Stardew Valley, because it is the best-solved version of
@@ -478,6 +492,11 @@ this loop and the player already knows it:
   reach, because a man staring at a bed on the far side of the farm, or at a counter through a wall,
   looks possessed rather than attentive. Interest follows reach. His head is a separate joint from his
   body: the body says where he is working, the head says what he is watching while he works.
+- **A container's contents hang over the container.** The panel is a board in the world at the thing it
+  belongs to, turning to face the camera, with the REAL items standing in its slots — the same carrot
+  model that grew in the row. A panel pinned to the corner of the screen is a spreadsheet the world
+  happens to be behind. Its lettering is drawn on a texture for now and the voxel font replaces it later;
+  the slots and the items are already the real thing.
 - **Anything placed can be taken back.** One tool undoes a plot: the plant first, then the bed under it.
   Two presses to undo what took two to make, which is exactly enough to make a mis-click cheap.
 
@@ -780,7 +799,7 @@ travels). Current sources:
 | `src/game/compost.ts`, `compostBin.ts` | Kitchen scraps rotting down into the farm's fertility | Active foundation |
 | `src/game/automation.ts` | Sprinklers and seeders: the boring half of farming, done elsewhere | Active foundation |
 | `src/game/placementGhost.ts`, `rangeHighlight.ts` | What you are about to place, and what a device reaches | Active foundation |
-| `src/container-panel.ts` | Looking inside a crate, a bin or a counter, and taking things out | Active UI |
+| `src/game/itemPanel.ts` | A container's contents on a board that hangs over it and faces the camera | Active UI |
 | `src/game/soilPatches.ts` | Worked ground drawn: one bed model, recoloured per state | Active foundation |
 | `scripts/authored/props/farmer.py`, `clips/farmer.mjs` | The player: a rigged voxel farmer and his six clips | Active asset pipeline |
 | `src/game/prepStation.ts` | The prep counter: a board, a plate, and a dish being made | Active foundation |

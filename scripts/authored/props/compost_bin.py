@@ -49,22 +49,47 @@ for o in parts: o.select_set(True)
 bpy.context.view_layer.objects.active = parts[0]
 bpy.ops.object.join(); parts[0].name = "bin"
 
-# The heap: its own object, so the game can scale it with the fill. Built at
-# FULL height; a bin with two handfuls in it is this, squashed.
-for k in range(60):
-    a = k * 2.399 + hash01(k, 2)
-    r = (W / 2 - 0.10) * math.sqrt(hash01(k, 3))
-    top = 0.46 * (1 - (r / (W / 2 - 0.09)) ** 1.7)
-    h = 0.02 + hash01(k, 4) * max(0.02, top)
-    colour = CRUMB if hash01(k, 5) < 0.6 else CRUMB_MID
-    if hash01(k, 6) < 0.16: colour = FLECK
-    size = (0.05 + hash01(k, 7) * 0.05, 0.05 + hash01(k, 8) * 0.05, 0.03 + hash01(k, 9) * 0.04)
-    x, y, z = math.cos(a) * r, math.sin(a) * r, h
-    verts = [(x + sx * size[0] / 2, y + sy * size[1] / 2, z + sz * size[2] / 2)
-             for sx in (-1, 1) for sy in (-1, 1) for sz in (-1, 1)]
-    faces = [(0, 1, 3, 2), (4, 6, 7, 5), (0, 4, 5, 1), (2, 3, 7, 6), (0, 2, 6, 4), (1, 5, 7, 3)]
-    obj = _mesh(f"heap_{k}", verts, faces, HEAP)
-    paint(obj, lambda i, co, colour=colour, k=k: shade(colour, 0.88 + hash01(k, i % 8) * 0.26))
+# The heap: its own object, and built SOLID to the brim rather than as a mound
+# of separate lumps. The game fills the bin by showing the part of it below a
+# waterline — a three-dimensional progress bar — so what matters is that every
+# height has something at it. Scaling a sparse mound down, which is what this
+# was, left cubes hanging in the air with daylight under them.
+#
+# What is in it is rubbish, and should look like rubbish: dark crumb with peel,
+# leaf and eggshell through it, in the colours of the crops that were trimmed.
+PEEL, LEAF, SHELL, CORE = hexrgb("#c47a2c"), hexrgb("#6d8a3a"), hexrgb("#d8cfae"), hexrgb("#8a3b2a")
+INNER_W, INNER_D, FULL_H = W - 0.14, D - 0.14, 0.52
+LAYERS = 13
+COLS, ROWS = 4, 3
+for layer in range(LAYERS):
+    z0 = 0.02 + layer * (FULL_H / LAYERS)
+    # The pile narrows as it rises, so a full bin is a heap standing proud of
+    # the boards rather than a block cut off flat.
+    shrink = 1.0 - 0.5 * (layer / (LAYERS - 1)) ** 1.8
+    across = INNER_W * shrink
+    deep = INNER_D * shrink
+    # A JITTERED GRID rather than scattered lumps: scattering left holes, and a
+    # bin you can see the floor of through its own rubbish reads as a few blocks
+    # lying in a box rather than as a heap filling up.
+    cols = COLS if layer < LAYERS - 3 else max(2, COLS - 2)
+    rows = ROWS if layer < LAYERS - 3 else max(2, ROWS - 1)
+    for cx in range(cols):
+        for cy in range(rows):
+            jitter = 0.34
+            x = (-0.5 + (cx + 0.5) / cols) * across + (hash01(layer, cx, cy, 1) - 0.5) * (across / cols) * jitter
+            y = (-0.5 + (cy + 0.5) / rows) * deep + (hash01(layer, cx, cy, 2) - 0.5) * (deep / rows) * jitter
+            # Overlapping on purpose: neighbours share a little of each other.
+            size = ((across / cols) * (1.18 + hash01(layer, cx, cy, 3) * 0.3),
+                    (deep / rows) * (1.18 + hash01(layer, cx, cy, 4) * 0.3),
+                    (FULL_H / LAYERS) * (1.5 + hash01(layer, cx, cy, 5) * 0.6))
+            roll = hash01(layer, cx, cy, 6)
+            colour = (CRUMB if roll < 0.46 else CRUMB_MID if roll < 0.66
+                      else PEEL if roll < 0.78 else LEAF if roll < 0.9 else SHELL if roll < 0.96 else CORE)
+            verts = [(x + sx * size[0] / 2, y + sy * size[1] / 2, z0 + sz * size[2] / 2)
+                     for sx in (-1, 1) for sy in (-1, 1) for sz in (-1, 1)]
+            faces = [(0, 1, 3, 2), (4, 6, 7, 5), (0, 4, 5, 1), (2, 3, 7, 6), (0, 2, 6, 4), (1, 5, 7, 3)]
+            obj = _mesh(f"heap_{layer}_{cx}_{cy}", verts, faces, HEAP)
+            paint(obj, lambda i, co, colour=colour, seed=layer * 31 + cx * 7 + cy: shade(colour, 0.86 + hash01(seed, i % 8) * 0.3))
 
 heaps = [o for o in bpy.data.objects if o.name.startswith("heap_")]
 bpy.ops.object.select_all(action='DESELECT')

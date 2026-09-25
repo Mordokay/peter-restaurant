@@ -44,6 +44,8 @@ export interface StageRigOptions {
   material?: StandardMaterial;
   /** Wind weight for parts that declare none; graded by height in the mesher. */
   sway?: number;
+  /** Metres each stage sits below the rig's origin — how much of it is buried. */
+  sink?: (id: string, index: number) => number;
   /** Share one meshing of each stage across every rig that asks — the difference
    *  between a farm that opens and a farm that freezes. Without it each rig
    *  meshes its own copy, which is what the model lab wants. */
@@ -73,6 +75,7 @@ export function createStageRig(options: StageRigOptions): StageRig {
       ? options.library.source(`${id}|${options.sway ?? 0}`, () => build(id, model)).createInstance(`${root.name} ${id}`)
       : build(id, model);
     mesh.parent = root;
+    mesh.position.y = -(options.sink?.(id, index) ?? 0);
     // An instance inherits its source's shadow settings; setting it on the
     // instance does nothing but warn, so it is set where it means something.
     if (mesh instanceof Mesh) mesh.receiveShadows = true;

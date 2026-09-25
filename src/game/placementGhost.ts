@@ -16,6 +16,8 @@ export interface PlacementGhost {
   /** Show `model` at this spot, turned `turn` quarter turns. */
   show(model: string, at: { x: number; z: number }, turn: number): void;
   hide(): void;
+  /** Floor relief changes where the ground is; the preview follows it. */
+  setGroundY(y: number): void;
   readonly model: string | null;
   dispose(): void;
 }
@@ -32,7 +34,7 @@ export function createPlacementGhost(options: {
   const { scene, catalog } = options;
   const root = new TransformNode("placement ghost", scene);
   if (options.parent) root.parent = options.parent;
-  const groundY = options.groundY ?? 0.02;
+  let groundY = options.groundY ?? 0.02;
 
   // One material for every ghost: unlit, so a preview never looks like a thing
   // standing in shadow, and tinted cool so it cannot be mistaken for the real
@@ -64,6 +66,7 @@ export function createPlacementGhost(options: {
 
   return {
     get model() { return current; },
+    setGroundY(y) { groundY = y; },
     show(id, at, turn) {
       const mesh = meshFor(id);
       if (!mesh) return;
