@@ -48,11 +48,12 @@ export interface ItemPanel {
   /** Keep it over a thing that has moved, or a player who has. */
   move(at: Vector3, from?: Vector3): void;
   /** Redraw with new contents, keeping it where it is. */
-  update(rows: readonly PanelRow[]): void;
-  /** Turn the items on their slots. Call it each frame; it costs one rotation
-   *  per visible slot and not a single extra draw call, because every item in
-   *  the panel is already an instance of a mesh the game had anyway. */
-  spin(dt: number): void;
+  setRows(rows: readonly PanelRow[]): void;
+  /** Per-frame work: turning the items on their slots, and holding the board at
+   *  a readable size however far the camera has pulled back. Both cost one
+   *  matrix each and not a single extra draw call, because every item in the
+   *  panel is already an instance of a mesh the game had anyway. */
+  update(dt: number): void;
   hide(): void;
   dispose(): void;
 }
@@ -69,6 +70,14 @@ const PX = SLOT / SLOT_PX;
 /** Radians per second an item turns on its slot. Slow: it is a display case,
  *  not a carousel, and the player has to be able to read a shape while it moves. */
 const SPIN = 0.55;
+/** Distance at which the board is its authored size; nearer it shrinks, further
+ *  it grows, so its share of the screen stays about the same. */
+const REFERENCE_DISTANCE = 12;
+// The clamps only catch the extremes — surveying the whole compound, or a nose
+// against the crate. Across the play range (3 m to 34 m) the compensation is
+// complete, so the board holds the same share of the screen throughout.
+const MIN_SCALE = 0.24;
+const MAX_SCALE = 3.2;
 
 export function createItemPanel(options: {
   scene: Scene;
@@ -257,16 +266,21 @@ export function createItemPanel(options: {
    *  floating in the sky belongs to nothing — hence the stem. */
   const LIFT = 1.15;
   const CLEAR = 0.55;
+  /** The board's current size, and the thing it is hanging over. */
+  let scaleNow = 1;
+  let anchor: { at: Vector3; from?: Vector3 } | null = null;
   const place = (at: Vector3, from?: Vector3): void => {
+    anchor = { at, from };
     const away = from ? at.subtract(from) : Vector3.Zero();
     away.y = 0;
     // Push it to the far side of the object from the player, so the player is
     // never standing between the camera and the board they just opened.
     if (away.lengthSquared() > 1e-4) away.normalize().scaleInPlace(CLEAR);
-    const head = at.add(new Vector3(away.x, LIFT, away.z));
+    // The lift grows with the board, or a big panel sits on top of its own object.
+    const head = at.add(new Vector3(away.x, LIFT * scaleNow, away.z));
     root.position.copyFrom(head);
     const lines = Math.max(1, Math.ceil(rows.length / COLUMNS));
-    const boardBottom = head.y - ((HEADER_PX + lines * SLOT_PX) * PX) / 2;
+    const boardBottom = head.y - ((HEADER_PX + lines * SLOT_PX) * PX * scaleNow) / 2;
     const drop = Math.max(0.05, boardBottom - at.y);
     stem.position.set(head.x, boardBottom - drop / 2, head.z);
     stem.scaling.y = drop;
@@ -288,19 +302,33 @@ export function createItemPanel(options: {
       stem.setEnabled(true);
     },
     move(at, from) { if (root.isEnabled()) place(at, from); },
-    spin(dt) {
+    update(dt) {
       if (!root.isEnabled()) return;
       for (const [index, slot] of slots.entries()) {
         // Each one a little out of step with its neighbours, so a full crate
         // reads as a shelf of objects rather than a clock mechanism.
         slot.mesh.rotation.y += dt * (SPIN + index * 0.06);
       }
+      // A board an inch tall is not a board. Apparent size falls off with
+      // distance, so the world size rises with it: the panel keeps roughly the
+      // same share of the screen from the closest zoom to the furthest, which
+      // is what makes it a HUD that happens to live in the world rather than a
+      // signpost that shrinks to nothing. Eased, so a zoom does not snap it.
+      const camera = scene.activeCamera;
+      if (camera && anchor) {
+        const distance = Vector3.Distance(camera.position, root.position);
+        const wanted = Math.max(MIN_SCALE, Math.min(MAX_SCALE, distance / REFERENCE_DISTANCE));
+        scaleNow += (wanted - scaleNow) * Math.min(1, dt * 8);
+        root.scaling.setAll(scaleNow);
+        place(anchor.at, anchor.from);
+      }
     },
-    update(next) {
+    setRows(next) {
       rows = next;
       layout(title);
     },
     hide() {
+      anchor = null;
       root.setEnabled(false);
       stem.setEnabled(false);
       clearSlots();

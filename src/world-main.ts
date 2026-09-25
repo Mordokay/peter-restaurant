@@ -777,7 +777,7 @@ function clickPanel(event: PointerEvent): boolean {
   saveEverything();
   refreshFarm();
   const left = openContainerNow.rows();
-  if (left.length) itemPanel.update(left);
+  if (left.length) itemPanel.setRows(left);
   else closeContainer();
   return true;
 }
@@ -1159,7 +1159,7 @@ engine.runRenderLoop(() => {
   prepStation?.update(dt);
   rangeHighlight.update(dt);
   tickHover(dt);
-  itemPanel.spin(dt);
+  itemPanel.update(dt);
   // Walk away and the panel closes itself: it belongs to the thing, and the
   // player has left the thing.
   if (openContainerNow) {

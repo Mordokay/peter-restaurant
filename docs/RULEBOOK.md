@@ -506,6 +506,10 @@ this loop and the player already knows it:
     or sliced through by whoever is standing in front of it.
   - Items in it are **unlit**: the board tips them away from the sun, and a slot full of silhouette is a
     slot full of nothing. White emissive carries their colour — see the same note in `lighting.ts`.
+  - It **holds its size on screen, not in the world**: apparent size falls off with distance, so its world
+    size rises with it and the board keeps about the same share of the screen from the closest zoom to
+    the furthest. Measured 132 px wide at 6.7 m, at 21.6 m and at 30.5 m. It is a HUD that happens to
+    live in the world, not a signpost that shrinks to nothing.
   - Pointing at a container opens it after a beat, Esc closes it and holds it closed until the cursor
     leaves, and walking away closes it. A panel that flashes up every time the cursor crosses a crate is
     worse than one the player has to ask for.
