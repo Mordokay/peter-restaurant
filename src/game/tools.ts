@@ -16,7 +16,12 @@ export type ToolId = "hoe" | "can" | "compost" | "mulch" | "sprinkler" | "seeder
 
 export interface ToolSlot { kind: "tool"; tool: ToolId }
 export interface SeedSlot { kind: "seed"; crop: string }
-export type Slot = ToolSlot | SeedSlot;
+/** Nothing in your hands. Pressing a tool's key again puts it away, and bare
+ *  hands still pick what is ripe — the one job that never needed a tool. */
+export interface HandSlot { kind: "hand" }
+export type Slot = ToolSlot | SeedSlot | HandSlot;
+
+export const EMPTY_HANDS: HandSlot = { kind: "hand" };
 
 export type FarmAction = "till" | "water" | "feed" | "sow" | "harvest" | "clear" | "place" | "lift" | "nothing";
 
@@ -57,8 +62,10 @@ export const TOOL_COSTS: Partial<Record<ToolId, string>> = { compost: "item_comp
  *  the player's inventory, for the tools that are spent. */
 export function actionOf(slot: Slot, soil: Soil, planted: PlantedCrop | null, carrying: readonly string[] = [], hasDevice = false): FarmAction {
   // A device on the plot is the only thing there is to do with that plot, in
-  // hand or not: you pick it up, or you leave it alone.
-  if (hasDevice) return slot.kind === "tool" && isDeviceTool(slot.tool) ? "lift" : "nothing";
+  // hand or not: you pick it up, or you leave it alone. Bare hands lift it too,
+  // since picking something up is what hands are for.
+  if (hasDevice) return slot.kind === "hand" || (slot.kind === "tool" && isDeviceTool(slot.tool)) ? "lift" : "nothing";
+  if (slot.kind === "hand") return actionWithStock(slot, soil, planted);
   if (slot.kind === "tool" && isDeviceTool(slot.tool)) {
     // A device stands in a bed, not on a path, and not on top of a plant.
     return soil.tilled && !planted ? "place" : "nothing";
@@ -85,6 +92,7 @@ function actionWithStock(slot: Slot, soil: Soil, planted: PlantedCrop | null): F
     return "nothing";
   }
 
+  if (slot.kind === "hand") return "nothing";
   if (slot.kind === "seed") return canSow(soil) ? "sow" : "nothing";
   switch (slot.tool) {
     // Tilling already-broken ground does nothing: a hoe is for opening a bed,
@@ -101,6 +109,7 @@ function actionWithStock(slot: Slot, soil: Soil, planted: PlantedCrop | null): F
  *  under their hand, so it is guidance rather than a wall of rules. */
 export function refusalFor(slot: Slot, soil: Soil, planted: PlantedCrop | null, carrying: readonly string[] = [], hasDevice = false): string {
   if (hasDevice) return "a device is standing here";
+  if (slot.kind === "hand") return planted ? "not ready yet" : "nothing in your hands";
   if (slot.kind === "tool" && isDeviceTool(slot.tool)) {
     return planted ? "something is growing here" : "break the ground first";
   }
@@ -129,6 +138,7 @@ export function hotbar(crops: readonly { id: string }[]): Slot[] {
 }
 
 export function slotName(slot: Slot): string {
+  if (slot.kind === "hand") return "Bare hands";
   if (slot.kind === "tool") return toolDefinition(slot.tool)?.name ?? slot.tool;
   return cropById(slot.crop)?.name ?? slot.crop;
 }

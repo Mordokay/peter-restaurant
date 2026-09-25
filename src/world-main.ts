@@ -34,7 +34,7 @@ import { createClipPlayer, createVoxelRig, socketNode } from "./game/voxelRig";
 
 /** The player's own model, and the tools he carries. */
 const FARMER_MODEL = "farmer";
-const TOOL_MODELS_PRELOAD = { hoe: "tool_hoe", can: "tool_can", pouch: "tool_pouch" };
+const TOOL_MODELS_PRELOAD = { hoe: "tool_hoe", can: "tool_can", compost: "tool_compost", mulch: "tool_mulch", seeds: "tool_seeds" };
 import { recipes } from "./game/recipes";
 import { FARM_SAVE_KEY, FARM_SAVE_VERSION, type FarmSave } from "./game/farm";
 import { readSave, writeSave } from "./game/persistence";
@@ -311,7 +311,10 @@ farmerClips?.play("idle", { loop: true });
 // The tool in the hand. One mesh per tool, hung on the hand socket by its own
 // grip marker: the pipeline recentres a model and stands it on its base, so
 // "the grip is at the origin" stops being true the moment it is voxelised.
-const TOOL_MODELS: Record<string, string> = { hoe: "tool_hoe", can: "tool_can", compost: "tool_pouch", mulch: "tool_pouch" };
+const TOOL_MODELS: Record<string, string> = {
+  hoe: "tool_hoe", can: "tool_can", compost: "tool_compost", mulch: "tool_mulch",
+  sprinkler: "item_sprinkler", seeder: "item_seeder",
+};
 const handNode = farmer ? socketNode(farmer, "arm_r", "tool") : null;
 const heldTools = new Map<string, Mesh>();
 function heldToolMesh(id: string): Mesh | null {
@@ -332,7 +335,11 @@ function heldToolMesh(id: string): Mesh | null {
 function showHeldTool(): void {
   if (!handNode) return;
   const slot = farmHud.slot;
-  const wanted = slot.kind === "tool" ? TOOL_MODELS[slot.tool] : "tool_pouch";
+  // Seeds are carried in the seed bag; bare hands carry nothing, which is the
+  // whole point of being able to put a tool away.
+  const wanted = slot.kind === "tool" ? TOOL_MODELS[slot.tool]
+    : slot.kind === "seed" ? "tool_seeds"
+    : undefined;
   for (const [id, mesh] of heldTools) mesh.setEnabled(id === wanted);
   if (wanted) heldToolMesh(wanted)?.setEnabled(true);
 }
@@ -498,8 +505,8 @@ function actOnPlot(): void {
   const action = addressed.action;
   if (action === "nothing") return;
 
-  // Face the work. A farmer who tills the bed behind them is a farmer nobody
-  // believes, and the turn costs one line.
+  // Face the work. He is usually looking that way already — he looks where the
+  // mouse is — but a click at the edge of a turn should still land square.
   player.rotation.y = Math.atan2(site.x - player.position.x, site.z - player.position.z);
 
   const land = (): void => {
@@ -696,6 +703,7 @@ function walk(dt: number): void {
   forward.normalize();
   const right = Vector3.Cross(Vector3.Up(), forward).normalize();
   const move = forward.scale(vertical).add(right.scale(horizontal)).normalize().scaleInPlace(speed * dt * (keys.has("shift") ? 2.4 : 1));
+  moveHeading = Math.atan2(move.x, move.z);
   if (build.active) {
     // While building, the same keys slide the view across the site instead of walking the marker.
     camera.target.addInPlace(move.scale(2.2));
@@ -703,7 +711,6 @@ function walk(dt: number): void {
     return;
   }
   player.position.addInPlace(move);
-  player.rotation.y = Math.atan2(move.x, move.z);
   walking = true;
   // Step up onto a floor slab, or back down to the ground.
   const room = roomAt(levelLayout, player.position.x, player.position.z);
@@ -713,6 +720,8 @@ function walk(dt: number): void {
 
 /** Set by walk() each frame it actually moved the player. */
 let walking = false;
+/** The direction the player is walking, when they are. */
+let moveHeading: number | null = null;
 /** The plot being worked and what the work looks like, while a clip runs. */
 let working: { site: { x: number; z: number }; colour: string } | null = null;
 
@@ -729,6 +738,30 @@ function busy(): boolean {
 
 /** Idle, walking, or working — the rig's own little state machine. A work clip
  *  owns the body until it finishes, so a step mid-swing does not cut the swing. */
+/** Turn the farmer towards a heading, the short way round and not instantly. */
+function faceTowards(heading: number, dt: number): void {
+  let delta = heading - player.rotation.y;
+  while (delta > Math.PI) delta -= Math.PI * 2;
+  while (delta < -Math.PI) delta += Math.PI * 2;
+  player.rotation.y += delta * Math.min(1, dt * 14);
+}
+
+/** The farmer looks where the mouse is. It is the hand that does the work, so
+ *  it is the thing worth watching — and it makes reach legible: you can see
+ *  what you are about to hit before you click. While walking with no pointer on
+ *  the ground he faces his own direction of travel instead. */
+function faceMouse(dt: number): void {
+  if (busy()) return;
+  const ground = groundUnderPointer();
+  if (ground) {
+    const dx = ground.x - player.position.x;
+    const dz = ground.z - player.position.z;
+    if (dx * dx + dz * dz > 0.04) faceTowards(Math.atan2(dx, dz), dt);
+    return;
+  }
+  if (moveHeading !== null) faceTowards(moveHeading, dt);
+}
+
 function driveFarmer(dt: number): void {
   if (!farmerClips) return;
   if (working && busy() && farmerClips.clip) {
@@ -779,7 +812,9 @@ function updateHud(): void {
 engine.runRenderLoop(() => {
   const dt = frameTimer.begin();
   walking = false;
+  moveHeading = null;
   walk(dt);
+  faceMouse(dt);
   driveFarmer(dt);
   camera.alpha += (targetAlpha - camera.alpha) * Math.min(1, dt * 8);
   camera.radius += (targetRadius - camera.radius) * Math.min(1, dt * 8);

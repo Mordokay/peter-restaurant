@@ -10,7 +10,7 @@ import { cropDefinitions } from "./game/crops";
 import { missingFor, recipes } from "./game/recipes";
 import { dominantColor } from "./game/cropPlanting";
 import { groupItems } from "./game/inventory";
-import { hotbar, slotName, toolDefinition, type FarmAction, type Slot } from "./game/tools";
+import { EMPTY_HANDS, hotbar, slotName, toolDefinition, type FarmAction, type Slot } from "./game/tools";
 import { catalog } from "./assets/catalog/index";
 import type { PlotReading } from "./game/farmPlots";
 
@@ -22,6 +22,9 @@ export interface PrepReading {
 
 export interface FarmHud {
   readonly slot: Slot;
+  /** Choose a slot, or put down what is already in that slot: pressing the
+   *  hoe's key twice leaves the farmer empty-handed, which is how every game
+   *  with a hotbar behaves and how nobody has to hunt for an "unequip". */
   select(index: number): void;
   /** Step through the bar — the mouse wheel and the shoulder buttons both want this. */
   cycle(direction: number): void;
@@ -59,6 +62,7 @@ const TOOL_COLOUR: Record<string, string> = {
 };
 
 function colourOf(slot: Slot): string {
+  if (slot.kind === "hand") return "#d99c6b";
   if (slot.kind === "tool") return TOOL_COLOUR[slot.tool] ?? "#9fb3a6";
   const crop = cropDefinitions.find((candidate) => candidate.id === slot.crop);
   const model = crop?.produce ? catalog.models[crop.produce] : undefined;
@@ -80,7 +84,8 @@ export function createFarmHud(mount: HTMLElement): FarmHud {
   const plotEl = bar.querySelector<HTMLElement>(".farm-plot")!;
   const carryEl = bar.querySelector<HTMLElement>(".farm-carry")!;
   const slots = hotbar(cropDefinitions);
-  let selected = 0;
+  /** -1 is bare hands. */
+  let selected = -1;
 
   const buttons = slots.map((slot, index) => {
     const button = document.createElement("button");
@@ -116,14 +121,17 @@ export function createFarmHud(mount: HTMLElement): FarmHud {
   let flashText = "";
 
   const hud: FarmHud = {
-    get slot() { return slots[selected]!; },
+    get slot() { return slots[selected] ?? EMPTY_HANDS; },
     select(index) {
       if (index < 0 || index >= slots.length) return;
-      selected = index;
+      selected = selected === index ? -1 : index;
       paint();
     },
     cycle(direction) {
-      selected = (selected + direction + slots.length) % slots.length;
+      // Cycling runs through the slots and then through empty hands, so the
+      // wheel can put a tool away as well as pick one up.
+      const next = selected + direction;
+      selected = next < -1 ? slots.length - 1 : next >= slots.length ? -1 : next;
       paint();
     },
     flash(message) {
